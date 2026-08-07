@@ -1,31 +1,34 @@
 # modbus_connector
 
-GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
-Работает с Modbus TCP и Modbus RTU через синхронные клиенты pymodbus;
-вся Modbus-логика выполняется в отдельном потоке (QThread), GUI не блокируется.
+[Russian version: README_ru.md](README_ru.md)
 
-## Возможности
+A PySide6 GUI application for debugging Modbus buses and developing Modbus
+devices. Works with Modbus TCP and Modbus RTU via synchronous pymodbus clients;
+all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 
-- Подключение по TCP (host, port, timeout) и RTU (порт, baudrate, parity и т.д.;
-  RTU по умолчанию) — все настройки задаются в GUI. Настройки соединения и список
-  регистров сохраняются между запусками в `~/.modbus_connector/settings.json`,
-  а через меню File — в произвольный JSON-файл (и загружаются обратно).
-- Таблица регистров: строки с именем, типом области (coils, discrete inputs,
-  holding/input registers), адресом и количеством; чтение и запись значений.
-  Enter в колонке «New value» отправляет команду записи, Ctrl+R (Cmd+R на macOS)
-  читает текущую строку; вся таблица доступна с клавиатуры.
-- Поллинг всех строк с настраиваемым интервалом.
-- Сканер адресов (кнопка «Scanner…», отдельное окно): перебор unit id в заданном
-  диапазоне с настраиваемыми пробами, показывает устройства, ответившие хотя бы
-  на одну пробу.
-- Панель лога внизу окна, скрывается кнопкой «Log».
+## Features
 
-## Требования
+- TCP (host, port, timeout) and RTU (serial port, baudrate, parity, etc.;
+  RTU by default) connections — all settings are configured in the GUI.
+  Connection settings and the register list persist between launches in
+  `~/.modbus_connector/settings.json`, and can also be saved to / loaded from
+  an arbitrary JSON file via the File menu.
+- Register table: rows with a name, area type (coils, discrete inputs,
+  holding/input registers), address and count; read and write values.
+  Enter in the "New value" column sends the write command, Ctrl+R (Cmd+R on
+  macOS) reads the current row; the whole table is keyboard-friendly.
+- Polling of all rows with an adjustable interval.
+- Address scanner ("Scanner…" button, separate window): iterates unit ids in
+  a given range with configurable probes and shows devices that answered at
+  least one probe.
+- Log panel at the bottom of the window, toggled with the "Log" button.
+
+## Requirements
 
 - Python 3.11+
 - `PySide6`, `pymodbus[serial]==3.6.9`
 
-## Установка
+## Installation
 
 ```bash
 python -m venv .venv
@@ -33,81 +36,81 @@ source .venv/bin/activate
 pip install -e .[dev]
 ```
 
-## Запуск
+## Run
 
 ```bash
 modbus-connector
-# или
+# or
 python -m modbus_connector
 ```
 
-## Сборка исполняемого файла
+## Building a standalone executable
 
 ```bash
 ./build.sh        # macOS / Linux
-build.bat         # Windows (cmd, работает и двойным кликом)
+build.bat         # Windows (cmd, also works by double-click)
 ```
 
-Скрипт ставит PyInstaller (extra `build`) и собирает standalone-приложение в
-`dist/`: на macOS — `ModbusConnector.app` + установочный образ
-`ModbusConnector.dmg`, на Windows/Linux — каталог `ModbusConnector/` с
-исполняемым файлом внутри (на Windows — `ModbusConnector.exe`; на другую машину
-копируется весь каталог). Артефакт не требует установленного Python на целевой
-машине.
+The script installs PyInstaller (the `build` extra) and builds a standalone
+application into `dist/`: on macOS — `ModbusConnector.app` plus a
+`ModbusConnector.dmg` disk image; on Windows/Linux — a `ModbusConnector/`
+folder with the executable inside (`ModbusConnector.exe` on Windows; copy the
+whole folder to another machine). The artifact does not require Python on the
+target machine.
 
-Заметки для macOS:
+macOS notes:
 
-- Запуск: двойной клик по `ModbusConnector.app` или `open dist/ModbusConnector.app`.
-  Файлы из промежуточного каталога `build/` запускать нельзя (скрипт удаляет его
-  после сборки).
-- Для переноса на другую машину используйте готовый `dist/ModbusConnector.dmg`
-  (самостоятельно переименовывать или упаковывать `.app` в `.pkg` не нужно —
-  такой файл не будет валидным установщиком).
-- Приложение подписано ad-hoc: при первом запуске на другом Mac Gatekeeper
-  предупредит о неустановленном разработчике — открывайте через правый клик →
-  «Открыть» или снимите карантин: `xattr -dr com.apple.quarantine ModbusConnector.app`.
+- Run: double-click `ModbusConnector.app` or `open dist/ModbusConnector.app`.
+  Never run files from the intermediate `build/` directory (the script removes
+  it after building).
+- To move the app to another machine use the ready-made
+  `dist/ModbusConnector.dmg` (do not rename or repack the `.app` into a `.pkg`
+  yourself — such a file is not a valid installer).
+- The app is ad-hoc signed: on another Mac Gatekeeper will warn about an
+  unidentified developer on first launch — open via right-click → "Open", or
+  remove the quarantine: `xattr -dr com.apple.quarantine ModbusConnector.app`.
 
-## Структура проекта
+## Project layout
 
 ```
 src/modbus_connector/
-  models.py       # типы данных без Qt: TcpParams/RtuParams, RegisterRow,
+  models.py       # Qt-free data types: TcpParams/RtuParams, RegisterRow,
                   # ScanProbe, parse_values()/format_values()
-  backend.py      # ModbusBackend — синхронная обёртка над pymodbus (без Qt)
-  worker.py       # ModbusWorker (QObject) — сигналы/слоты над backend, QThread
-  connection_panel.py  # панель подключения (TCP/RTU, state/set_state)
-  registers_panel.py   # таблица регистров, поллинг, Enter = запись
-  scanner_panel.py     # сканер адресов (отдельное окно)
-  log_panel.py         # панель лога (скрываемая)
-  settings_store.py    # сохранение настроек в ~/.modbus_connector/settings.json
-  main_window.py  # главное окно
-  app.py          # создание QApplication и запуск
+  backend.py      # ModbusBackend — synchronous pymodbus wrapper (no Qt)
+  worker.py       # ModbusWorker (QObject) — signals/slots over backend, QThread
+  connection_panel.py  # connection panel (TCP/RTU, state/set_state)
+  registers_panel.py   # register table, polling, Enter = write
+  scanner_panel.py     # address scanner (separate window)
+  log_panel.py         # log panel (hideable)
+  settings_store.py    # settings persistence in ~/.modbus_connector/settings.json
+  main_window.py  # main window
+  app.py          # QApplication creation and startup
   __main__.py     # python -m modbus_connector
 tests/
-  conftest.py     # фикстура modbus_server: тестовый Modbus TCP сервер на 127.0.0.1
+  conftest.py     # modbus_server fixture: test Modbus TCP server on 127.0.0.1
   test_models.py  # parse_values()/format_values()
-  test_backend.py # ModbusBackend против тестового сервера
+  test_backend.py # ModbusBackend against the test server
 ```
 
-## Разработка
+## Development
 
 ```bash
-pytest          # тесты
-ruff check .    # линт
+pytest          # tests
+ruff check .    # lint
 ```
 
-Тесты backend поднимают реальный Modbus TCP сервер (pymodbus) на 127.0.0.1
-со свободным портом и гоняют чтение/запись/сканирование через `ModbusBackend`.
+The backend tests start a real Modbus TCP server (pymodbus) on 127.0.0.1
+with a free port and exercise read/write/scan through `ModbusBackend`.
 
 ## CI
 
-GitHub Actions (`.github/workflows/build.yml`) на каждый пуш в `main` гоняет
-тесты и собирает артефакты под три ОС на раннерах macOS/Windows/Linux:
-`modbus-connector-macos` (DMG), `modbus-connector-windows` и
-`modbus-connector-linux` (zip с исполняемым файлом). Готовые файлы скачиваются
-со страницы запуска workflow (Actions → выбранный run → Artifacts; хранятся
-90 дней); сборку также можно запустить вручную через «Run workflow».
+GitHub Actions (`.github/workflows/build.yml`) runs tests and builds artifacts
+for all three OSes on macOS/Windows/Linux runners on every push to `main`:
+`modbus-connector-macos` (DMG), `modbus-connector-windows` and
+`modbus-connector-linux` (zip with the executable). Download them from the
+workflow run page (Actions → a run → Artifacts; kept for 90 days); a build can
+also be started manually via "Run workflow".
 
-При пуше тега `v*` (например, `git tag v0.1.0 && git push origin v0.1.0`)
-те же файлы автоматически прикрепляются к GitHub Release — постоянной странице
-скачивания (Releases в репозитории).
+Pushing a `v*` tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`)
+automatically attaches the same files to a GitHub Release — a permanent
+download page (Releases in the repository).
