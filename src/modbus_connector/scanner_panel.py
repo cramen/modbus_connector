@@ -1,0 +1,158 @@
+from typing import get_args
+
+from PySide6.QtCore import Signal, Slot
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTableWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from modbus_connector.models import DEFAULT_SCAN_PROBES, RegisterKind, ScanProbe
+
+KINDS = list(get_args(RegisterKind))
+
+COL_TYPE, COL_ADDRESS, COL_COUNT, COL_ACTIONS = range(4)
+
+
+class ScannerPanel(QWidget):
+    scanStarted = Signal()
+    scanRequested = Signal(list, int, int)
+    scanStopRequested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        self._start = QSpinBox(minimum=1, maximum=247, value=1)
+        self._end = QSpinBox(minimum=1, maximum=247, value=247)
+
+        self._probes_table = QTableWidget(0, 4)
+        self._probes_table.setHorizontalHeaderLabels(["Type", "Address", "Count", ""])
+        self._probes_table.verticalHeader().setVisible(False)
+        self._probes_table.setMaximumHeight(140)
+
+        add_probe_button = QPushButton("Add probe")
+        add_probe_button.clicked.connect(lambda: self._add_probe())
+
+        self._start_button = QPushButton("Start scan")
+        self._stop_button = QPushButton("Stop")
+        self._stop_button.setEnabled(False)
+        self._start_button.clicked.connect(self._on_start)
+        self._stop_button.clicked.connect(self.scanStopRequested)
+
+        self._progress = QProgressBar()
+        self._progress.setValue(0)
+        self._results = QListWidget()
+
+        range_layout = QHBoxLayout()
+        range_layout.addWidget(QLabel("Unit range:"))
+        range_layout.addWidget(self._start)
+        range_layout.addWidget(QLabel("–"))
+        range_layout.addWidget(self._end)
+        range_layout.addStretch(1)
+        range_layout.addWidget(add_probe_button)
+        range_layout.addWidget(self._start_button)
+        range_layout.addWidget(self._stop_button)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(range_layout)
+        layout.addWidget(self._probes_table)
+        layout.addWidget(self._progress)
+        layout.addWidget(QLabel("Results:"))
+        layout.addWidget(self._results)
+
+        for probe in DEFAULT_SCAN_PROBES:
+            self._add_probe(probe)
+
+    def _add_probe(self, probe: ScanProbe | None = None) -> None:
+        probe = probe or ScanProbe(kind="holding_registers", address=0, count=1)
+        index = self._probes_table.rowCount()
+        self._probes_table.insertRow(index)
+
+        type_combo = QComboBox()
+        type_combo.addItems(KINDS)
+        type_combo.setCurrentText(probe.kind)
+        self._probes_table.setCellWidget(index, COL_TYPE, type_combo)
+        self._probes_table.setCellWidget(
+            index, COL_ADDRESS, QSpinBox(minimum=0, maximum=65535, value=probe.address)
+        )
+        self._probes_table.setCellWidget(
+            index, COL_COUNT, QSpinBox(minimum=1, maximum=125, value=probe.count)
+        )
+
+        delete_button = QPushButton("Delete")
+        delete_button.clicked.connect(self._on_delete_probe)
+        self._probes_table.setCellWidget(index, COL_ACTIONS, delete_button)
+
+    @Slot()
+    def _on_delete_probe(self) -> None:
+        button = self.sender()
+        for index in range(self._probes_table.rowCount()):
+            if self._probes_table.cellWidget(index, COL_ACTIONS) is button:
+                self._probes_table.removeRow(index)
+                return
+
+    def _probes(self) -> list[ScanProbe]:
+        probes = []
+        for index in range(self._probes_table.rowCount()):
+            type_combo = self._probes_table.cellWidget(index, COL_TYPE)
+            address_spin = self._probes_table.cellWidget(index, COL_ADDRESS)
+            count_spin = self._probes_table.cellWidget(index, COL_COUNT)
+            probes.append(
+                ScanProbe(
+                    kind=type_combo.currentText(),
+                    address=address_spin.value(),
+                    count=count_spin.value(),
+                )
+            )
+        return probes
+
+    @Slot()
+    def _on_start(self) -> None:
+        probes = self._probes()
+        if not probes:
+            return
+        self._results.clear()
+        self._progress.setValue(0)
+        self._progress.setMaximum(1)
+        self._start_button.setEnabled(False)
+        self._stop_button.setEnabled(True)
+        self.scanStarted.emit()
+        self.scanRequested.emit(probes, self._start.value(), self._end.value())
+
+    @Slot(int, int)
+    def handle_scan_progress(self, done: int, total: int) -> None:
+        self._progress.setMaximum(max(1, total))
+        self._progress.setValue(done)
+
+    @Slot(int, list)
+    def handle_scan_hit(self, unit: int, probe_indices: list) -> None:
+        probes = self._probes()
+        labels = []
+        for i in probe_indices:
+            if 0 <= i < len(probes):
+                probe = probes[i]
+                labels.append(f"{probe.kind}@{probe.address} x{probe.count}")
+            else:
+                labels.append(f"probe#{i}")
+        self._results.addItem(f"Unit {unit}: {', '.join(labels)}")
+
+    @Slot()
+    def handle_scan_finished(self) -> None:
+        self._start_button.setEnabled(True)
+        self._stop_button.setEnabled(False)
+
+    def is_scanning(self) -> bool:
+        return self._stop_button.isEnabled()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self.is_scanning():
+            self.scanStopRequested.emit()
+        super().closeEvent(event)

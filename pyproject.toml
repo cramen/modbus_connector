@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modbus-connector"
+version = "0.1.0"
+description = "PySide6 GUI for debugging Modbus buses and developing Modbus devices"
+requires-python = ">=3.11"
+dependencies = [
+    "pymodbus[serial]==3.6.9",
+    "PySide6",
+]
+
+[project.gui-scripts]
+modbus-connector = "modbus_connector.app:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

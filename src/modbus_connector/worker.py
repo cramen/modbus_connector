@@ -1,0 +1,102 @@
+from PySide6.QtCore import QObject, Signal, Slot
+
+from modbus_connector.backend import ModbusBackend
+from modbus_connector.models import (
+    ConnectionParams,
+    RegisterRow,
+    ScanProbe,
+    TcpParams,
+    format_values,
+)
+
+
+def _describe(params: ConnectionParams) -> str:
+    if isinstance(params, TcpParams):
+        return f"tcp {params.host}:{params.port}"
+    return f"rtu {params.port} @ {params.baudrate}"
+
+
+class ModbusWorker(QObject):
+    connectionChanged = Signal(bool, str)
+    readFinished = Signal(int, bool, list, str)
+    writeFinished = Signal(int, bool, str)
+    scanProgress = Signal(int, int)
+    scanHit = Signal(int, list)
+    scanFinished = Signal()
+    logLine = Signal(str)
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._backend = ModbusBackend()
+        self._scan_stop = False
+
+    @Slot(object)
+    def connect_to(self, params: ConnectionParams) -> None:
+        self.logLine.emit(f"→ connect {_describe(params)}")
+        try:
+            self._backend.connect(params)
+        except Exception as exc:
+            self.logLine.emit(f"✗ connect failed: {exc}")
+            self.connectionChanged.emit(False, str(exc))
+            return
+        self.logLine.emit("← connected")
+        self.connectionChanged.emit(True, f"Connected ({_describe(params)})")
+
+    @Slot()
+    def disconnect(self) -> None:
+        self._scan_stop = True
+        try:
+            self._backend.disconnect()
+        except Exception as exc:
+            self.logLine.emit(f"✗ disconnect failed: {exc}")
+        self.logLine.emit("→ disconnect")
+        self.connectionChanged.emit(False, "Disconnected")
+
+    @Slot(int, int, object)
+    def read(self, request_id: int, unit: int, row: RegisterRow) -> None:
+        self.logLine.emit(f"→ read {row.kind} unit={unit} addr={row.address} count={row.count}")
+        try:
+            values = self._backend.read(unit, row.kind, row.address, row.count)
+        except Exception as exc:
+            self.logLine.emit(f"✗ read failed: {exc}")
+            self.readFinished.emit(request_id, False, [], str(exc))
+            return
+        self.logLine.emit(f"← {format_values(values)}")
+        self.readFinished.emit(request_id, True, list(values), "")
+
+    @Slot(int, int, object, list)
+    def write(self, request_id: int, unit: int, row: RegisterRow, values: list) -> None:
+        self.logLine.emit(
+            f"→ write {row.kind} unit={unit} addr={row.address} values={format_values(values)}"
+        )
+        try:
+            self._backend.write(unit, row.kind, row.address, values)
+        except Exception as exc:
+            self.logLine.emit(f"✗ write failed: {exc}")
+            self.writeFinished.emit(request_id, False, str(exc))
+            return
+        self.logLine.emit("← ok")
+        self.writeFinished.emit(request_id, True, "")
+
+    @Slot(list, int, int)
+    def start_scan(self, probes: list[ScanProbe], start: int, end: int) -> None:
+        self._scan_stop = False
+        total = max(0, end - start + 1)
+        self.logLine.emit(f"→ scan units {start}..{end} ({len(probes)} probes)")
+        done = 0
+        try:
+            for unit, indices in self._backend.scan(probes, start, end, lambda: self._scan_stop):
+                done = max(done, unit - start + 1)
+                self.scanProgress.emit(done, total)
+                if indices:
+                    self.scanHit.emit(unit, list(indices))
+                    self.logLine.emit(f"← scan hit unit={unit} probes={list(indices)}")
+        except Exception as exc:
+            self.logLine.emit(f"✗ scan failed: {exc}")
+        self.scanProgress.emit(total, total)
+        self.scanFinished.emit()
+        self.logLine.emit("← scan stopped" if self._scan_stop else "← scan finished")
+
+    @Slot()
+    def stop_scan(self) -> None:
+        self._scan_stop = True
