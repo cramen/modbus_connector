@@ -86,6 +86,45 @@ class RegistersPanel(QWidget):
     def set_unit_id(self, unit: int) -> None:
         self._unit_id = unit
 
+    def state(self) -> list[dict]:
+        rows = []
+        for index in range(self._table.rowCount()):
+            name_item = self._table.item(index, COL_NAME)
+            address_item = self._table.item(index, COL_ADDRESS)
+            count_item = self._table.item(index, COL_COUNT)
+            type_combo = self._table.cellWidget(index, COL_TYPE)
+            try:
+                address = int(address_item.text().strip(), 0)
+                count = int(count_item.text().strip(), 0)
+            except (ValueError, AttributeError):
+                continue
+            rows.append(
+                {
+                    "name": name_item.text() if name_item else "",
+                    "kind": type_combo.currentText(),
+                    "address": address,
+                    "count": count,
+                }
+            )
+        return rows
+
+    def set_state(self, rows: list) -> None:
+        while self._table.rowCount():
+            self._table.removeRow(0)
+        for entry in rows or []:
+            try:
+                row = RegisterRow(
+                    name=str(entry.get("name", "")),
+                    kind=entry.get("kind") if entry.get("kind") in KINDS else "holding_registers",
+                    address=int(entry["address"]),
+                    count=int(entry["count"]),
+                )
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+            self._add_row(row)
+        if self._table.rowCount() == 0:
+            self._add_row()
+
     def _add_row(self, row: RegisterRow | None = None) -> None:
         row = row or RegisterRow(name="", kind="holding_registers", address=0, count=1)
         index = self._table.rowCount()

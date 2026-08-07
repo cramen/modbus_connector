@@ -1,9 +1,19 @@
 import itertools
+import json
 from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QMetaObject, Qt, QThread
-from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QHBoxLayout, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QCloseEvent, QKeySequence
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QMainWindow,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from modbus_connector.connection_panel import ConnectionPanel
 from modbus_connector.log_panel import LogPanel
@@ -23,9 +33,9 @@ class MainWindow(QMainWindow):
         self._request_ids: Iterator[int] = itertools.count(1)
 
         self.connection_panel = ConnectionPanel()
-        self.connection_panel.set_state(load_settings())
         self.registers_panel = RegistersPanel(lambda: next(self._request_ids))
         self.log_panel = LogPanel()
+        self._apply_state(load_settings())
 
         self.scanner_panel = ScannerPanel(self)
         self.scanner_panel.setWindowFlags(Qt.WindowType.Window)
@@ -52,6 +62,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.registers_panel, 1)
         layout.addWidget(self.log_panel)
         self.setCentralWidget(central)
+
+        file_menu = self.menuBar().addMenu("File")
+        save_action = file_menu.addAction("Save Settings to File…", self._save_to_file)
+        save_action.setShortcut(QKeySequence.StandardKey.Save)
+        load_action = file_menu.addAction("Load Settings from File…", self._load_from_file)
+        load_action.setShortcut(QKeySequence.StandardKey.Open)
 
         self._thread = QThread(self)
         self._worker = ModbusWorker()
@@ -83,6 +99,54 @@ class MainWindow(QMainWindow):
 
         self._thread.start()
 
+    def _collect_state(self) -> dict[str, Any]:
+        return {
+            "connection": self.connection_panel.state(),
+            "registers": self.registers_panel.state(),
+        }
+
+    def _apply_state(self, state: dict[str, Any]) -> None:
+        if not state:
+            return
+        # backward compatibility: the old format stored connection keys at the top level
+        connection = state.get("connection") if isinstance(state.get("connection"), dict) else state
+        self.connection_panel.set_state(connection)
+        registers = state.get("registers")
+        if isinstance(registers, list):
+            self.registers_panel.set_state(registers)
+
+    def _save_to_file(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Save Settings", str(Path.home() / "settings.json"), "JSON (*.json)"
+        )
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            path.write_text(json.dumps(self._collect_state(), indent=2), encoding="utf-8")
+        except OSError as exc:
+            self.log_panel.append(f"✗ failed to save settings to {path}: {exc}")
+            return
+        self.log_panel.append(f"→ settings saved to {path}")
+
+    def _load_from_file(self) -> None:
+        path_str, _ = QFileDialog.getOpenFileName(
+            self, "Load Settings", str(Path.home()), "JSON (*.json)"
+        )
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            self.log_panel.append(f"✗ failed to load settings from {path}: {exc}")
+            return
+        if not isinstance(state, dict):
+            self.log_panel.append(f"✗ failed to load settings from {path}: not an object")
+            return
+        self._apply_state(state)
+        self.log_panel.append(f"← settings loaded from {path}")
+
     def _show_scanner(self) -> None:
         self.scanner_panel.show()
         self.scanner_panel.raise_()
@@ -92,7 +156,7 @@ class MainWindow(QMainWindow):
         self.registers_panel.set_unit_id(unit_id)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        save_settings(self.connection_panel.state())
+        save_settings(self._collect_state())
         self.registers_panel.stop_polling()
         self._worker.stop_scan()
         QMetaObject.invokeMethod(
