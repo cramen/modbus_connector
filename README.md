@@ -98,3 +98,12 @@ ruff check .    # линт
 
 Тесты backend поднимают реальный Modbus TCP сервер (pymodbus) на 127.0.0.1
 со свободным портом и гоняют чтение/запись/сканирование через `ModbusBackend`.
+
+## CI
+
+GitHub Actions (`.github/workflows/build.yml`) на каждый пуш в `main` гоняет
+тесты и собирает артефакты под три ОС на раннерах macOS/Windows/Linux:
+`modbus-connector-macos` (DMG), `modbus-connector-windows` и
+`modbus-connector-linux` (каталог с исполняемым файлом). Готовые файлы
+скачиваются со страницы запуска workflow (Actions → выбранный run → Artifacts);
+сборку также можно запустить вручную через «Run workflow».

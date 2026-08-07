@@ -73,6 +73,10 @@ modbus-connector          # запуск GUI (или python -m modbus_connector)
 build.bat                 # то же под Windows (cmd): dist\ModbusConnector\ModbusConnector.exe
 ```
 
+CI: `.github/workflows/build.yml` — push в main / ручной запуск; матрица
+macOS/Windows/Linux: pytest, затем сборка через build.sh/build.bat,
+артефакты в upload-artifact (macOS — dmg, Windows/Linux — каталог dist).
+
 ## Соглашения
 
 - Python 3.11+ синтаксис, полная типизация, минимум комментариев, ruff line-length 100.

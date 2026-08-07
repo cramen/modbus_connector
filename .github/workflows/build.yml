@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact-name: modbus-connector-macos
+            artifact-path: dist/ModbusConnector.dmg
+          - os: windows-latest
+            artifact-name: modbus-connector-windows
+            artifact-path: dist/ModbusConnector/
+          - os: ubuntu-latest
+            artifact-name: modbus-connector-linux
+            artifact-path: dist/ModbusConnector/
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Create venv and install dependencies
+        shell: bash
+        run: |
+          python -m venv .venv
+          if [ "$RUNNER_OS" == "Windows" ]; then PY=.venv/Scripts/python; else PY=.venv/bin/python; fi
+          "$PY" -m pip install -U pip
+          "$PY" -m pip install -e ".[dev,build]"
+
+      - name: Run tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then PY=.venv/Scripts/python; else PY=.venv/bin/python; fi
+          "$PY" -m pytest tests/ -q
+
+      - name: Build (macOS/Linux)
+        if: runner.os != 'Windows'
+        run: ./build.sh
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: build.bat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
