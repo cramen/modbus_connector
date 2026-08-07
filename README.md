@@ -44,13 +44,15 @@ python -m modbus_connector
 ## Сборка исполняемого файла
 
 ```bash
-./build.sh
+./build.sh        # macOS / Linux
+build.bat         # Windows (cmd, работает и двойным кликом)
 ```
 
 Скрипт ставит PyInstaller (extra `build`) и собирает standalone-приложение в
 `dist/`: на macOS — `ModbusConnector.app` + установочный образ
 `ModbusConnector.dmg`, на Windows/Linux — каталог `ModbusConnector/` с
-исполняемым файлом внутри. Артефакт не требует установленного Python на целевой
+исполняемым файлом внутри (на Windows — `ModbusConnector.exe`; на другую машину
+копируется весь каталог). Артефакт не требует установленного Python на целевой
 машине.
 
 Заметки для macOS:

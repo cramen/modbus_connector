@@ -69,7 +69,8 @@ pytest                    # тесты
 ruff check .              # линт
 modbus-connector          # запуск GUI (или python -m modbus_connector)
 ./build.sh                # сборка standalone-приложения PyInstaller'ом в dist/
-                          # (macOS: ModbusConnector.app; extra `build` в pyproject)
+                          # (macOS: ModbusConnector.app + .dmg; extra `build` в pyproject)
+build.bat                 # то же под Windows (cmd): dist\ModbusConnector\ModbusConnector.exe
 ```
 
 ## Соглашения
