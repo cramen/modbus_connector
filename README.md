@@ -40,6 +40,30 @@ modbus-connector
 python -m modbus_connector
 ```
 
+## Сборка исполняемого файла
+
+```bash
+./build.sh
+```
+
+Скрипт ставит PyInstaller (extra `build`) и собирает standalone-приложение в
+`dist/`: на macOS — `ModbusConnector.app` + установочный образ
+`ModbusConnector.dmg`, на Windows/Linux — каталог `ModbusConnector/` с
+исполняемым файлом внутри. Артефакт не требует установленного Python на целевой
+машине.
+
+Заметки для macOS:
+
+- Запуск: двойной клик по `ModbusConnector.app` или `open dist/ModbusConnector.app`.
+  Файлы из промежуточного каталога `build/` запускать нельзя (скрипт удаляет его
+  после сборки).
+- Для переноса на другую машину используйте готовый `dist/ModbusConnector.dmg`
+  (самостоятельно переименовывать или упаковывать `.app` в `.pkg` не нужно —
+  такой файл не будет валидным установщиком).
+- Приложение подписано ad-hoc: при первом запуске на другом Mac Gatekeeper
+  предупредит о неустановленном разработчике — открывайте через правый клик →
+  «Открыть» или снимите карантин: `xattr -dr com.apple.quarantine ModbusConnector.app`.
+
 ## Структура проекта
 
 ```

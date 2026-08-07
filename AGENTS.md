@@ -67,6 +67,8 @@ pip install -e .[dev]     # установка (в т.ч. dev-зависимос
 pytest                    # тесты
 ruff check .              # линт
 modbus-connector          # запуск GUI (или python -m modbus_connector)
+./build.sh                # сборка standalone-приложения PyInstaller'ом в dist/
+                          # (macOS: ModbusConnector.app; extra `build` в pyproject)
 ```
 
 ## Соглашения
