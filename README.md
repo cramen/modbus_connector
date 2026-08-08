@@ -44,6 +44,63 @@ modbus-connector
 python -m modbus_connector
 ```
 
+## Usage
+
+### Connecting
+
+1. Choose the connection type: **TCP** (host, port) or **RTU** (serial port,
+   baudrate, data bits, parity, stop bits — RTU is the default). Use "Refresh"
+   to rescan serial ports; a newly appeared port is selected automatically.
+2. Set the **Unit ID** of the target device (used for all register operations)
+   and the response **Timeout**.
+3. Press **Connect**. Input fields are locked while connected; press
+   **Disconnect** to change settings.
+
+### Adding registers
+
+Press **Add register** and fill in the row: an arbitrary **Name**, the area
+**Type** (coils, discrete inputs, holding registers, input registers),
+**Address** (decimal or hex, e.g. `0x10`) and **Count** (how many values to
+read starting at the address). All columns are plain cells — the table is
+fully navigable with the keyboard. The ✕ button deletes a row.
+
+### Reading values
+
+- **Ctrl+R** (**Cmd+R** on macOS) — reads the row that has the keyboard focus.
+- **Read all** — reads every row once.
+- **Start polling** — reads all rows repeatedly with the interval set in the
+  "Interval" field (milliseconds); press **Stop polling** to stop.
+
+Read values appear in the **Value** column; every request and response is also
+shown in the log panel (toggled with the "Log" button).
+
+### Writing values
+
+Type the value(s) into the **New value** column and press **Enter** — the
+write command is sent immediately:
+
+- registers: decimal or hex numbers (`4321`, `0x10E1`); for Count > 1 enter
+  several values separated by commas or spaces (`1, 2, 0xFF`) — a single value
+  uses function "write single register", several values use "write multiple
+  registers";
+- coils: `0`/`1`, `true`/`false`, `on`/`off` (case-insensitive).
+
+After a successful write the row is re-read automatically, so the **Value**
+column reflects the applied change. Parse errors and Modbus errors are
+reported in the log panel.
+
+Note: only coils and holding registers are writable — discrete inputs and
+input registers are read-only by the protocol.
+
+### Scanning for devices
+
+Press **Scanner…** to open the scanner window. Set the unit id range
+(default 1–247) and the probe list (register type + address + count to try on
+each address; sensible defaults are prefilled). **Start scan** begins the
+sweep, **Stop** aborts it; units that answered at least one probe appear in
+the results list. Scanning pauses polling in the main window.
+
+
 ## Building a standalone executable
 
 ```bash
