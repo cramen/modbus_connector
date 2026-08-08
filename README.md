@@ -70,6 +70,19 @@ macOS notes:
   unidentified developer on first launch — open via right-click → "Open", or
   remove the quarantine: `xattr -dr com.apple.quarantine ModbusConnector.app`.
 
+Linux notes:
+
+- RTU connections to serial ports (`/dev/ttyUSB*`, `/dev/ttyACM*`, etc.) require
+  membership in the port's group, usually `dialout` (sometimes `uucp`). If you
+  see `Errno 13` / "Permission denied" on connect, check the port:
+  ```bash
+  ls -l /dev/ttyUSB0
+  ```
+  Add your user to the group and re-login (or run `newgrp dialout`):
+  ```bash
+  sudo usermod -aG dialout $USER
+  ```
+
 ## Project layout
 
 ```
