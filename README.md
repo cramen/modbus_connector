@@ -23,6 +23,16 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   least one probe.
 - Log panel at the bottom of the window, toggled with the "Log" button.
 
+## Screenshots
+
+Main window — connected, register table with read values, request/response log:
+
+![Main window](docs/screenshots/main_window.png)
+
+Address scanner — probes, progress and found units:
+
+![Scanner](docs/screenshots/scanner.png)
+
 ## Requirements
 
 - Python 3.11+
