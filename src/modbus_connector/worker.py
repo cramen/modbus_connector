@@ -27,6 +27,7 @@ class ModbusWorker(QObject):
     scanHit = Signal(int, list)
     scanFinished = Signal()
     statsUpdated = Signal(object)
+    aliveChanged = Signal(bool)
     logLine = Signal(str)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -60,6 +61,11 @@ class ModbusWorker(QObject):
             self.logLine.emit(f"✗ disconnect failed: {exc}")
         self.logLine.emit("→ disconnect")
         self.connectionChanged.emit(False, "Disconnected")
+
+    @Slot()
+    def check_alive(self) -> None:
+        # local client state only — no Modbus traffic on the bus
+        self.aliveChanged.emit(self._backend.connected)
 
     @Slot(int, int, object)
     def read(self, request_id: int, unit: int, row: RegisterRow) -> None:

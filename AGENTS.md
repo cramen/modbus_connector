@@ -43,10 +43,15 @@ src/modbus_connector/
                   # (hits пуст, если unit не ответил)
   worker.py       # Qt: ModbusWorker(QObject) над backend — сигналы
                   # connectionChanged/readFinished/writeFinished/scanProgress/
-                  # scanHit/scanFinished/statsUpdated/logLine; слоты connect_to/
-                  # disconnect/read/write/start_scan/stop_scan; read/write
-                  # замеряют wall time и пишут в Stats
-  connection_panel.py  # параметры подключения (TCP/RTU), state()/set_state()
+                  # scanHit/scanFinished/statsUpdated/aliveChanged/logLine;
+                  # слоты connect_to/disconnect/read/write/start_scan/stop_scan/
+                  # check_alive (локальная проверка backend.connected, без
+                  # трафика); read/write замеряют wall time и пишут в Stats
+  connection_panel.py  # параметры подключения (TCP/RTU), state()/set_state();
+                       # статус трёх цветов: серый (отключён), зелёный (alive),
+                       # оранжевый "(idle)" — connected, но backend.connected
+                       # упал после таймаута (pymodbus переподключится сам);
+                       # set_connected(ok, message) + слот set_alive(bool)
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
                        # колонка Format — формат отображения значений
                        # (dec/hex/s16/u32/s32/f32, только для регистровых kind),
@@ -63,7 +68,8 @@ src/modbus_connector/
   log_panel.py         # панель лога внизу главного окна, скрываемая кнопкой Log
   settings_store.py    # load_settings()/save_settings() — JSON в ~/.modbus_connector/
   main_window.py  # главное окно, компоновка панелей + worker в QThread;
-                  # в статус-баре счётчики транзакций (statsUpdated)
+                  # в статус-баре счётчики транзакций (statsUpdated);
+                  # QTimer (~2 с) queued-вызывает worker.check_alive
   app.py          # QApplication, entry point main()
   __main__.py     # python -m modbus_connector
 tests/

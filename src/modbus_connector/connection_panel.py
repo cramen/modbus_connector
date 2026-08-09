@@ -24,6 +24,8 @@ class ConnectionPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._connected = False
+        self._alive = False
+        self._status_message = "Disconnected"
 
         self._type_combo = QComboBox()
         self._type_combo.addItems(["TCP", "RTU"])
@@ -186,8 +188,9 @@ class ConnectionPanel(QWidget):
     @Slot(bool, str)
     def set_connected(self, ok: bool, message: str) -> None:
         self._connected = ok
-        self._status.setText(message)
-        self._status.setStyleSheet(f"color: {'green' if ok else 'gray'}")
+        self._alive = ok  # assume alive right after connect; reset on disconnect
+        self._status_message = message
+        self._render_status()
         self._button.setText("Disconnect" if ok else "Connect")
         for widget in (
             self._type_combo,
@@ -202,3 +205,20 @@ class ConnectionPanel(QWidget):
             self._timeout,
         ):
             widget.setEnabled(not ok)
+
+    @Slot(bool)
+    def set_alive(self, alive: bool) -> None:
+        self._alive = alive
+        self._render_status()
+
+    def _render_status(self) -> None:
+        if not self._connected:
+            text, color = self._status_message, "gray"
+        elif self._alive:
+            text, color = self._status_message, "green"
+        else:
+            # pymodbus drops `connected` after a timeout but silently reconnects
+            # on the next transaction — the link is idle/degraded, not dead
+            text, color = f"{self._status_message} (idle)", "orange"
+        self._status.setText(text)
+        self._status.setStyleSheet(f"color: {color}")

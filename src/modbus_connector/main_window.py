@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QMetaObject, Qt, QThread, Slot
+from PySide6.QtCore import QMetaObject, Qt, QThread, QTimer, Slot
 from PySide6.QtGui import QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -102,6 +102,13 @@ class MainWindow(QMainWindow):
         self._update_stats(StatsSnapshot())
         self.statusBar().addPermanentWidget(self._stats_label)
         self._worker.statsUpdated.connect(self._update_stats)
+
+        self._worker.aliveChanged.connect(self.connection_panel.set_alive)
+        # queued to the worker thread: check_alive runs where the backend lives
+        self._alive_timer = QTimer(self)
+        self._alive_timer.setInterval(2000)
+        self._alive_timer.timeout.connect(self._worker.check_alive)
+        self._alive_timer.start()
 
         self._thread.start()
 
