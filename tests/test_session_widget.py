@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Qt needs system libraries (libEGL etc.) that headless Linux CI runners lack;
 # skip the whole module there — it still runs on macOS/Windows CI and dev machines.
 try:
-    from PySide6.QtWidgets import QApplication  # noqa: E402
+    from PySide6.QtWidgets import QApplication, QSizePolicy  # noqa: E402
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
@@ -55,4 +55,11 @@ def test_registers_options_roundtrip(qapp: QApplication) -> None:
     assert session.state()["registers_options"] == {"order": "CDAB"}
     session.set_state({"registers": []})  # missing key: keep current value
     assert session.state()["registers_options"] == {"order": "CDAB"}
+    session.shutdown()
+
+
+def test_status_label_never_widens_the_window(qapp: QApplication) -> None:
+    session = SessionWidget()
+    policy = session.connection_panel._status.sizePolicy()
+    assert policy.horizontalPolicy() == QSizePolicy.Policy.Ignored
     session.shutdown()

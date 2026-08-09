@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
     QVBoxLayout,
@@ -73,6 +74,7 @@ class ConnectionPanel(QWidget):
 
         self._rtu_port = QComboBox()
         self._rtu_port.setMinimumWidth(140)
+        self._rtu_port.setMaximumWidth(220)  # long device paths must not widen the window
         self._rtu_refresh = QPushButton("Refresh")
         self._rtu_baud = QComboBox(editable=True)
         self._rtu_baud.addItems(BAUDRATES)
@@ -122,21 +124,38 @@ class ConnectionPanel(QWidget):
         self._diag_button.clicked.connect(self._on_diag_clicked)
         self._status = QLabel("Disconnected")
         self._status.setStyleSheet("color: gray")
+        # the status text must never drive the window width: Ignored keeps it
+        # out of the layout's size hint, long messages just truncate visually
+        self._status.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         self._rtu_refresh.clicked.connect(self._refresh_ports)
         self._refresh_ports()
 
-        layout = QHBoxLayout(self)
+        settings_row = QHBoxLayout()
+        settings_row.addWidget(self._type_combo)
+        settings_row.addWidget(self._stack, 1)
+        settings_row.addWidget(QLabel("Unit:"))
+        settings_row.addWidget(self._unit)
+        settings_row.addWidget(QLabel("Timeout:"))
+        settings_row.addWidget(self._timeout)
+        settings_row.addStretch(1)
+
+        self._controls_row = QHBoxLayout()
+        self._controls_row.addWidget(self._button)
+        self._controls_row.addWidget(self._device_id_button)
+        self._controls_row.addWidget(self._diag_button)
+
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.addWidget(self._type_combo)
-        layout.addWidget(self._stack, 1)
-        layout.addWidget(QLabel("Unit:"))
-        layout.addWidget(self._unit)
-        layout.addWidget(QLabel("Timeout:"))
-        layout.addWidget(self._timeout)
-        layout.addWidget(self._button)
-        layout.addWidget(self._device_id_button)
-        layout.addWidget(self._diag_button)
-        layout.addWidget(self._status)
+        layout.addLayout(settings_row)
+        layout.addLayout(self._controls_row)
+        self._controls_row.addStretch(1)
+        self._controls_row.addWidget(self._status)
+
+    def add_control(self, widget: QWidget) -> None:
+        """Add a button to the panel's second row (before the status label)."""
+        self._controls_row.insertWidget(self._controls_row.count() - 2, widget)
 
     def unit_id(self) -> int:
         return self._unit.value()

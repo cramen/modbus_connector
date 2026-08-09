@@ -3,7 +3,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from PySide6.QtCore import QMetaObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
 from modbus_connector.connection_panel import ConnectionPanel
 from modbus_connector.log_panel import LogPanel
@@ -43,16 +43,12 @@ class SessionWidget(QWidget):
         self._log_button.setCheckable(True)
         self._log_button.setChecked(True)
         self._log_button.toggled.connect(self.log_panel.setVisible)
-
-        top = QHBoxLayout()
-        top.setContentsMargins(0, 0, 0, 0)
-        top.addWidget(self.connection_panel, 1)
-        top.addWidget(self._scanner_button)
-        top.addWidget(self._log_button)
+        self.connection_panel.add_control(self._scanner_button)
+        self.connection_panel.add_control(self._log_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.addLayout(top)
+        layout.addWidget(self.connection_panel)
         layout.addWidget(self.registers_panel, 1)
         layout.addWidget(self.log_panel)
 

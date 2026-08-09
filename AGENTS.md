@@ -71,7 +71,11 @@ src/modbus_connector/
                   # read/write замеряют wall time и пишут в Stats
   connection_panel.py  # параметры подключения (TCP / RTU / RTU over TCP /
                        # RTU over UDP — страницы network/serial),
-                       # state()/set_state();
+                       # state()/set_state(); две строки: настройки сверху,
+                       # кнопки (Connect/Device ID…/Diagnostics… +
+                       # Scanner…/Log от SessionWidget через add_control)
+                       # и статус снизу; статус — sizePolicy Ignored, длинный
+                       # текст не расширяет окно;
                        # статус трёх цветов: серый (отключён), зелёный (alive),
                        # оранжевый "(idle)" — connected, но backend.connected
                        # упал после таймаута (pymodbus переподключится сам);
