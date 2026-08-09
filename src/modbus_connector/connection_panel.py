@@ -1,13 +1,19 @@
+from collections.abc import Callable
+
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QPushButton,
     QSpinBox,
     QStackedWidget,
+    QVBoxLayout,
     QWidget,
 )
 from serial.tools import list_ports
@@ -16,13 +22,23 @@ from modbus_connector.models import ConnectionParams, RtuParams, TcpParams
 
 BAUDRATES = ["9600", "19200", "38400", "57600", "115200"]
 
+DEVICE_ID_NAMES = {0x00: "VendorName", 0x01: "ProductCode", 0x02: "MajorMinorRevision"}
+
 
 class ConnectionPanel(QWidget):
     connectRequested = Signal(object, int)
     disconnectRequested = Signal()
+    deviceIdRequested = Signal(int, int)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        request_id_provider: Callable[[], int],
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._next_request_id = request_id_provider
+        self._device_id_request = -1
+        self._device_id_list: QListWidget | None = None
         self._connected = False
         self._alive = False
         self._status_message = "Disconnected"
@@ -82,6 +98,9 @@ class ConnectionPanel(QWidget):
 
         self._button = QPushButton("Connect")
         self._button.clicked.connect(self._on_button_clicked)
+        self._device_id_button = QPushButton("Device ID…")
+        self._device_id_button.setEnabled(False)  # only meaningful while connected
+        self._device_id_button.clicked.connect(self._on_device_id_clicked)
         self._status = QLabel("Disconnected")
         self._status.setStyleSheet("color: gray")
         self._rtu_refresh.clicked.connect(self._refresh_ports)
@@ -96,6 +115,7 @@ class ConnectionPanel(QWidget):
         layout.addWidget(QLabel("Timeout:"))
         layout.addWidget(self._timeout)
         layout.addWidget(self._button)
+        layout.addWidget(self._device_id_button)
         layout.addWidget(self._status)
 
     def unit_id(self) -> int:
@@ -196,6 +216,7 @@ class ConnectionPanel(QWidget):
         self._status_message = message
         self._render_status()
         self._button.setText("Disconnect" if ok else "Connect")
+        self._device_id_button.setEnabled(ok)
         for widget in (
             self._type_combo,
             self._tcp_host,
@@ -226,3 +247,38 @@ class ConnectionPanel(QWidget):
             text, color = f"{self._status_message} (idle)", "orange"
         self._status.setText(text)
         self._status.setStyleSheet(f"color: {color}")
+
+    @Slot()
+    def _on_device_id_clicked(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Device identification (0x2B/0x0E)")
+        list_widget = QListWidget()
+        list_widget.addItem("Reading…")
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(list_widget)
+        layout.addWidget(buttons)
+        self._device_id_list = list_widget
+        self._device_id_request = self._next_request_id()
+        self.deviceIdRequested.emit(self._device_id_request, self._unit.value())
+        dialog.exec()
+        self._device_id_list = None
+        self._device_id_request = -1
+
+    @Slot(int, bool, dict, str)
+    def handle_device_id_finished(
+        self, request_id: int, ok: bool, info: dict, error: str
+    ) -> None:
+        if request_id != self._device_id_request or self._device_id_list is None:
+            return
+        list_widget = self._device_id_list
+        list_widget.clear()
+        if not ok:
+            list_widget.addItem(f"✗ {error}")
+            return
+        if not info:
+            list_widget.addItem("(device reported no objects)")
+        for object_id, value in sorted(info.items()):
+            label = DEVICE_ID_NAMES.get(object_id, f"object 0x{object_id:02X}")
+            list_widget.addItem(f"{label}: {value}")

@@ -10,6 +10,7 @@ from pymodbus.datastore import (
     ModbusServerContext,
     ModbusSlaveContext,
 )
+from pymodbus.device import ModbusDeviceIdentification
 from pymodbus.server import ModbusTcpServer
 
 UNIT_ID = 1
@@ -40,7 +41,10 @@ def modbus_server() -> Iterator[int]:
     holder: dict[str, ModbusTcpServer] = {}
 
     async def serve() -> None:
-        server = ModbusTcpServer(context, address=("127.0.0.1", port))
+        identity = ModbusDeviceIdentification(
+            info={0x00: "pymodbus", 0x01: "test-server", 0x02: "1.0"}
+        )
+        server = ModbusTcpServer(context, identity=identity, address=("127.0.0.1", port))
         holder["server"] = server
         await server.serve_forever()
 

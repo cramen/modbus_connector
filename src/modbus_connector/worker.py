@@ -40,6 +40,7 @@ class ModbusWorker(QObject):
     scanHit = Signal(int, list)
     scanFinished = Signal()
     readwriteFinished = Signal(int, bool, list, str)
+    deviceIdFinished = Signal(int, bool, dict, str)
     addrScanProgress = Signal(int, int)
     addrScanHit = Signal(int)
     addrScanFinished = Signal()
@@ -171,6 +172,21 @@ class ModbusWorker(QObject):
         self._record_stats(True, started)
         self.logLine.emit(f"← {format_values(result)}")
         self.readwriteFinished.emit(request_id, True, list(result), "")
+
+    @Slot(int, int)
+    def read_device_id(self, request_id: int, unit: int) -> None:
+        self.logLine.emit(f"→ read device id unit={unit}")
+        started = time.monotonic()
+        try:
+            info = self._backend.read_device_identification(unit)
+        except Exception as exc:
+            self._record_stats(False, started, exc)
+            self.logLine.emit(f"✗ read device id failed: {exc}")
+            self.deviceIdFinished.emit(request_id, False, {}, str(exc))
+            return
+        self._record_stats(True, started)
+        self.logLine.emit(f"← device id: {len(info)} objects")
+        self.deviceIdFinished.emit(request_id, True, info, "")
 
     @Slot(list, int, int)
     def start_scan(self, probes: list[ScanProbe], start: int, end: int) -> None:

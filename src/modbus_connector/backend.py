@@ -192,6 +192,19 @@ class ModbusBackend:
         _raise_if_error(result, f"Ошибка read/write @{read_address}")
         return list(result.registers)
 
+    def read_device_identification(self, unit: int) -> dict[int, str]:
+        client = self._require_client()
+        result = client.read_device_information(read_code=1, object_id=0, slave=unit)
+        _raise_if_error(result, f"Ошибка чтения device id unit={unit}")
+        return {
+            int(object_id): (
+                value.decode("utf-8", errors="replace")
+                if isinstance(value, bytes)
+                else str(value)
+            )
+            for object_id, value in result.information.items()
+        }
+
     def scan(
         self,
         probes: list[ScanProbe],

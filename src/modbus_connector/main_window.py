@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
 
         self._request_ids: Iterator[int] = itertools.count(1)
 
-        self.connection_panel = ConnectionPanel()
+        self.connection_panel = ConnectionPanel(lambda: next(self._request_ids))
         self.registers_panel = RegistersPanel(lambda: next(self._request_ids))
         self.log_panel = LogPanel()
 
@@ -78,6 +78,8 @@ class MainWindow(QMainWindow):
         self.connection_panel.connectRequested.connect(self._on_connect_requested)
         self.connection_panel.connectRequested.connect(self._worker.connect_to)
         self.connection_panel.disconnectRequested.connect(self._worker.disconnect)
+        self.connection_panel.deviceIdRequested.connect(self._worker.read_device_id)
+        self._worker.deviceIdFinished.connect(self.connection_panel.handle_device_id_finished)
         self._worker.connectionChanged.connect(self.connection_panel.set_connected)
 
         self.registers_panel.readRequested.connect(self._worker.read)

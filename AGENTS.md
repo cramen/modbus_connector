@@ -42,6 +42,7 @@ src/modbus_connector/
                   # read/write (write только coils/holding_registers),
                   # mask_write_register (функция 0x16),
                   # readwrite_registers (функция 0x17),
+                  # read_device_identification (0x2B/0x0E, dict[int, str]),
                   # ModbusExceptionError (.exception_code) для exception
                   # responses, человекочитаемые сообщения об ошибках,
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
@@ -66,7 +67,9 @@ src/modbus_connector/
                        # статус трёх цветов: серый (отключён), зелёный (alive),
                        # оранжевый "(idle)" — connected, но backend.connected
                        # упал после таймаута (pymodbus переподключится сам);
-                       # set_connected(ok, message) + слот set_alive(bool)
+                       # set_connected(ok, message) + слот set_alive(bool);
+                       # кнопка "Device ID…" (активна при подключении) — диалог
+                       # идентификации устройства (0x2B/0x0E)
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
                        # колонка Unit ID — per-row unit (пусто = глобальный
                        # unit из панели подключения),
@@ -110,7 +113,8 @@ tests/
                   # 127.0.0.1, свободный порт, отдельный поток с собственным
                   # event loop; slaves={1: ...} (single=False), zero_mode=True;
                   # hr 0..9 = 100..109, ir 0..4 = 7..11,
-                  # coils 0..7 = True/False чередуя, di 0..7 = с False; unit_id = 1
+                  # coils 0..7 = True/False чередуя, di 0..7 = с False; unit_id = 1;
+                  # identity (0x2B/0x0E): pymodbus/test-server/1.0
   test_models.py  # parse_values/format_values
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
 ```

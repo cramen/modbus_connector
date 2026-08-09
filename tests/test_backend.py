@@ -203,6 +203,20 @@ class TestScanAddresses:
             list(ModbusBackend().scan_addresses(UNIT_ID, "holding_registers", 0, 1, lambda: False))
 
 
+class TestReadDeviceIdentification:
+    def test_reads_identity_objects(self, backend: ModbusBackend) -> None:
+        # the conftest server answers 0x2B/0x0E with the fixture identity
+        info = backend.read_device_identification(UNIT_ID)
+        assert all(isinstance(key, int) for key in info)
+        assert info[0x00] == "pymodbus"
+        assert info[0x01] == "test-server"
+        assert info[0x02] == "1.0"
+
+    def test_without_connect(self) -> None:
+        with pytest.raises(ConnectionError):
+            ModbusBackend().read_device_identification(UNIT_ID)
+
+
 class TestReadWriteRegisters:
     def test_readwrite(self, backend: ModbusBackend) -> None:
         result = backend.readwrite_registers(UNIT_ID, 0, 3, 5, [11, 22, 33])
