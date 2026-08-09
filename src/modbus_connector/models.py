@@ -4,7 +4,7 @@ from typing import Literal
 
 RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_registers"]
 
-DisplayFormat = Literal["dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64"]
+DisplayFormat = Literal["dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64", "ascii"]
 
 ByteOrder = Literal["ABCD", "CDAB", "BADC", "DCBA"]
 
@@ -148,6 +148,16 @@ def format_register_values(
         return ", ".join(f"0x{v:04X}" for v in values)
     if fmt == "s16":
         return ", ".join(str(_to_s16(v)) for v in values)
+    if fmt == "ascii":
+        # two chars per register (high, low byte); NUL terminates, other
+        # non-printable bytes show as '.'; `order` does not apply to strings
+        chars = []
+        for value in values:
+            for byte in value.to_bytes(2, "big"):
+                if byte == 0:
+                    return "".join(chars)
+                chars.append(chr(byte) if 0x20 <= byte <= 0x7E else ".")
+        return "".join(chars)
     group = _GROUP_SIZES[fmt]
     parts = []
     groups_end = len(values) - len(values) % group

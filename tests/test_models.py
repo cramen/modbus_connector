@@ -102,8 +102,28 @@ class TestFormatRegisterValues:
         assert format_register_values([0x3F80, 0x0000, 7], "f32") == "1, 7"
 
     def test_empty(self) -> None:
-        for fmt in ("dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64"):
+        for fmt in (
+            "dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64", "ascii"
+        ):
             assert format_register_values([], fmt) == ""
+
+
+class TestAsciiFormat:
+    def test_hello_with_nul_terminator(self) -> None:
+        assert format_register_values([0x4865, 0x6C6C, 0x6F00], "ascii") == "Hello"
+
+    def test_nul_terminates_mid_register(self) -> None:
+        assert format_register_values([0x4100, 0x4243], "ascii") == "A"
+
+    def test_non_printable_replaced_with_dot(self) -> None:
+        assert format_register_values([0x4101, 0x7F42], "ascii") == "A..B"
+
+    def test_no_nul_reads_all_registers(self) -> None:
+        assert format_register_values([0x4142, 0x4344], "ascii") == "ABCD"
+
+    def test_order_does_not_apply(self) -> None:
+        values = [0x4865, 0x6C6C, 0x6F00]
+        assert format_register_values(values, "ascii", "DCBA") == "Hello"
 
 
 class Test64BitFormats:

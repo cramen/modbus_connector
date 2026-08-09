@@ -458,8 +458,8 @@ class RegistersPanel(QWidget):
         scale = self._float_at(index, COL_SCALE, 1.0)
         offset = self._float_at(index, COL_OFFSET, 0.0)
         unit = self._text_at(index, COL_UNIT)
-        # hex shows raw words — scaling hex is meaningless
-        if fmt != "hex" and (scale != 1.0 or offset != 0.0 or unit):
+        # hex and ascii show raw data — scaling them is meaningless
+        if fmt not in ("hex", "ascii") and (scale != 1.0 or offset != 0.0 or unit):
             return format_scaled_values(values, scale, offset, unit)
         order = self._table.cellWidget(index, COL_ORDER).currentText()
         return format_register_values(values, fmt, order)
