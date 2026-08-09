@@ -2,6 +2,7 @@ from collections.abc import Iterator
 
 import pytest
 from conftest import UNIT_ID
+from pymodbus.client import ModbusTcpClient
 
 from modbus_connector.backend import ModbusBackend
 from modbus_connector.models import ScanProbe, TcpParams
@@ -13,6 +14,18 @@ def backend(modbus_server: int) -> Iterator[ModbusBackend]:
     b.connect(TcpParams(host="127.0.0.1", port=modbus_server))
     yield b
     b.disconnect()
+
+
+def _spy_close(monkeypatch: pytest.MonkeyPatch) -> list[ModbusTcpClient]:
+    closed: list[ModbusTcpClient] = []
+    original_close = ModbusTcpClient.close
+
+    def spy_close(client: ModbusTcpClient) -> None:
+        closed.append(client)
+        original_close(client)
+
+    monkeypatch.setattr(ModbusTcpClient, "close", spy_close)
+    return closed
 
 
 class TestConnect:
@@ -28,6 +41,32 @@ class TestConnect:
         b = ModbusBackend()
         with pytest.raises((ConnectionError, OSError)):
             b.connect(TcpParams(host="127.0.0.1", port=1, timeout=0.5))
+
+    def test_failed_connect_closes_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        closed = _spy_close(monkeypatch)
+        monkeypatch.setattr(ModbusTcpClient, "connect", lambda client: False)
+        b = ModbusBackend()
+        with pytest.raises(ConnectionError):
+            b.connect(TcpParams(host="127.0.0.1", port=1, timeout=0.5))
+        assert b._client is None
+        assert len(closed) == 1
+        b.disconnect()
+
+    def test_failed_connect_closes_client_on_exception(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        closed = _spy_close(monkeypatch)
+
+        def raising_connect(client: ModbusTcpClient) -> bool:
+            raise OSError("boom")
+
+        monkeypatch.setattr(ModbusTcpClient, "connect", raising_connect)
+        b = ModbusBackend()
+        with pytest.raises(ConnectionError, match="boom"):
+            b.connect(TcpParams(host="127.0.0.1", port=1, timeout=0.5))
+        assert b._client is None
+        assert len(closed) == 1
+        b.disconnect()
 
 
 class TestRead:

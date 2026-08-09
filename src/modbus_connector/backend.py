@@ -40,20 +40,26 @@ class ModbusBackend:
         try:
             ok = client.connect()
         except Exception as exc:
+            self._close_client(client)
             raise ConnectionError(f"Не удалось подключиться к {description}: {exc}") from exc
         if not ok:
+            self._close_client(client)
             raise ConnectionError(f"Не удалось подключиться к {description}")
         self._client = client
         logger.info("Подключено к %s", description)
 
     def disconnect(self) -> None:
         if self._client is not None:
-            try:
-                self._client.close()
-            except Exception:
-                logger.exception("Ошибка при закрытии соединения")
+            self._close_client(self._client)
             self._client = None
             logger.info("Соединение закрыто")
+
+    @staticmethod
+    def _close_client(client: ModbusTcpClient | ModbusSerialClient) -> None:
+        try:
+            client.close()
+        except Exception:
+            logger.exception("Ошибка при закрытии соединения")
 
     def read(
         self, unit: int, kind: RegisterKind, address: int, count: int
