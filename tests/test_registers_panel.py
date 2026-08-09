@@ -16,7 +16,9 @@ except ImportError as exc:
 
 from PySide6.QtGui import QColor  # noqa: E402
 
+from modbus_connector.models import RegisterRow  # noqa: E402
 from modbus_connector.registers_panel import (  # noqa: E402
+    COL_ADDRESS,
     COL_NEW_VALUE,
     COL_VALUE,
     RegistersPanel,
@@ -71,3 +73,57 @@ def test_changed_value_flashes_background(qapp: QApplication) -> None:
     request_id = _read_row(panel, 0)
     panel.handle_read_finished(request_id, True, [1], "")
     assert panel._flash_generations[token] == generation  # same value: no new flash
+
+
+def test_filter_hides_and_unhides_rows(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "temp", "kind": "holding_registers", "address": 10, "count": 1},
+            {"name": "pressure", "kind": "input_registers", "address": 20, "count": 1},
+        ]
+    )
+
+    panel._filter_edit.setText("TEMP")  # case-insensitive name match
+    assert not panel._table.isRowHidden(0)
+    assert panel._table.isRowHidden(1)
+
+    panel._filter_edit.setText("20")  # address match
+    assert panel._table.isRowHidden(0)
+    assert not panel._table.isRowHidden(1)
+
+    panel._filter_edit.setText("input")  # type match
+    assert panel._table.isRowHidden(0)
+    assert not panel._table.isRowHidden(1)
+
+    panel._filter_edit.setText("")  # clearing unhides everything
+    assert not panel._table.isRowHidden(0)
+    assert not panel._table.isRowHidden(1)
+
+    panel._filter_edit.setText("temp")  # newly added rows are filtered too
+    panel._add_row(RegisterRow(name="new", kind="holding_registers", address=30))
+    assert panel._table.isRowHidden(2)
+
+
+def test_sort_preserves_tokens_and_pending_reads(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "c", "kind": "holding_registers", "address": 30, "count": 1},
+            {"name": "a", "kind": "holding_registers", "address": 10, "count": 1},
+            {"name": "b", "kind": "holding_registers", "address": 20, "count": 1},
+        ]
+    )
+    tokens_before = [panel._token_at(i) for i in range(3)]
+    request_id = _read_row(panel, 0)  # pending read on row "c"
+
+    panel._sort_by_address()
+
+    addresses = [panel._table.item(i, COL_ADDRESS).text() for i in range(3)]
+    assert addresses == ["10", "20", "30"]
+    tokens_after = [panel._token_at(i) for i in range(3)]
+    assert tokens_after == [tokens_before[1], tokens_before[2], tokens_before[0]]
+
+    panel.handle_read_finished(request_id, True, [42], "")
+    assert panel._table.item(2, COL_VALUE).text() == "42"  # "c" followed its token
+    assert panel._table.item(0, COL_VALUE).text() == ""

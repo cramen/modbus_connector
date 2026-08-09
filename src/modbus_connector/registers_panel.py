@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSpinBox,
     QStyle,
@@ -106,6 +107,13 @@ class RegistersPanel(QWidget):
         add_button.clicked.connect(lambda: self._add_row())
         read_all_button = QPushButton("Read all")
         read_all_button.clicked.connect(self.read_all)
+        sort_button = QPushButton("Sort by address")
+        sort_button.clicked.connect(self._sort_by_address)
+
+        self._filter_edit = QLineEdit()
+        self._filter_edit.setPlaceholderText("Filter…")
+        self._filter_edit.setClearButtonEnabled(True)
+        self._filter_edit.textChanged.connect(self._apply_filter)
 
         self._poll_interval = QSpinBox(minimum=100, maximum=600_000, value=1000)
         self._poll_interval.setSuffix(" ms")
@@ -117,6 +125,8 @@ class RegistersPanel(QWidget):
         top = QHBoxLayout()
         top.addWidget(add_button)
         top.addWidget(read_all_button)
+        top.addWidget(sort_button)
+        top.addWidget(self._filter_edit)
         top.addStretch(1)
         top.addWidget(QLabel("Interval:"))
         top.addWidget(self._poll_interval)
@@ -239,6 +249,63 @@ class RegistersPanel(QWidget):
             width = widget.sizeHint().width() + 8
             if self._table.columnWidth(col) < width:
                 self._table.setColumnWidth(col, width)
+
+        self._apply_filter_to_row(index)
+
+    @Slot()
+    def _apply_filter(self) -> None:
+        for index in range(self._table.rowCount()):
+            self._apply_filter_to_row(index)
+
+    def _apply_filter_to_row(self, index: int) -> None:
+        needle = self._filter_edit.text().strip().lower()
+        visible = True
+        if needle:
+            haystack = " ".join(
+                (
+                    self._text_at(index, COL_NAME),
+                    self._table.cellWidget(index, COL_TYPE).currentText(),
+                    self._text_at(index, COL_ADDRESS),
+                )
+            ).lower()
+            visible = needle in haystack
+        self._table.setRowHidden(index, not visible)
+
+    @Slot()
+    def _sort_by_address(self) -> None:
+        def address_of(index: int) -> int:
+            try:
+                return int(self._text_at(index, COL_ADDRESS), 0)
+            except ValueError:
+                return -1  # unparseable addresses sort first but still move
+
+        order = sorted(
+            range(self._table.rowCount()), key=lambda i: (address_of(i), i)
+        )
+        self._table.blockSignals(True)
+        snapshot = []
+        for index in range(self._table.rowCount()):
+            items = [
+                self._table.takeItem(index, col) for col in range(self._table.columnCount())
+            ]
+            widgets = {}
+            for col in (COL_TYPE, COL_FORMAT, COL_ACTIONS):
+                widgets[col] = self._table.cellWidget(index, col)
+                self._table.removeCellWidget(index, col)  # detach, not delete
+            snapshot.append((items, widgets))
+        while self._table.rowCount():
+            self._table.removeRow(0)
+        for new_index, old_index in enumerate(order):
+            items, widgets = snapshot[old_index]
+            self._table.insertRow(new_index)
+            for col, item in enumerate(items):
+                if item is not None:
+                    self._table.setItem(new_index, col, item)
+            for col, widget in widgets.items():
+                if widget is not None:
+                    self._table.setCellWidget(new_index, col, widget)
+        self._table.blockSignals(False)
+        self._apply_filter()
 
     def _token_at(self, index: int) -> int:
         item = self._table.item(index, COL_NAME)
