@@ -1,9 +1,17 @@
 import json
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Slot
 from PySide6.QtGui import QCloseEvent, QKeySequence
-from PySide6.QtWidgets import QFileDialog, QLabel, QMainWindow, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QLabel,
+    QMainWindow,
+    QTabWidget,
+    QToolButton,
+    QWidget,
+)
 
 from modbus_connector.models import StatsSnapshot
 from modbus_connector.session_widget import SessionWidget
@@ -16,20 +24,79 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Modbus Connector")
         self.resize(1100, 750)
 
-        self._session = SessionWidget()
-        self._session.set_state(load_settings())
-        self.setCentralWidget(self._session)
+        self._tabs = QTabWidget()
+        self._tabs.setMovable(True)
+        add_button = QToolButton()
+        add_button.setText("+")
+        add_button.setToolTip("New connection tab")
+        add_button.clicked.connect(lambda: self._add_session())
+        self._tabs.setCornerWidget(add_button)
+        self._tabs.tabCloseRequested.connect(self._close_tab)
+        self._tabs.currentChanged.connect(self._on_current_changed)
+        self.setCentralWidget(self._tabs)
 
         self._stats_label = QLabel()
         self._update_stats(StatsSnapshot())
         self.statusBar().addPermanentWidget(self._stats_label)
-        self._session.statsUpdated.connect(self._update_stats)
 
         file_menu = self.menuBar().addMenu("File")
         save_action = file_menu.addAction("Save Settings to File…", self._save_to_file)
         save_action.setShortcut(QKeySequence.StandardKey.Save)
         load_action = file_menu.addAction("Load Settings from File…", self._load_from_file)
         load_action.setShortcut(QKeySequence.StandardKey.Open)
+
+        self._apply_state(load_settings())
+
+    def _add_session(self, state: dict[str, Any] | None = None) -> SessionWidget:
+        session = SessionWidget()
+        if state:
+            session.set_state(state)
+        session.titleChanged.connect(
+            lambda title, s=session: self._update_tab_title(s, title)
+        )
+        session.statsUpdated.connect(self._on_session_stats)
+        index = self._tabs.addTab(session, session.title())
+        self._tabs.setCurrentIndex(index)
+        self._update_close_state()
+        return session
+
+    def _close_tab(self, index: int) -> None:
+        if self._tabs.count() <= 1:
+            return  # the last tab stays open
+        session = self._tabs.widget(index)
+        self._tabs.removeTab(index)
+        session.shutdown()
+        session.deleteLater()
+        self._update_close_state()
+
+    def _update_close_state(self) -> None:
+        self._tabs.setTabsClosable(self._tabs.count() > 1)
+
+    def _update_tab_title(self, session: SessionWidget, title: str) -> None:
+        index = self._tabs.indexOf(session)
+        if index >= 0:
+            self._tabs.setTabText(index, title)
+
+    def _clear_sessions(self) -> None:
+        while self._tabs.count():
+            session = self._tabs.widget(0)
+            self._tabs.removeTab(0)
+            session.shutdown()
+            session.deleteLater()
+        self._update_close_state()
+
+    def _shutdown_sessions(self) -> None:
+        for index in range(self._tabs.count()):
+            self._tabs.widget(index).shutdown()
+
+    def _on_session_stats(self, snapshot: StatsSnapshot) -> None:
+        if self.sender() is self._tabs.currentWidget():
+            self._update_stats(snapshot)
+
+    def _on_current_changed(self, index: int) -> None:
+        session = self._tabs.widget(index)
+        if session is not None:
+            self._update_stats(session.last_stats())
 
     @Slot(object)
     def _update_stats(self, snapshot: StatsSnapshot) -> None:
@@ -49,6 +116,28 @@ class MainWindow(QMainWindow):
         )
         self._stats_label.setToolTip(tooltip or "no errors yet")
 
+    def _collect_state(self) -> dict[str, Any]:
+        return {
+            "tabs": [self._tabs.widget(i).state() for i in range(self._tabs.count())],
+            "active_tab": self._tabs.currentIndex(),
+        }
+
+    def _apply_state(self, state: dict[str, Any]) -> None:
+        tabs = state.get("tabs") if isinstance(state, dict) else None
+        if isinstance(tabs, list):
+            for entry in tabs:
+                if isinstance(entry, dict):
+                    self._add_session(entry)
+        else:
+            # old single-session format: connection/registers/scanner at top level
+            # (and the even older flat connection format) become one tab
+            self._add_session(state)
+        if self._tabs.count() == 0:
+            self._add_session()
+        active = state.get("active_tab") if isinstance(state, dict) else None
+        if isinstance(active, int) and 0 <= active < self._tabs.count():
+            self._tabs.setCurrentIndex(active)
+
     def _save_to_file(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
             self, "Save Settings", str(Path.home() / "settings.json"), "JSON (*.json)"
@@ -57,11 +146,11 @@ class MainWindow(QMainWindow):
             return
         path = Path(path_str)
         try:
-            path.write_text(json.dumps(self._session.state(), indent=2), encoding="utf-8")
+            path.write_text(json.dumps(self._collect_state(), indent=2), encoding="utf-8")
         except OSError as exc:
-            self._session.log_panel.append(f"✗ failed to save settings to {path}: {exc}")
+            self._log_line(f"✗ failed to save settings to {path}: {exc}")
             return
-        self._session.log_panel.append(f"→ settings saved to {path}")
+        self._log_line(f"→ settings saved to {path}")
 
     def _load_from_file(self) -> None:
         path_str, _ = QFileDialog.getOpenFileName(
@@ -73,17 +162,21 @@ class MainWindow(QMainWindow):
         try:
             state = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            self._session.log_panel.append(f"✗ failed to load settings from {path}: {exc}")
+            self._log_line(f"✗ failed to load settings from {path}: {exc}")
             return
         if not isinstance(state, dict):
-            self._session.log_panel.append(
-                f"✗ failed to load settings from {path}: not an object"
-            )
+            self._log_line(f"✗ failed to load settings from {path}: not an object")
             return
-        self._session.set_state(state)
-        self._session.log_panel.append(f"← settings loaded from {path}")
+        self._clear_sessions()
+        self._apply_state(state)
+        self._log_line(f"← settings loaded from {path}")
+
+    def _log_line(self, line: str) -> None:
+        session = self._tabs.currentWidget()
+        if session is not None:
+            session.log_panel.append(line)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        save_settings(self._session.state())
-        self._session.shutdown()
+        save_settings(self._collect_state())
+        self._shutdown_sessions()
         super().closeEvent(event)

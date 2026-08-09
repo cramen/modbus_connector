@@ -2,12 +2,12 @@ import itertools
 from collections.abc import Iterator
 from typing import Any
 
-from PySide6.QtCore import QMetaObject, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QMetaObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from modbus_connector.connection_panel import ConnectionPanel
 from modbus_connector.log_panel import LogPanel
-from modbus_connector.models import ConnectionParams
+from modbus_connector.models import ConnectionParams, StatsSnapshot, describe_connection
 from modbus_connector.registers_panel import RegistersPanel
 from modbus_connector.scanner_panel import ScannerPanel
 from modbus_connector.worker import ModbusWorker
@@ -16,11 +16,17 @@ from modbus_connector.worker import ModbusWorker
 class SessionWidget(QWidget):
     """Одна Modbus-сессия: панели + worker в QThread + окно сканера."""
 
+    DEFAULT_TITLE = "New connection"
+
     statsUpdated = Signal(object)
+    titleChanged = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._request_ids: Iterator[int] = itertools.count(1)
+        self._title = self.DEFAULT_TITLE
+        self._params: ConnectionParams | None = None
+        self._last_stats = StatsSnapshot()
 
         self.connection_panel = ConnectionPanel(lambda: next(self._request_ids))
         self.registers_panel = RegistersPanel(lambda: next(self._request_ids))
@@ -69,6 +75,7 @@ class SessionWidget(QWidget):
             self.connection_panel.handle_diag_counters_finished
         )
         self._worker.connectionChanged.connect(self.connection_panel.set_connected)
+        self._worker.connectionChanged.connect(self._on_connection_changed)
 
         self.registers_panel.readRequested.connect(self._worker.read)
         self.registers_panel.writeRequested.connect(self._worker.write)
@@ -104,7 +111,7 @@ class SessionWidget(QWidget):
         self._worker.trafficLine.connect(self.log_panel.append_raw)
         self.registers_panel.logLine.connect(self.log_panel.append)
 
-        self._worker.statsUpdated.connect(self.statsUpdated)
+        self._worker.statsUpdated.connect(self._on_stats_updated)
 
         self._worker.aliveChanged.connect(self.connection_panel.set_alive)
         # queued to the worker thread: check_alive runs where the backend lives
@@ -141,7 +148,28 @@ class SessionWidget(QWidget):
         self.scanner_panel.activateWindow()
 
     def _on_connect_requested(self, params: ConnectionParams, unit_id: int) -> None:
+        self._params = params
         self.registers_panel.set_unit_id(unit_id)
+
+    @Slot(bool, str)
+    def _on_connection_changed(self, ok: bool, message: str) -> None:
+        self._title = (
+            describe_connection(self._params)
+            if ok and self._params is not None
+            else self.DEFAULT_TITLE
+        )
+        self.titleChanged.emit(self._title)
+
+    def title(self) -> str:
+        return self._title
+
+    @Slot(object)
+    def _on_stats_updated(self, snapshot: StatsSnapshot) -> None:
+        self._last_stats = snapshot
+        self.statsUpdated.emit(snapshot)
+
+    def last_stats(self) -> StatsSnapshot:
+        return self._last_stats
 
     def shutdown(self) -> None:
         self.registers_panel.stop_polling()

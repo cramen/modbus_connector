@@ -5,8 +5,9 @@
 GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
 Подключение к устройствам по Modbus TCP и RTU (по умолчанию RTU), чтение/запись
 регистров из таблицы, поллинг с интервалом, сканер unit-адресов в отдельном окне.
-Настройки соединения, список регистров и состояние сканера сохраняются между
-запусками в `~/.modbus_connector/settings.json` (`settings_store.py`); через
+Настройки соединений (вкладки), списки регистров и состояния сканеров
+сохраняются между запусками в `~/.modbus_connector/settings.json`
+(`settings_store.py`, формат `{"tabs": [...], "active_tab": i}`); через
 меню File их же можно сохранить/загрузить в произвольный JSON-файл.
 
 ## Архитектура
@@ -32,6 +33,7 @@ pyproject.toml
 src/modbus_connector/
   models.py       # без Qt: RegisterKind, TcpParams/RtuParams,
                   # RtuOverTcpParams/RtuOverUdpParams, ConnectionParams,
+                  # describe_connection(params) — "tcp host:port" и т.п.,
                   # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
                   # ByteOrder, parse_values(kind, text), format_values(values),
                   # format_register_values(values, fmt, order),
@@ -118,10 +120,13 @@ src/modbus_connector/
                     # state()/set_state() (connection+registers+scanner,
                     # backward compat со старым плоским форматом),
                     # shutdown() — корректная остановка worker/потока;
-                    # сигнал statsUpdated(object) наружу для статус-бара
-  main_window.py  # главное окно: один SessionWidget, меню File
-                  # (save/load делегирует сессии), статус-бар со счётчиками
-                  # транзакций (session.statsUpdated)
+                    # сигналы statsUpdated(object) и titleChanged(str)
+                    # ("New connection" → описание соединения), last_stats()
+  main_window.py  # главное окно: QTabWidget с SessionWidget'ами (кнопка "+"
+                  # в углу, последнюю вкладку закрыть нельзя), меню File
+                  # (save/load всех вкладок), статус-бар следует активной
+                  # вкладке; настройки: {"tabs": [...], "active_tab": i},
+                  # старый односессионный формат читается как одна вкладка
   app.py          # QApplication, entry point main()
   __main__.py     # python -m modbus_connector
 tests/
@@ -136,6 +141,8 @@ tests/
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
   test_registers_panel.py  # offscreen Qt тесты таблицы регистров
   test_session_widget.py   # smoke: state round-trip + shutdown сессии
+  test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
+                           # закрытие вкладок
 ```
 
 ## Команды

@@ -43,6 +43,16 @@ class RtuParams:
 ConnectionParams = TcpParams | RtuParams | RtuOverTcpParams | RtuOverUdpParams
 
 
+def describe_connection(params: ConnectionParams) -> str:
+    if isinstance(params, TcpParams):
+        return f"tcp {params.host}:{params.port}"
+    if isinstance(params, RtuOverTcpParams):
+        return f"rtu/tcp {params.host}:{params.port}"
+    if isinstance(params, RtuOverUdpParams):
+        return f"rtu/udp {params.host}:{params.port}"
+    return f"rtu {params.port} @ {params.baudrate}"
+
+
 @dataclass
 class RegisterRow:
     name: str

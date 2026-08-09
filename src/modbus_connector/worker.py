@@ -8,24 +8,12 @@ from modbus_connector.models import (
     ConnectionParams,
     RegisterKind,
     RegisterRow,
-    RtuOverTcpParams,
-    RtuOverUdpParams,
     ScanProbe,
     Stats,
-    TcpParams,
+    describe_connection,
     describe_exception,
     format_values,
 )
-
-
-def _describe(params: ConnectionParams) -> str:
-    if isinstance(params, TcpParams):
-        return f"tcp {params.host}:{params.port}"
-    if isinstance(params, RtuOverTcpParams):
-        return f"rtu/tcp {params.host}:{params.port}"
-    if isinstance(params, RtuOverUdpParams):
-        return f"rtu/udp {params.host}:{params.port}"
-    return f"rtu {params.port} @ {params.baudrate}"
 
 
 def _classify_error(exc: Exception) -> str:
@@ -76,7 +64,7 @@ class ModbusWorker(QObject):
 
     @Slot(object)
     def connect_to(self, params: ConnectionParams) -> None:
-        self.logLine.emit(f"→ connect {_describe(params)}")
+        self.logLine.emit(f"→ connect {describe_connection(params)}")
         try:
             self._backend.connect(params)
         except Exception as exc:
@@ -84,7 +72,7 @@ class ModbusWorker(QObject):
             self.connectionChanged.emit(False, str(exc))
             return
         self.logLine.emit("← connected")
-        self.connectionChanged.emit(True, f"Connected ({_describe(params)})")
+        self.connectionChanged.emit(True, f"Connected ({describe_connection(params)})")
 
     @Slot()
     def disconnect(self) -> None:
