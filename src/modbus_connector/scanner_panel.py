@@ -1,12 +1,13 @@
 from typing import get_args
 
-from PySide6.QtCore import Signal, Slot
+from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QProgressBar,
     QPushButton,
     QSpinBox,
@@ -27,6 +28,7 @@ class ScannerPanel(QWidget):
     scanRequested = Signal(list, int, int)
     scanStopRequested = Signal()
     addrScanRequested = Signal(int, object, int, int)
+    unitSelected = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -51,6 +53,8 @@ class ScannerPanel(QWidget):
         self._progress = QProgressBar()
         self._progress.setValue(0)
         self._results = QListWidget()
+        self._results.setToolTip("Double-click a unit to select it for the connection")
+        self._results.itemDoubleClicked.connect(self._on_unit_double_clicked)
 
         self._addr_unit = QSpinBox(minimum=1, maximum=247, value=1)
         self._addr_kind = QComboBox()
@@ -174,7 +178,15 @@ class ScannerPanel(QWidget):
                 labels.append(f"{probe.kind}@{probe.address} x{probe.count}")
             else:
                 labels.append(f"probe#{i}")
-        self._results.addItem(f"Unit {unit}: {', '.join(labels)}")
+        item = QListWidgetItem(f"Unit {unit}: {', '.join(labels)}")
+        item.setData(Qt.ItemDataRole.UserRole, unit)
+        self._results.addItem(item)
+
+    @Slot(QListWidgetItem)
+    def _on_unit_double_clicked(self, item: QListWidgetItem) -> None:
+        unit = item.data(Qt.ItemDataRole.UserRole)
+        if isinstance(unit, int):
+            self.unitSelected.emit(unit)
 
     @Slot()
     def handle_scan_finished(self) -> None:

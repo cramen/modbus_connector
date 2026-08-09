@@ -101,6 +101,10 @@ class ConnectionPanel(QWidget):
     def unit_id(self) -> int:
         return self._unit.value()
 
+    @Slot(int)
+    def set_unit_id(self, unit: int) -> None:
+        self._unit.setValue(unit)
+
     def state(self) -> dict:
         return {
             "type": self._type_combo.currentText(),

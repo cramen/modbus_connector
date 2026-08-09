@@ -100,6 +100,11 @@ class MainWindow(QMainWindow):
         self._worker.addrScanHit.connect(self.scanner_panel.handle_addr_scan_hit)
         self._worker.addrScanFinished.connect(self.scanner_panel.handle_addr_scan_finished)
 
+        self.scanner_panel.unitSelected.connect(self.connection_panel.set_unit_id)
+        self.scanner_panel.unitSelected.connect(
+            lambda unit: self.log_panel.append(f"→ unit {unit} selected in connection panel")
+        )
+
         self._worker.logLine.connect(self.log_panel.append)
         self._worker.trafficLine.connect(self.log_panel.append_raw)
         self.registers_panel.logLine.connect(self.log_panel.append)
