@@ -51,6 +51,11 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 
 ![Главное окно](docs/screenshots/main_window.png)
 
+Настройки отображения строк — Scale/Offset/Unit и переопределение порядка
+байт для каждой строки таблицы (кнопка «Display…» над таблицей):
+
+![Настройки отображения](docs/screenshots/display_dialog.png)
+
 Сканер адресов — обход unit-адресов с пробами и скан адресов регистров:
 
 ![Сканер](docs/screenshots/scanner.png)

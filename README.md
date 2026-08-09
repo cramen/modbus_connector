@@ -50,6 +50,11 @@ Main window — two connection tabs, register table with read values, log:
 
 ![Main window](docs/screenshots/main_window.png)
 
+Per-row display settings — Scale/Offset/Unit and a byte-order override per
+register row (the "Display…" button above the table):
+
+![Display settings](docs/screenshots/display_dialog.png)
+
 Address scanner — unit sweep with probes and the register address scan:
 
 ![Scanner](docs/screenshots/scanner.png)
