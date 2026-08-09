@@ -106,11 +106,12 @@ src/modbus_connector/
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик
   scanner_panel.py     # сканер unit-адресов и адресов регистров (секция
-                       # Address scan); открывается отдельным окном; двойной
+                       # Registers scan); открывается отдельным окном; двойной
                        # клик по найденному unit выбирает его в панели
-                       # подключения (unitSelected); state()/set_state() —
-                       # диапазон, probes и параметры Address scan
-                       # сохраняются в настройках
+                       # подключения (unitSelected); probes-таблица — текстовые
+                       # ячейки (dec/0x-hex), невалидные строки пропускаются;
+                       # state()/set_state() — диапазон, probes и параметры
+                       # Registers scan сохраняются в настройках
   log_panel.py         # панель лога внизу главного окна, скрываемая кнопкой Log;
                        # чекбокс Raw (выкл. по умолчанию) показывает raw-кадры
                        # шины (append_raw), буфер (is_raw, текст) по 5000 строк
@@ -146,6 +147,8 @@ tests/
   test_session_widget.py   # smoke: state round-trip + shutdown сессии
   test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
                            # закрытие вкладок
+  test_scanner_panel.py    # probes-таблица (текстовые ячейки, пропуск
+                           # невалидных), round-trip настроек сканера
 ```
 
 ## Команды

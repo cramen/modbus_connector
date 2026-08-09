@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -99,7 +100,8 @@ class ScannerPanel(QWidget):
         layout.addWidget(self._progress)
         layout.addWidget(QLabel("Results:"))
         layout.addWidget(self._results)
-        layout.addWidget(QLabel("Address scan:"))
+        self._addr_section_label = QLabel("Registers scan:")
+        layout.addWidget(self._addr_section_label)
         layout.addLayout(addr_layout)
         layout.addWidget(self._addr_progress)
         layout.addWidget(self._addr_results)
@@ -116,12 +118,11 @@ class ScannerPanel(QWidget):
         type_combo.addItems(KINDS)
         type_combo.setCurrentText(probe.kind)
         self._probes_table.setCellWidget(index, COL_TYPE, type_combo)
-        self._probes_table.setCellWidget(
-            index, COL_ADDRESS, QSpinBox(minimum=0, maximum=65535, value=probe.address)
+        # plain text items (dec or 0x-hex), keyboard-friendly like the main table
+        self._probes_table.setItem(
+            index, COL_ADDRESS, QTableWidgetItem(str(probe.address))
         )
-        self._probes_table.setCellWidget(
-            index, COL_COUNT, QSpinBox(minimum=1, maximum=125, value=probe.count)
-        )
+        self._probes_table.setItem(index, COL_COUNT, QTableWidgetItem(str(probe.count)))
 
         delete_button = QPushButton("Delete")
         delete_button.clicked.connect(self._on_delete_probe)
@@ -139,13 +140,20 @@ class ScannerPanel(QWidget):
         probes = []
         for index in range(self._probes_table.rowCount()):
             type_combo = self._probes_table.cellWidget(index, COL_TYPE)
-            address_spin = self._probes_table.cellWidget(index, COL_ADDRESS)
-            count_spin = self._probes_table.cellWidget(index, COL_COUNT)
+            address_item = self._probes_table.item(index, COL_ADDRESS)
+            count_item = self._probes_table.item(index, COL_COUNT)
+            try:
+                address = int(address_item.text().strip(), 0) if address_item else -1
+                count = int(count_item.text().strip(), 0) if count_item else -1
+            except ValueError:
+                continue  # rows with invalid/empty numbers are skipped
+            if not 0 <= address <= 65535 or not 1 <= count <= 125:
+                continue
             probes.append(
                 ScanProbe(
                     kind=type_combo.currentText(),
-                    address=address_spin.value(),
-                    count=count_spin.value(),
+                    address=address,
+                    count=count,
                 )
             )
         return probes

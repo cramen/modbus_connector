@@ -203,7 +203,7 @@ sweep, **Stop** aborts it; units that answered at least one probe appear in
 the results list. **Double-click a found unit** to copy it into the connection
 panel's Unit ID field. Scanning pauses polling in the main window.
 
-The **Address scan** section below works the other way around: for a known
+The **Registers scan** section below works the other way around: for a known
 unit it reads a range of addresses of a chosen register type one by one and
 lists every address that answered as `0xNNNN (dec)` — a quick way to map the
 register space of an unfamiliar device.
