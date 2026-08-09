@@ -18,11 +18,22 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from modbus_connector.models import RegisterKind, RegisterRow, format_values, parse_values
+from modbus_connector.models import (
+    DisplayFormat,
+    RegisterKind,
+    RegisterRow,
+    format_register_values,
+    format_values,
+    parse_values,
+)
 
 KINDS = list(get_args(RegisterKind))
+FORMATS = list(get_args(DisplayFormat))
+REGISTER_KINDS = ("holding_registers", "input_registers")
 
-COL_NAME, COL_TYPE, COL_ADDRESS, COL_COUNT, COL_VALUE, COL_NEW_VALUE, COL_ACTIONS = range(7)
+COL_NAME, COL_TYPE, COL_ADDRESS, COL_COUNT, COL_FORMAT, COL_VALUE, COL_NEW_VALUE, COL_ACTIONS = (
+    range(8)
+)
 
 
 class RegistersPanel(QWidget):
@@ -42,9 +53,9 @@ class RegistersPanel(QWidget):
         self._pending_reads: dict[int, int] = {}
         self._pending_writes: dict[int, int] = {}
 
-        self._table = QTableWidget(0, 7)
+        self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels(
-            ["Name", "Type", "Address", "Count", "Value", "New value", ""]
+            ["Name", "Type", "Address", "Count", "Format", "Value", "New value", ""]
         )
         self._table.horizontalHeader().setSectionResizeMode(
             COL_NAME, QHeaderView.ResizeMode.Stretch
@@ -93,6 +104,7 @@ class RegistersPanel(QWidget):
             address_item = self._table.item(index, COL_ADDRESS)
             count_item = self._table.item(index, COL_COUNT)
             type_combo = self._table.cellWidget(index, COL_TYPE)
+            format_combo = self._table.cellWidget(index, COL_FORMAT)
             try:
                 address = int(address_item.text().strip(), 0)
                 count = int(count_item.text().strip(), 0)
@@ -104,6 +116,7 @@ class RegistersPanel(QWidget):
                     "kind": type_combo.currentText(),
                     "address": address,
                     "count": count,
+                    "format": format_combo.currentText(),
                 }
             )
         return rows
@@ -118,6 +131,9 @@ class RegistersPanel(QWidget):
                     kind=entry.get("kind") if entry.get("kind") in KINDS else "holding_registers",
                     address=int(entry["address"]),
                     count=int(entry["count"]),
+                    format=(
+                        entry.get("format") if entry.get("format") in FORMATS else "dec"
+                    ),
                 )
             except (AttributeError, KeyError, TypeError, ValueError):
                 continue
@@ -145,6 +161,13 @@ class RegistersPanel(QWidget):
         self._table.setItem(index, COL_ADDRESS, QTableWidgetItem(str(row.address)))
         self._table.setItem(index, COL_COUNT, QTableWidgetItem(str(row.count)))
 
+        format_combo = QComboBox()
+        format_combo.addItems(FORMATS)
+        format_combo.setCurrentText(row.format)
+        format_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        format_combo.setToolTip("Display format (registers only; coils/discrete show 0/1)")
+        self._table.setCellWidget(index, COL_FORMAT, format_combo)
+
         value_item = QTableWidgetItem("")
         value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self._table.setItem(index, COL_VALUE, value_item)
@@ -164,7 +187,11 @@ class RegistersPanel(QWidget):
         self._table.setCellWidget(index, COL_ACTIONS, actions)
         self._table.blockSignals(False)
 
-        for col, widget in ((COL_TYPE, type_combo), (COL_ACTIONS, actions)):
+        for col, widget in (
+            (COL_TYPE, type_combo),
+            (COL_FORMAT, format_combo),
+            (COL_ACTIONS, actions),
+        ):
             width = widget.sizeHint().width() + 8
             if self._table.columnWidth(col) < width:
                 self._table.setColumnWidth(col, width)
@@ -197,6 +224,7 @@ class RegistersPanel(QWidget):
             kind=type_combo.currentText(),
             address=address,
             count=count,
+            format=self._table.cellWidget(index, COL_FORMAT).currentText(),
         )
 
     def _row_of_sender(self) -> int | None:
@@ -261,6 +289,13 @@ class RegistersPanel(QWidget):
         for index in range(self._table.rowCount()):
             self._read_table_row(index)
 
+    def _display_text(self, index: int, values: list) -> str:
+        kind = self._table.cellWidget(index, COL_TYPE).currentText()
+        if kind not in REGISTER_KINDS:
+            return format_values(values)
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        return format_register_values(values, fmt)
+
     @Slot(int, bool, list, str)
     def handle_read_finished(self, request_id: int, ok: bool, values: list, error: str) -> None:
         token = self._pending_reads.pop(request_id, None)
@@ -271,7 +306,7 @@ class RegistersPanel(QWidget):
             return
         item = self._table.item(index, COL_VALUE)
         if item is not None:
-            item.setText(format_values(values) if ok else f"✗ {error}")
+            item.setText(self._display_text(index, values) if ok else f"✗ {error}")
 
     @Slot(int, bool, str)
     def handle_write_finished(self, request_id: int, ok: bool, error: str) -> None:

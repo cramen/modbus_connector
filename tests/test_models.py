@@ -1,6 +1,6 @@
 import pytest
 
-from modbus_connector.models import format_values, parse_values
+from modbus_connector.models import format_register_values, format_values, parse_values
 
 
 class TestParseRegisters:
@@ -57,3 +57,44 @@ class TestFormatValues:
     def test_roundtrip_hex_friendly(self) -> None:
         values = [0, 255, 65535]
         assert parse_values("holding_registers", format_values(values)) == values
+
+
+class TestFormatRegisterValues:
+    def test_dec(self) -> None:
+        assert format_register_values([1, 2, 65535], "dec") == "1, 2, 65535"
+
+    def test_hex(self) -> None:
+        assert format_register_values([0, 26, 65535], "hex") == "0x0000, 0x001A, 0xFFFF"
+
+    def test_s16(self) -> None:
+        assert format_register_values([1, 65535, 32768], "s16") == "1, -1, -32768"
+
+    def test_u32_pairs_big_endian(self) -> None:
+        assert format_register_values([0x0001, 0x0000], "u32") == "65536"
+        assert format_register_values([0x0000, 0x0001], "u32") == "1"
+
+    def test_u32_odd_trailing_register(self) -> None:
+        assert format_register_values([0x0001, 0x0000, 7], "u32") == "65536, 7"
+
+    def test_s32(self) -> None:
+        assert format_register_values([0xFFFF, 0xFFFF], "s32") == "-1"
+        assert format_register_values([0x0000, 0x0001], "s32") == "1"
+        assert format_register_values([0x8000, 0x0000], "s32") == "-2147483648"
+
+    def test_s32_odd_trailing_register(self) -> None:
+        assert format_register_values([0xFFFF, 0xFFFF, 7], "s32") == "-1, 7"
+
+    def test_f32(self) -> None:
+        assert format_register_values([0x3F80, 0x0000], "f32") == "1"
+        assert format_register_values([0x3F00, 0x0000], "f32") == "0.5"
+        assert format_register_values([0xC020, 0x0000], "f32") == "-2.5"
+
+    def test_f32_multiple_pairs(self) -> None:
+        assert format_register_values([0x3F80, 0x0000, 0xC020, 0x0000], "f32") == "1, -2.5"
+
+    def test_f32_odd_trailing_register(self) -> None:
+        assert format_register_values([0x3F80, 0x0000, 7], "f32") == "1, 7"
+
+    def test_empty(self) -> None:
+        for fmt in ("dec", "hex", "s16", "u32", "s32", "f32"):
+            assert format_register_values([], fmt) == ""

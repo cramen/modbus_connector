@@ -31,8 +31,9 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 pyproject.toml
 src/modbus_connector/
   models.py       # без Qt: RegisterKind, TcpParams/RtuParams, ConnectionParams,
-                  # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES,
-                  # parse_values(kind, text), format_values(values)
+                  # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
+                  # parse_values(kind, text), format_values(values),
+                  # format_register_values(values, fmt)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
@@ -44,6 +45,8 @@ src/modbus_connector/
                   # read/write/start_scan/stop_scan
   connection_panel.py  # параметры подключения (TCP/RTU), state()/set_state()
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
+                       # колонка Format — формат отображения значений
+                       # (dec/hex/s16/u32/s32/f32, только для регистровых kind),
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик
   scanner_panel.py     # сканер unit-адресов; открывается отдельным окном

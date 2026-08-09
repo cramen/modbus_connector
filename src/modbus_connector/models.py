@@ -1,7 +1,10 @@
+import struct
 from dataclasses import dataclass
 from typing import Literal
 
 RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_registers"]
+
+DisplayFormat = Literal["dec", "hex", "s16", "u32", "s32", "f32"]
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,7 @@ class RegisterRow:
     kind: RegisterKind
     address: int
     count: int = 1
+    format: DisplayFormat = "dec"
 
 
 @dataclass
@@ -91,3 +95,33 @@ def parse_values(kind: RegisterKind, text: str) -> list[int | bool]:
 
 def format_values(values: list[int | bool]) -> str:
     return ", ".join(str(int(v)) for v in values)
+
+
+def _to_s16(value: int) -> int:
+    return value - 0x10000 if value >= 0x8000 else value
+
+
+def _to_s32(value: int) -> int:
+    return value - 0x1_0000_0000 if value >= 0x8000_0000 else value
+
+
+def format_register_values(values: list[int], fmt: DisplayFormat) -> str:
+    if fmt == "dec":
+        return format_values(values)
+    if fmt == "hex":
+        return ", ".join(f"0x{v:04X}" for v in values)
+    if fmt == "s16":
+        return ", ".join(str(_to_s16(v)) for v in values)
+    parts = []
+    pairs_end = len(values) - len(values) % 2
+    for i in range(0, pairs_end, 2):
+        combined = values[i] << 16 | values[i + 1]  # big-endian: first register is high word
+        if fmt == "u32":
+            parts.append(str(combined))
+        elif fmt == "s32":
+            parts.append(str(_to_s32(combined)))
+        else:  # f32
+            parts.append(f"{struct.unpack('>f', struct.pack('>I', combined))[0]:.6g}")
+    if len(values) % 2:
+        parts.append(str(values[-1]))  # odd trailing register has no pair, show as decimal
+    return ", ".join(parts)
