@@ -7,9 +7,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 # Qt needs system libraries (libEGL etc.) that headless Linux CI runners lack;
 # skip the whole module there — it still runs on macOS/Windows CI and dev machines.
-pytest.importorskip("PySide6.QtWidgets", reason="Qt system libraries not available")
-
-from PySide6.QtWidgets import QApplication  # noqa: E402
+# A plain try/except is needed: pytest.importorskip re-raises ImportErrors coming
+# from a missing shared library inside an otherwise installed package.
+try:
+    from PySide6.QtWidgets import QApplication  # noqa: E402
+except ImportError as exc:
+    pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
 from modbus_connector.registers_panel import COL_NEW_VALUE, RegistersPanel  # noqa: E402
 
