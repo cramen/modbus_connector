@@ -8,24 +8,33 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 
 ## Features
 
-- TCP (host, port, timeout) and RTU (serial port, baudrate, parity, etc.;
-  RTU by default) connections — all settings are configured in the GUI.
-  Connection settings, the register list and the scanner state persist between
-  launches in `~/.modbus_connector/settings.json`, and can also be saved to /
-  loaded from an arbitrary JSON file via the File menu.
+- Multiple simultaneous connections in tabs: each tab is an independent
+  session with its own connection, register table, log and scanner. Settings
+  for all tabs persist between launches in
+  `~/.modbus_connector/settings.json` (old single-session settings files keep
+  working), and can also be saved to / loaded from an arbitrary JSON file via
+  the File menu.
+- Connection types: TCP (host, port, timeout), RTU (serial port, baudrate,
+  parity, etc.; RTU by default) and **RTU over TCP / RTU over UDP** for
+  RS-485↔Ethernet converters — all configured in the GUI.
 - Register table: rows with a name, area type (coils, discrete inputs,
   holding/input registers), address and count; read and write values.
   Enter in the "New value" column sends the write command, Ctrl+R (Cmd+R on
   macOS) reads the current row; the whole table is keyboard-friendly.
-- Rich value display: per-row formats (dec/hex/s16/u32/s32/f32), scaling with
-  offset and engineering units; a value that changed between reads flashes
-  for a couple of seconds.
-- Per-row Unit ID: rows can address different devices on the same bus.
+- Rich value display: per-row formats (dec/hex/s16/u32/s32/f32/u64/s64/f64/
+  ascii) with byte order variants (ABCD/CDAB/BADC/DCBA), scaling with offset
+  and engineering units; a value that changed between reads flashes for a
+  couple of seconds.
+- Per-row Unit ID (rows can address different devices on the same bus) and
+  per-row polling interval (slow and fast registers in one table).
 - Filter box and one-click "Sort by address" for large tables.
-- Polling of all rows with an adjustable interval.
+- Advanced protocol functions: Mask Write Register (0x16), Read/Write Multiple
+  Registers (0x17), Read Device Identification (0x2B) and serial-line
+  Diagnostics (0x08) — via dedicated dialogs.
 - Link visibility: transaction statistics in the status bar (count, errors
-  with percentage, average response time) and a live connection indicator
-  (green = alive, orange "(idle)" = link idle or degraded).
+  with percentage, top error kind, average response time), human-readable
+  Modbus exception names and a live connection indicator (green = alive,
+  orange "(idle)" = link idle or degraded).
 - Address scanner ("Scanner…" button, separate window): iterates unit ids in
   a given range with configurable probes and shows devices that answered at
   least one probe; double-click a found unit to select it for the connection.
@@ -37,7 +46,7 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 
 ## Screenshots
 
-Main window — connected, register table with read values, request/response log:
+Main window — two connection tabs, register table with read values, log:
 
 ![Main window](docs/screenshots/main_window.png)
 
@@ -70,9 +79,11 @@ python -m modbus_connector
 
 ### Connecting
 
-1. Choose the connection type: **TCP** (host, port) or **RTU** (serial port,
-   baudrate, data bits, parity, stop bits — RTU is the default). Use "Refresh"
-   to rescan serial ports; a newly appeared port is selected automatically.
+1. Choose the connection type: **TCP** (host, port), **RTU** (serial port,
+   baudrate, data bits, parity, stop bits — RTU is the default; use "Refresh"
+   to rescan serial ports) or **RTU over TCP** / **RTU over UDP** (host, port —
+   RTU frames inside a network socket, for RS-485↔Ethernet converters such as
+   USR or Elfin).
 2. Set the **Unit ID** of the target device (used for all register operations)
    and the response **Timeout**.
 3. Press **Connect**. Input fields are locked while connected; press
@@ -83,7 +94,19 @@ orange with an "(idle)" suffix means the connection is configured but the last
 transaction timed out — pymodbus reconnects transparently on the next request,
 so this is informational, not an error. The status bar at the bottom of the
 window shows transaction counters: total, errors with a percentage and the
-average response time of successful operations.
+most frequent error kind (the full breakdown by error type is in the label's
+tooltip), plus the average response time of successful operations. Modbus
+exception responses are reported by name (e.g. "Illegal Data Address (0x02)")
+in the log.
+
+### Working with tabs
+
+The main window holds connections in tabs. The **+** button in the tab bar
+corner opens another independent session — its own connection, register table,
+log and scanner window. The tab title follows the connection (e.g. `tcp
+192.168.1.10:502`); the last remaining tab cannot be closed. The status bar
+statistics follow the active tab. All tabs are saved to the settings on exit
+and restored on the next launch.
 
 ### Adding registers
 
@@ -100,7 +123,9 @@ the table is fully navigable with the keyboard. The ✕ button deletes a row.
 - **Ctrl+R** (**Cmd+R** on macOS) — reads the row that has the keyboard focus.
 - **Read all** — reads every row once.
 - **Start polling** — reads all rows repeatedly with the interval set in the
-  "Interval" field (milliseconds); press **Stop polling** to stop.
+  "Interval" field (milliseconds); press **Stop polling** to stop. The
+  optional **Poll, ms** column overrides the interval per row (empty = global
+  interval; finer values are effectively clamped to the global tick).
 
 Read values appear in the **Value** column; every request and response is also
 shown in the log panel (toggled with the "Log" button).
@@ -108,14 +133,21 @@ shown in the log panel (toggled with the "Log" button).
 ### Display formats, scaling and units
 
 For register rows the **Format** column chooses how the Value column renders:
-`dec` (default), `hex` (`0xNNNN`), `s16` (signed 16-bit), and `u32`/`s32`/`f32`,
-which combine register pairs into 32-bit values (big-endian: the first register
-is the high word; a leftover odd register is shown as-is). Coils and discrete
+`dec` (default), `hex` (`0xNNNN`), `s16` (signed 16-bit), `u32`/`s32`/`f32`
+(pairs of registers as one 32-bit value), `u64`/`s64`/`f64` (groups of four
+registers) and `ascii` (two characters per register, e.g. device names and
+serial numbers; the string ends at the first NUL byte). Coils and discrete
 inputs always show 0/1.
+
+Multi-register values are big-endian by default (the first register is the
+high word); the **Order** column covers devices with a different byte layout:
+`ABCD` (default), `CDAB` (word-swapped), `BADC` (byte-swapped words), `DCBA`
+(full reverse). A leftover register that does not fill a whole 32/64-bit group
+is shown as-is.
 
 The **Scale**, **Offset** and **Unit** columns show engineering values instead:
 each raw register is displayed as `x * scale + offset` with the unit appended
-(e.g. `23.5 °C`). Scaling is skipped for the `hex` format.
+(e.g. `23.5 °C`). Scaling is skipped for the `hex` and `ascii` formats.
 
 A value that changed since the previous read flashes green for ~2 seconds.
 
@@ -141,6 +173,21 @@ reported in the log panel.
 
 Note: only coils and holding registers are writable — discrete inputs and
 input registers are read-only by the protocol.
+
+### Advanced protocol functions
+
+- **Mask write…** (button above the table) — Mask Write Register (0x16):
+  AND/OR masks applied to one holding register. Table rows covering the
+  address are re-read after a successful write.
+- **Read/Write…** — Read/Write Multiple Registers (0x17): writes values and
+  reads back a range in one transaction; the returned values go to the log.
+- **Device ID…** (connection panel, enabled while connected) — Read Device
+  Identification (0x2B/0x0E): vendor name, product code, revision and other
+  objects reported by the device.
+- **Diagnostics…** (connection panel, enabled while connected) — serial-line
+  diagnostics (0x08): loopback echo check and bus/slave message counters with
+  Refresh and Clear counters. This is a serial-line function, but some TCP
+  devices answer it too.
 
 ### Scanning for devices
 
@@ -212,31 +259,40 @@ Linux notes:
 
 ```
 src/modbus_connector/
-  models.py       # Qt-free data types and helpers: TcpParams/RtuParams,
-                  # RegisterRow, ScanProbe, DisplayFormat,
+  models.py       # Qt-free data types and helpers: TcpParams/RtuParams/
+                  # RtuOverTcpParams/RtuOverUdpParams, RegisterRow, ScanProbe,
+                  # DisplayFormat, ByteOrder, describe_connection(),
                   # parse_values()/format_values(),
                   # format_register_values()/format_scaled_values(),
-                  # Stats/StatsSnapshot
+                  # EXCEPTION_CODES/describe_exception(), Stats/StatsSnapshot
   backend.py      # ModbusBackend — synchronous pymodbus wrapper (no Qt):
-                  # read/write, unit scan, register address scan,
-                  # raw traffic hook
+                  # read/write, mask write (0x16), read/write registers (0x17),
+                  # device identification (0x2B), diagnostics (0x08),
+                  # unit scan, register address scan, raw traffic hook
   worker.py       # ModbusWorker (QObject) — signals/slots over backend, QThread;
                   # timing statistics, liveness checks, traffic forwarding
-  connection_panel.py  # connection panel (TCP/RTU, state/set_state) with a live
-                       # status indicator (gray/green/orange)
-  registers_panel.py   # register table: polling, per-row unit/format/scaling,
-                       # change highlighting, filter/sort, Enter = write
+  connection_panel.py  # connection panel (TCP/RTU/RTU over TCP/RTU over UDP,
+                       # state/set_state) with a live status indicator
+                       # (gray/green/orange); Device ID…/Diagnostics… dialogs
+  registers_panel.py   # register table: per-row unit/poll/format/order/scaling,
+                       # change highlighting, filter/sort, Enter = write,
+                       # Mask write…/Read/Write… dialogs
   scanner_panel.py     # unit scanner + register address scan (separate window)
   log_panel.py         # log panel (hideable): Raw hex traffic toggle, Save…
   settings_store.py    # settings persistence in ~/.modbus_connector/settings.json
-  main_window.py  # main window, status bar with transaction statistics
+  session_widget.py # SessionWidget — one Modbus session (panels, scanner
+                    # window, worker thread) as a self-contained widget
+  main_window.py  # main window: sessions in tabs, File menu,
+                  # status bar following the active tab
   app.py          # QApplication creation and startup
   __main__.py     # python -m modbus_connector
 tests/
   conftest.py     # modbus_server fixture: test Modbus TCP server on 127.0.0.1
-  test_models.py  # value parsing/formatting, Stats
+  test_models.py  # value parsing/formatting, exceptions, Stats
   test_backend.py # ModbusBackend against the test server
   test_registers_panel.py  # offscreen Qt tests for the register table
+  test_session_widget.py   # session state round-trip and shutdown
+  test_main_window_tabs.py # tab lifecycle and settings round-trip
 ```
 
 ## Development
