@@ -150,6 +150,62 @@ class ScannerPanel(QWidget):
             )
         return probes
 
+    def state(self) -> dict:
+        return {
+            "start": self._start.value(),
+            "end": self._end.value(),
+            "probes": [
+                {"kind": probe.kind, "address": probe.address, "count": probe.count}
+                for probe in self._probes()
+            ],
+            "addr_unit": self._addr_unit.value(),
+            "addr_kind": self._addr_kind.currentText(),
+            "addr_from": self._addr_from.value(),
+            "addr_to": self._addr_to.value(),
+        }
+
+    def set_state(self, state: dict) -> None:
+        if not state:
+            return
+        for spin, key in (
+            (self._start, "start"),
+            (self._end, "end"),
+            (self._addr_unit, "addr_unit"),
+            (self._addr_from, "addr_from"),
+            (self._addr_to, "addr_to"),
+        ):
+            try:
+                spin.setValue(int(state.get(key, spin.value())))
+            except (TypeError, ValueError):
+                continue
+        if state.get("addr_kind") in KINDS:
+            self._addr_kind.setCurrentText(str(state["addr_kind"]))
+        probes_entry = state.get("probes")
+        if not isinstance(probes_entry, list):
+            return
+        probes = []
+        for entry in probes_entry:
+            try:
+                probes.append(
+                    ScanProbe(
+                        kind=(
+                            entry.get("kind")
+                            if entry.get("kind") in KINDS
+                            else "holding_registers"
+                        ),
+                        address=int(entry["address"]),
+                        count=int(entry["count"]),
+                    )
+                )
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+        if not probes:
+            probes = list(DEFAULT_SCAN_PROBES)
+        while self._probes_table.rowCount():
+            self._probes_table.removeRow(0)
+        for probe in probes:
+            self._add_probe(probe)
+
     @Slot()
     def _on_start(self) -> None:
         probes = self._probes()

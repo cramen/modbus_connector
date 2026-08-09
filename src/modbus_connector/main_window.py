@@ -36,12 +36,13 @@ class MainWindow(QMainWindow):
         self.connection_panel = ConnectionPanel()
         self.registers_panel = RegistersPanel(lambda: next(self._request_ids))
         self.log_panel = LogPanel()
-        self._apply_state(load_settings())
 
         self.scanner_panel = ScannerPanel(self)
         self.scanner_panel.setWindowFlags(Qt.WindowType.Window)
         self.scanner_panel.setWindowTitle("Modbus Scanner")
         self.scanner_panel.resize(700, 500)
+
+        self._apply_state(load_settings())
 
         self._scanner_button = QPushButton("Scanner…")
         self._scanner_button.clicked.connect(self._show_scanner)
@@ -134,6 +135,7 @@ class MainWindow(QMainWindow):
         return {
             "connection": self.connection_panel.state(),
             "registers": self.registers_panel.state(),
+            "scanner": self.scanner_panel.state(),
         }
 
     def _apply_state(self, state: dict[str, Any]) -> None:
@@ -145,6 +147,9 @@ class MainWindow(QMainWindow):
         registers = state.get("registers")
         if isinstance(registers, list):
             self.registers_panel.set_state(registers)
+        scanner = state.get("scanner")
+        if isinstance(scanner, dict):
+            self.scanner_panel.set_state(scanner)
 
     def _save_to_file(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
