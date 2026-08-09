@@ -83,11 +83,9 @@ class ModbusWorker(QObject):
         self._scan_stop = False
         total = max(0, end - start + 1)
         self.logLine.emit(f"→ scan units {start}..{end} ({len(probes)} probes)")
-        done = 0
         try:
             for unit, indices in self._backend.scan(probes, start, end, lambda: self._scan_stop):
-                done = max(done, unit - start + 1)
-                self.scanProgress.emit(done, total)
+                self.scanProgress.emit(unit - start + 1, total)
                 if indices:
                     self.scanHit.emit(unit, list(indices))
                     self.logLine.emit(f"← scan hit unit={unit} probes={list(indices)}")

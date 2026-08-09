@@ -98,6 +98,10 @@ class ModbusBackend:
         end: int,
         should_stop: Callable[[], bool],
     ) -> Iterator[tuple[int, list[int]]]:
+        """Сканирует unit-адреса start..end, для каждого отдаёт (unit, hits).
+
+        hits — индексы сработавших probes; пустой список — unit не ответил.
+        """
         self._require_client()
         for unit in range(start, end + 1):
             if should_stop():
@@ -109,8 +113,7 @@ class ModbusBackend:
                 except Exception:
                     continue
                 hits.append(index)
-            if hits:
-                yield unit, hits
+            yield unit, hits
 
     def _require_client(self) -> ModbusTcpClient | ModbusSerialClient:
         if not self.connected:

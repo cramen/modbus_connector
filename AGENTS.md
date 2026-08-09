@@ -35,7 +35,9 @@ src/modbus_connector/
                   # parse_values(kind, text), format_values(values)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
-                  # scan(probes, start, end, should_stop)
+                  # scan(probes, start, end, should_stop) — генератор, отдаёт
+                  # (unit, hits) для каждого просканированного unit
+                  # (hits пуст, если unit не ответил)
   worker.py       # Qt: ModbusWorker(QObject) над backend — сигналы
                   # connectionChanged/readFinished/writeFinished/scanProgress/
                   # scanHit/scanFinished/logLine; слоты connect_to/disconnect/

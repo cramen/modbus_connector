@@ -94,11 +94,17 @@ class TestNotConnected:
 class TestScan:
     def test_finds_unit(self, backend: ModbusBackend) -> None:
         probes = [ScanProbe(kind="holding_registers", address=0, count=1)]
-        assert list(backend.scan(probes, 1, 10, lambda: False)) == [(1, [0])]
+        expected = [(unit, [0] if unit == UNIT_ID else []) for unit in range(1, 11)]
+        assert list(backend.scan(probes, 1, 10, lambda: False)) == expected
+
+    def test_reports_every_unit(self, backend: ModbusBackend) -> None:
+        probes = [ScanProbe(kind="holding_registers", address=0, count=1)]
+        results = list(backend.scan(probes, 1, 3, lambda: False))
+        assert results == [(1, [0]), (2, []), (3, [])]
 
     def test_empty_range(self, backend: ModbusBackend) -> None:
         probes = [ScanProbe(kind="holding_registers", address=0, count=1)]
-        assert list(backend.scan(probes, 2, 5, lambda: False)) == []
+        assert list(backend.scan(probes, 2, 5, lambda: False)) == [(u, []) for u in range(2, 6)]
 
     def test_should_stop(self, backend: ModbusBackend) -> None:
         probes = [ScanProbe(kind="holding_registers", address=0, count=1)]
