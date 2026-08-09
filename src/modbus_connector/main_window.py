@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self._worker.scanFinished.connect(self.scanner_panel.handle_scan_finished)
 
         self._worker.logLine.connect(self.log_panel.append)
+        self._worker.trafficLine.connect(self.log_panel.append_raw)
         self.registers_panel.logLine.connect(self.log_panel.append)
 
         self._stats_label = QLabel()

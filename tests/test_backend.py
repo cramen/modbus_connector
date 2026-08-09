@@ -130,6 +130,37 @@ class TestNotConnected:
         ModbusBackend().disconnect()
 
 
+class TestTrafficHook:
+    def test_captures_tx_and_rx_frames(self, backend: ModbusBackend) -> None:
+        frames: list[tuple[str, bytes]] = []
+        backend.traffic_hook = lambda direction, data: frames.append((direction, data))
+        backend.read(UNIT_ID, "holding_registers", 0, 2)
+        tx = [data for direction, data in frames if direction == "tx"]
+        rx = [data for direction, data in frames if direction == "rx"]
+        assert tx and rx
+        frame = tx[0]
+        # Modbus TCP MBAP: tid(2) pid(2)=0 length(2) unit(1) fcode(1)
+        assert frame[2:4] == b"\x00\x00"
+        assert frame[6] == UNIT_ID
+        assert frame[7] == 3  # read holding registers
+
+    def test_hook_failure_does_not_break_read(self, backend: ModbusBackend) -> None:
+        def failing_hook(direction: str, data: bytes) -> None:
+            raise RuntimeError("boom")
+
+        backend.traffic_hook = failing_hook
+        assert backend.read(UNIT_ID, "holding_registers", 0, 2) == [100, 101]
+
+    def test_disconnect_restores_client_io(self, modbus_server: int) -> None:
+        b = ModbusBackend()
+        b.connect(TcpParams(host="127.0.0.1", port=modbus_server))
+        client = b._client
+        assert client is not None
+        b.disconnect()
+        assert "send" not in client.__dict__  # instance wrapper restored
+        assert "recv" not in client.__dict__
+
+
 class TestScan:
     def test_finds_unit(self, backend: ModbusBackend) -> None:
         probes = [ScanProbe(kind="holding_registers", address=0, count=1)]

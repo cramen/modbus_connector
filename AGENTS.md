@@ -40,10 +40,13 @@ src/modbus_connector/
                   # read/write (write только coils/holding_registers),
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
                   # (unit, hits) для каждого просканированного unit
-                  # (hits пуст, если unit не ответил)
+                  # (hits пуст, если unit не ответил);
+                  # traffic_hook — Callable[[str, bytes], None] (tx/rx),
+                  # обёртка client.send/recv на время подключения
   worker.py       # Qt: ModbusWorker(QObject) над backend — сигналы
                   # connectionChanged/readFinished/writeFinished/scanProgress/
-                  # scanHit/scanFinished/statsUpdated/aliveChanged/logLine;
+                  # scanHit/scanFinished/statsUpdated/aliveChanged/trafficLine/
+                  # logLine;
                   # слоты connect_to/disconnect/read/write/start_scan/stop_scan/
                   # check_alive (локальная проверка backend.connected, без
                   # трафика); read/write замеряют wall time и пишут в Stats
@@ -65,7 +68,10 @@ src/modbus_connector/
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик
   scanner_panel.py     # сканер unit-адресов; открывается отдельным окном
-  log_panel.py         # панель лога внизу главного окна, скрываемая кнопкой Log
+  log_panel.py         # панель лога внизу главного окна, скрываемая кнопкой Log;
+                       # чекбокс Raw (выкл. по умолчанию) показывает raw-кадры
+                       # шины (append_raw), буфер (is_raw, текст) по 5000 строк
+                       # каждого вида, перерисовка при переключении
   settings_store.py    # load_settings()/save_settings() — JSON в ~/.modbus_connector/
   main_window.py  # главное окно, компоновка панелей + worker в QThread;
                   # в статус-баре счётчики транзакций (statsUpdated);

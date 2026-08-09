@@ -13,10 +13,13 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+TrafficHook = Callable[[str, bytes], None]  # (direction "tx"/"rx", raw frame bytes)
+
 
 class ModbusBackend:
     def __init__(self) -> None:
         self._client: ModbusTcpClient | ModbusSerialClient | None = None
+        self.traffic_hook: TrafficHook | None = None
 
     @property
     def connected(self) -> bool:
@@ -46,10 +49,47 @@ class ModbusBackend:
             self._close_client(client)
             raise ConnectionError(f"Не удалось подключиться к {description}")
         self._client = client
+        self._wrap_traffic(client)
         logger.info("Подключено к %s", description)
+
+    def _wrap_traffic(self, client: ModbusTcpClient | ModbusSerialClient) -> None:
+        # client.send/recv is the single choke point for raw bytes: every framer
+        # (socket for TCP, rtu for serial) funnels frames through these methods
+        original_send = client.send
+        original_recv = client.recv
+
+        def send(request: bytes) -> int:
+            size = original_send(request)
+            if request:
+                self._emit_traffic("tx", request)
+            return size
+
+        def recv(size: int) -> bytes:
+            data = original_recv(size)
+            if data:
+                self._emit_traffic("rx", data)
+            return data
+
+        client.send = send
+        client.recv = recv
+
+    def _unwrap_traffic(self, client: ModbusTcpClient | ModbusSerialClient) -> None:
+        # dropping the instance attributes restores the class methods
+        client.__dict__.pop("send", None)
+        client.__dict__.pop("recv", None)
+
+    def _emit_traffic(self, direction: str, data: bytes) -> None:
+        hook = self.traffic_hook
+        if hook is None:
+            return
+        try:
+            hook(direction, data)
+        except Exception:  # a failing hook must never kill a transaction
+            logger.exception("Ошибка в traffic_hook")
 
     def disconnect(self) -> None:
         if self._client is not None:
+            self._unwrap_traffic(self._client)
             self._close_client(self._client)
             self._client = None
             logger.info("Соединение закрыто")

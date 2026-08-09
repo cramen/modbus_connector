@@ -28,13 +28,20 @@ class ModbusWorker(QObject):
     scanFinished = Signal()
     statsUpdated = Signal(object)
     aliveChanged = Signal(bool)
+    trafficLine = Signal(str)
     logLine = Signal(str)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._backend = ModbusBackend()
+        self._backend.traffic_hook = self._on_traffic
         self._scan_stop = False
         self._stats = Stats()
+
+    def _on_traffic(self, direction: str, data: bytes) -> None:
+        hex_bytes = " ".join(f"{byte:02x}" for byte in data)
+        arrow = "→" if direction == "tx" else "←"
+        self.trafficLine.emit(f"{arrow} {direction} {hex_bytes}")
 
     def _record_stats(self, ok: bool, started: float) -> None:
         self._stats.record(ok, (time.monotonic() - started) * 1000)
