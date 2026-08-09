@@ -203,6 +203,20 @@ class TestScanAddresses:
             list(ModbusBackend().scan_addresses(UNIT_ID, "holding_registers", 0, 1, lambda: False))
 
 
+class TestDiagnostics:
+    def test_loopback_echo_matches(self, backend: ModbusBackend) -> None:
+        assert backend.diag_loopback(UNIT_ID) is True
+
+    def test_counters_and_clear(self, backend: ModbusBackend) -> None:
+        backend.read(UNIT_ID, "holding_registers", 0, 1)
+        counters = backend.diag_counters(UNIT_ID)
+        assert counters  # the conftest server answers 0x08 subfunctions
+        assert set(counters) == set(ModbusBackend._DIAG_COUNTERS)
+        assert all(isinstance(value, int) for value in counters.values())
+        backend.diag_clear_counters(UNIT_ID)
+        assert backend.diag_counters(UNIT_ID)["bus_message_count"] == 0
+
+
 class TestReadDeviceIdentification:
     def test_reads_identity_objects(self, backend: ModbusBackend) -> None:
         # the conftest server answers 0x2B/0x0E with the fixture identity

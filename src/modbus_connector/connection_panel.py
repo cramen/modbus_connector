@@ -29,6 +29,9 @@ class ConnectionPanel(QWidget):
     connectRequested = Signal(object, int)
     disconnectRequested = Signal()
     deviceIdRequested = Signal(int, int)
+    diagLoopbackRequested = Signal(int, int)
+    diagCountersRequested = Signal(int, int)
+    diagClearRequested = Signal(int, int)
 
     def __init__(
         self,
@@ -39,6 +42,10 @@ class ConnectionPanel(QWidget):
         self._next_request_id = request_id_provider
         self._device_id_request = -1
         self._device_id_list: QListWidget | None = None
+        self._diag_loopback_request = -1
+        self._diag_counters_request = -1
+        self._diag_status: QLabel | None = None
+        self._diag_list: QListWidget | None = None
         self._connected = False
         self._alive = False
         self._status_message = "Disconnected"
@@ -101,6 +108,12 @@ class ConnectionPanel(QWidget):
         self._device_id_button = QPushButton("Device ID…")
         self._device_id_button.setEnabled(False)  # only meaningful while connected
         self._device_id_button.clicked.connect(self._on_device_id_clicked)
+        self._diag_button = QPushButton("Diagnostics…")
+        self._diag_button.setEnabled(False)
+        self._diag_button.setToolTip(
+            "Serial-line diagnostics (0x08); some TCP devices answer it too"
+        )
+        self._diag_button.clicked.connect(self._on_diag_clicked)
         self._status = QLabel("Disconnected")
         self._status.setStyleSheet("color: gray")
         self._rtu_refresh.clicked.connect(self._refresh_ports)
@@ -116,6 +129,7 @@ class ConnectionPanel(QWidget):
         layout.addWidget(self._timeout)
         layout.addWidget(self._button)
         layout.addWidget(self._device_id_button)
+        layout.addWidget(self._diag_button)
         layout.addWidget(self._status)
 
     def unit_id(self) -> int:
@@ -217,6 +231,7 @@ class ConnectionPanel(QWidget):
         self._render_status()
         self._button.setText("Disconnect" if ok else "Connect")
         self._device_id_button.setEnabled(ok)
+        self._diag_button.setEnabled(ok)
         for widget in (
             self._type_combo,
             self._tcp_host,
@@ -282,3 +297,79 @@ class ConnectionPanel(QWidget):
         for object_id, value in sorted(info.items()):
             label = DEVICE_ID_NAMES.get(object_id, f"object 0x{object_id:02X}")
             list_widget.addItem(f"{label}: {value}")
+
+    @Slot()
+    def _on_diag_clicked(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Diagnostics (function 0x08)")
+        loopback_button = QPushButton("Loopback")
+        status_label = QLabel("—")
+        counters_list = QListWidget()
+        refresh_button = QPushButton("Refresh")
+        clear_button = QPushButton("Clear counters")
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        top = QHBoxLayout()
+        top.addWidget(loopback_button)
+        top.addWidget(status_label)
+        top.addStretch(1)
+        top.addWidget(refresh_button)
+        top.addWidget(clear_button)
+        layout = QVBoxLayout(dialog)
+        layout.addLayout(top)
+        layout.addWidget(counters_list)
+        layout.addWidget(buttons)
+        self._diag_status = status_label
+        self._diag_list = counters_list
+        loopback_button.clicked.connect(self._request_diag_loopback)
+        refresh_button.clicked.connect(self._request_diag_counters)
+        clear_button.clicked.connect(self._request_diag_clear)
+        self._request_diag_counters()  # initial load
+        dialog.exec()
+        self._diag_status = None
+        self._diag_list = None
+        self._diag_loopback_request = -1
+        self._diag_counters_request = -1
+
+    def _request_diag_loopback(self) -> None:
+        if self._diag_status is None:
+            return
+        self._diag_status.setText("…")
+        self._diag_loopback_request = self._next_request_id()
+        self.diagLoopbackRequested.emit(self._diag_loopback_request, self._unit.value())
+
+    def _request_diag_counters(self) -> None:
+        if self._diag_list is None:
+            return
+        self._diag_counters_request = self._next_request_id()
+        self.diagCountersRequested.emit(self._diag_counters_request, self._unit.value())
+
+    def _request_diag_clear(self) -> None:
+        if self._diag_list is None:
+            return
+        self._diag_counters_request = self._next_request_id()
+        self.diagClearRequested.emit(self._diag_counters_request, self._unit.value())
+
+    @Slot(int, bool, str)
+    def handle_diag_loopback_finished(
+        self, request_id: int, echo_ok: bool, error: str
+    ) -> None:
+        if request_id != self._diag_loopback_request or self._diag_status is None:
+            return
+        if error:
+            self._diag_status.setText(f"✗ {error}")
+        else:
+            self._diag_status.setText("OK" if echo_ok else "mismatch")
+
+    @Slot(int, bool, dict, str)
+    def handle_diag_counters_finished(
+        self, request_id: int, ok: bool, counters: dict, error: str
+    ) -> None:
+        if request_id != self._diag_counters_request or self._diag_list is None:
+            return
+        self._diag_list.clear()
+        if not ok:
+            self._diag_list.addItem(f"✗ {error}")
+            return
+        for name, value in counters.items():
+            self._diag_list.addItem(f"{name}: {value}")

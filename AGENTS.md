@@ -43,6 +43,8 @@ src/modbus_connector/
                   # mask_write_register (функция 0x16),
                   # readwrite_registers (функция 0x17),
                   # read_device_identification (0x2B/0x0E, dict[int, str]),
+                  # diag_loopback/diag_counters/diag_clear_counters (0x08;
+                  # неподдержанные счётчики опускаются),
                   # ModbusExceptionError (.exception_code) для exception
                   # responses, человекочитаемые сообщения об ошибках,
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
@@ -69,7 +71,9 @@ src/modbus_connector/
                        # упал после таймаута (pymodbus переподключится сам);
                        # set_connected(ok, message) + слот set_alive(bool);
                        # кнопка "Device ID…" (активна при подключении) — диалог
-                       # идентификации устройства (0x2B/0x0E)
+                       # идентификации устройства (0x2B/0x0E);
+                       # кнопка "Diagnostics…" — диалог диагностики (0x08):
+                       # loopback, счётчики, clear counters
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
                        # колонка Unit ID — per-row unit (пусто = глобальный
                        # unit из панели подключения),

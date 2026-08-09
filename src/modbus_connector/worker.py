@@ -41,6 +41,8 @@ class ModbusWorker(QObject):
     scanFinished = Signal()
     readwriteFinished = Signal(int, bool, list, str)
     deviceIdFinished = Signal(int, bool, dict, str)
+    diagLoopbackFinished = Signal(int, bool, str)
+    diagCountersFinished = Signal(int, bool, dict, str)
     addrScanProgress = Signal(int, int)
     addrScanHit = Signal(int)
     addrScanFinished = Signal()
@@ -187,6 +189,52 @@ class ModbusWorker(QObject):
         self._record_stats(True, started)
         self.logLine.emit(f"← device id: {len(info)} objects")
         self.deviceIdFinished.emit(request_id, True, info, "")
+
+    @Slot(int, int)
+    def diag_loopback(self, request_id: int, unit: int) -> None:
+        self.logLine.emit(f"→ diag loopback unit={unit}")
+        started = time.monotonic()
+        try:
+            echo_ok = self._backend.diag_loopback(unit)
+        except Exception as exc:
+            self._record_stats(False, started, exc)
+            self.logLine.emit(f"✗ diag loopback failed: {exc}")
+            self.diagLoopbackFinished.emit(request_id, False, str(exc))
+            return
+        self._record_stats(True, started)
+        self.logLine.emit("← loopback ok" if echo_ok else "← loopback mismatch")
+        self.diagLoopbackFinished.emit(request_id, echo_ok, "")
+
+    @Slot(int, int)
+    def diag_read_counters(self, request_id: int, unit: int) -> None:
+        self.logLine.emit(f"→ diag counters unit={unit}")
+        started = time.monotonic()
+        try:
+            counters = self._backend.diag_counters(unit)
+        except Exception as exc:
+            self._record_stats(False, started, exc)
+            self.logLine.emit(f"✗ diag counters failed: {exc}")
+            self.diagCountersFinished.emit(request_id, False, {}, str(exc))
+            return
+        self._record_stats(True, started)
+        self.logLine.emit(f"← diag counters: {counters}")
+        self.diagCountersFinished.emit(request_id, True, counters, "")
+
+    @Slot(int, int)
+    def diag_clear_counters(self, request_id: int, unit: int) -> None:
+        self.logLine.emit(f"→ diag clear counters unit={unit}")
+        started = time.monotonic()
+        try:
+            self._backend.diag_clear_counters(unit)
+            counters = self._backend.diag_counters(unit)  # show the cleared state
+        except Exception as exc:
+            self._record_stats(False, started, exc)
+            self.logLine.emit(f"✗ diag clear counters failed: {exc}")
+            self.diagCountersFinished.emit(request_id, False, {}, str(exc))
+            return
+        self._record_stats(True, started)
+        self.logLine.emit("← counters cleared")
+        self.diagCountersFinished.emit(request_id, True, counters, "")
 
     @Slot(list, int, int)
     def start_scan(self, probes: list[ScanProbe], start: int, end: int) -> None:

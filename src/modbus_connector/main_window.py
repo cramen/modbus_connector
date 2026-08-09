@@ -80,6 +80,15 @@ class MainWindow(QMainWindow):
         self.connection_panel.disconnectRequested.connect(self._worker.disconnect)
         self.connection_panel.deviceIdRequested.connect(self._worker.read_device_id)
         self._worker.deviceIdFinished.connect(self.connection_panel.handle_device_id_finished)
+        self.connection_panel.diagLoopbackRequested.connect(self._worker.diag_loopback)
+        self.connection_panel.diagCountersRequested.connect(self._worker.diag_read_counters)
+        self.connection_panel.diagClearRequested.connect(self._worker.diag_clear_counters)
+        self._worker.diagLoopbackFinished.connect(
+            self.connection_panel.handle_diag_loopback_finished
+        )
+        self._worker.diagCountersFinished.connect(
+            self.connection_panel.handle_diag_counters_finished
+        )
         self._worker.connectionChanged.connect(self.connection_panel.set_connected)
 
         self.registers_panel.readRequested.connect(self._worker.read)

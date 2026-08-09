@@ -205,6 +205,43 @@ class ModbusBackend:
             for object_id, value in result.information.items()
         }
 
+    _DIAG_COUNTERS = {
+        "bus_message_count": "diag_read_bus_message_count",
+        "bus_comm_error_count": "diag_read_bus_comm_error_count",
+        "bus_exception_error_count": "diag_read_bus_exception_error_count",
+        "slave_message_count": "diag_read_slave_message_count",
+        "slave_no_response_count": "diag_read_slave_no_response_count",
+        "slave_busy_count": "diag_read_slave_busy_count",
+        "slave_nak_count": "diag_read_slave_nak_count",
+    }
+
+    def diag_loopback(self, unit: int, data: int = 0xA5A5) -> bool:
+        client = self._require_client()
+        payload = data.to_bytes(2, "big")
+        result = client.diag_query_data(payload, slave=unit)
+        _raise_if_error(result, "Ошибка diag loopback")
+        return bool(result.message == payload)
+
+    def diag_counters(self, unit: int) -> dict[str, int]:
+        # devices often implement only a subset of 0x08: failed counters
+        # are omitted from the result instead of aborting the whole read
+        client = self._require_client()
+        counters = {}
+        for name, method_name in self._DIAG_COUNTERS.items():
+            result = getattr(client, method_name)(slave=unit)
+            if result.isError():
+                continue
+            message = result.message
+            counters[name] = int(
+                message[0] if isinstance(message, (list, tuple)) else message
+            )
+        return counters
+
+    def diag_clear_counters(self, unit: int) -> None:
+        client = self._require_client()
+        result = client.diag_clear_counters(slave=unit)
+        _raise_if_error(result, "Ошибка diag clear counters")
+
     def scan(
         self,
         probes: list[ScanProbe],
