@@ -2,6 +2,7 @@ import pytest
 
 from modbus_connector.models import (
     Stats,
+    decode_register_values,
     describe_exception,
     format_register_values,
     format_scaled_values,
@@ -218,6 +219,35 @@ class TestFormatScaledValues:
 
     def test_empty(self) -> None:
         assert format_scaled_values([], 2.0, 1.0, "V") == ""
+
+
+class TestDecodeComposeWithScaling:
+    def test_f32_scaled_with_unit(self) -> None:
+        decoded = decode_register_values([0x3F80, 0x0000], "f32")
+        assert decoded == [1.0]
+        assert format_scaled_values(decoded, 0.1, -40.0, "°C") == "-39.9 °C"
+
+    def test_order_applies_before_scaling(self) -> None:
+        decoded = decode_register_values([0x0000, 0x3F80], "f32", "CDAB")
+        assert format_scaled_values(decoded, 0.1, -40.0, "°C") == "-39.9 °C"
+
+    def test_s16_negative_scaled(self) -> None:
+        decoded = decode_register_values([0xFFFF], "s16")
+        assert decoded == [-1]
+        assert format_scaled_values(decoded, 0.5, 0.0, "") == "-0.5"
+
+    def test_u32_with_order_and_scale(self) -> None:
+        decoded = decode_register_values([0x0000, 0x3F80], "u32", "CDAB")
+        assert decoded == [1065353216]
+        assert format_scaled_values(decoded, 1e-9, 0.0, "G") == "1.065 G"
+
+    def test_dec_decode_is_identity(self) -> None:
+        assert decode_register_values([1, 2, 300], "dec") == [1, 2, 300]
+
+    def test_u64_decode(self) -> None:
+        assert decode_register_values([0x0102, 0x0304, 0x0506, 0x0708], "u64") == [
+            0x0102030405060708
+        ]
 
 
 class TestStats:

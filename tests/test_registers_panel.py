@@ -183,6 +183,22 @@ def test_unit_id_state_roundtrip(qapp: QApplication) -> None:
     assert cells == ["5", "", "", ""]
 
 
+def test_display_text_decodes_then_scales(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "t", "kind": "holding_registers", "address": 0, "count": 2,
+             "format": "f32", "scale": 0.1, "offset": -40.0, "unit": "°C"},
+            {"name": "h", "kind": "holding_registers", "address": 2, "count": 1,
+             "format": "hex", "scale": 2.0, "unit": "V"},
+        ]
+    )
+    # Format+Order decode first, then scale/offset/unit
+    assert panel._display_text(0, [0x3F80, 0x0000]) == "-39.9 °C"
+    # hex bypasses scaling entirely
+    assert panel._display_text(1, [0x001A]) == "0x001A"
+
+
 def test_per_row_poll_gets_own_timer(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
     panel.set_state(

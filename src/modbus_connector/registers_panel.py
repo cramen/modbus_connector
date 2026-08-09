@@ -27,6 +27,7 @@ from modbus_connector.models import (
     DisplayFormat,
     RegisterKind,
     RegisterRow,
+    decode_register_values,
     format_register_values,
     format_scaled_values,
     format_values,
@@ -657,13 +658,16 @@ class RegistersPanel(QWidget):
         if kind not in REGISTER_KINDS:
             return format_values(values)
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        # hex and ascii show raw data — scaling them is meaningless
+        if fmt in ("hex", "ascii"):
+            return format_register_values(values, fmt)
+        order = self._table.cellWidget(index, COL_ORDER).currentText()
+        decoded = decode_register_values(values, fmt, order)
         scale = self._float_at(index, COL_SCALE, 1.0)
         offset = self._float_at(index, COL_OFFSET, 0.0)
         unit = self._text_at(index, COL_UNIT)
-        # hex and ascii show raw data — scaling them is meaningless
-        if fmt not in ("hex", "ascii") and (scale != 1.0 or offset != 0.0 or unit):
-            return format_scaled_values(values, scale, offset, unit)
-        order = self._table.cellWidget(index, COL_ORDER).currentText()
+        if scale != 1.0 or offset != 0.0 or unit:
+            return format_scaled_values(decoded, scale, offset, unit)
         return format_register_values(values, fmt, order)
 
     @Slot(int, bool, list, str)

@@ -36,8 +36,9 @@ src/modbus_connector/
                   # describe_connection(params) — "tcp host:port" и т.п.,
                   # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
                   # ByteOrder, parse_values(kind, text), format_values(values),
-                  # format_register_values(values, fmt, order),
-                  # format_scaled_values(values, scale, offset, unit),
+                  # decode_register_values(values, fmt, order) — decode до чисел,
+                  # format_register_values (поверх decode),
+                  # format_scaled_values (x*scale+offset по decoded),
                   # EXCEPTION_CODES/describe_exception — имена Modbus-исключений,
                   # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms,
                   # разбивка ошибок по видам)
@@ -91,7 +92,8 @@ src/modbus_connector/
                        # колонка Order — порядок байт 32/64-битных значений
                        # (ABCD/CDAB/BADC/DCBA),
                        # колонки Scale/Offset/Unit — показ scaled-значений
-                       # (x*scale+offset, кроме hex; запись всегда raw),
+                       # (decode по Format/Order, затем x*scale+offset,
+                       # кроме hex/ascii; запись всегда raw),
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (по токену строки, с генерацией),
                        # фильтр по имени/типу/адресу (QLineEdit) и кнопка

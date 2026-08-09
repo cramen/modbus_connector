@@ -145,8 +145,9 @@ high word); the **Order** column covers devices with a different byte layout:
 (full reverse). A leftover register that does not fill a whole 32/64-bit group
 is shown as-is.
 
-The **Scale**, **Offset** and **Unit** columns show engineering values instead:
-each raw register is displayed as `x * scale + offset` with the unit appended
+The **Scale**, **Offset** and **Unit** columns show engineering values: the
+raw registers are first decoded according to Format and Order, then each
+decoded number is displayed as `x * scale + offset` with the unit appended
 (e.g. `23.5 °C`). Scaling is skipped for the `hex` and `ascii` formats.
 
 A value that changed since the previous read flashes green for ~2 seconds.

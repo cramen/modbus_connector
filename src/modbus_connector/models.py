@@ -156,23 +156,49 @@ def _order_permutation(order: ByteOrder, n_bytes: int) -> list[int]:
 _GROUP_SIZES = {"u32": 2, "s32": 2, "f32": 2, "u64": 4, "s64": 4, "f64": 4}
 
 
+def decode_register_values(
+    values: list[int], fmt: DisplayFormat, order: ByteOrder = "ABCD"
+) -> list[int | float]:
+    """Decode raw registers into numbers per fmt/order.
+
+    32-bit formats combine register pairs, 64-bit formats groups of four;
+    trailing registers that do not fill a whole group pass through as decimals.
+    Only numeric formats are supported — hex/ascii are string formats handled
+    directly by format_register_values.
+    """
+    if fmt == "dec":
+        return [int(value) for value in values]
+    if fmt == "s16":
+        return [_to_s16(value) for value in values]
+    group = _GROUP_SIZES[fmt]
+    decoded: list[int | float] = []
+    groups_end = len(values) - len(values) % group
+    for i in range(0, groups_end, group):
+        raw = b"".join(value.to_bytes(2, "big") for value in values[i : i + group])
+        data = bytes(raw[j] for j in _order_permutation(order, len(raw)))
+        if fmt in ("u32", "u64"):
+            decoded.append(int.from_bytes(data, "big"))
+        elif fmt in ("s32", "s64"):
+            decoded.append(int.from_bytes(data, "big", signed=True))
+        elif fmt == "f32":
+            decoded.append(struct.unpack(">f", data)[0])
+        else:  # f64
+            decoded.append(struct.unpack(">d", data)[0])
+    decoded.extend(values[groups_end:])
+    return decoded
+
+
 def format_register_values(
     values: list[int], fmt: DisplayFormat, order: ByteOrder = "ABCD"
 ) -> str:
     """Render raw registers in the given display format.
 
-    32-bit formats combine register pairs, 64-bit formats groups of four.
     `order` permutes the bytes of each group (see _order_permutation; for
     64-bit groups the pattern tiles over all 8 bytes: CDAB reverses the four
     16-bit words, BADC swaps bytes within each word, DCBA reverses everything).
-    Trailing registers that do not fill a whole group are shown as decimals.
     """
-    if fmt == "dec":
-        return format_values(values)
     if fmt == "hex":
         return ", ".join(f"0x{v:04X}" for v in values)
-    if fmt == "s16":
-        return ", ".join(str(_to_s16(v)) for v in values)
     if fmt == "ascii":
         # two chars per register (high, low byte); NUL terminates, other
         # non-printable bytes show as '.'; `order` does not apply to strings
@@ -183,25 +209,15 @@ def format_register_values(
                     return "".join(chars)
                 chars.append(chr(byte) if 0x20 <= byte <= 0x7E else ".")
         return "".join(chars)
-    group = _GROUP_SIZES[fmt]
-    parts = []
-    groups_end = len(values) - len(values) % group
-    for i in range(0, groups_end, group):
-        raw = b"".join(value.to_bytes(2, "big") for value in values[i : i + group])
-        data = bytes(raw[j] for j in _order_permutation(order, len(raw)))
-        if fmt in ("u32", "u64"):
-            parts.append(str(int.from_bytes(data, "big")))
-        elif fmt in ("s32", "s64"):
-            parts.append(str(int.from_bytes(data, "big", signed=True)))
-        elif fmt == "f32":
-            parts.append(f"{struct.unpack('>f', data)[0]:.6g}")
-        else:  # f64
-            parts.append(f"{struct.unpack('>d', data)[0]:.6g}")
-    parts.extend(str(value) for value in values[groups_end:])
-    return ", ".join(parts)
+    return ", ".join(
+        f"{v:.6g}" if isinstance(v, float) else str(v)
+        for v in decode_register_values(values, fmt, order)
+    )
 
 
-def format_scaled_values(values: list[int], scale: float, offset: float, unit: str) -> str:
+def format_scaled_values(
+    values: list[int | float], scale: float, offset: float, unit: str
+) -> str:
     text = ", ".join(f"{v * scale + offset:.4g}" for v in values)
     return f"{text} {unit}" if text and unit else text
 
