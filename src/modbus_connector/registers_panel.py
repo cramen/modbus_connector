@@ -23,6 +23,7 @@ from modbus_connector.models import (
     RegisterKind,
     RegisterRow,
     format_register_values,
+    format_scaled_values,
     format_values,
     parse_values,
 )
@@ -31,9 +32,26 @@ KINDS = list(get_args(RegisterKind))
 FORMATS = list(get_args(DisplayFormat))
 REGISTER_KINDS = ("holding_registers", "input_registers")
 
-COL_NAME, COL_TYPE, COL_ADDRESS, COL_COUNT, COL_FORMAT, COL_VALUE, COL_NEW_VALUE, COL_ACTIONS = (
-    range(8)
-)
+(
+    COL_NAME,
+    COL_TYPE,
+    COL_ADDRESS,
+    COL_COUNT,
+    COL_FORMAT,
+    COL_SCALE,
+    COL_OFFSET,
+    COL_UNIT,
+    COL_VALUE,
+    COL_NEW_VALUE,
+    COL_ACTIONS,
+) = range(11)
+
+
+def _entry_float(value: object, default: float) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 class RegistersPanel(QWidget):
@@ -53,15 +71,30 @@ class RegistersPanel(QWidget):
         self._pending_reads: dict[int, int] = {}
         self._pending_writes: dict[int, int] = {}
 
-        self._table = QTableWidget(0, 8)
+        self._table = QTableWidget(0, 11)
         self._table.setHorizontalHeaderLabels(
-            ["Name", "Type", "Address", "Count", "Format", "Value", "New value", ""]
+            [
+                "Name",
+                "Type",
+                "Address",
+                "Count",
+                "Format",
+                "Scale",
+                "Offset",
+                "Unit",
+                "Value",
+                "New value",
+                "",
+            ]
         )
         self._table.horizontalHeader().setSectionResizeMode(
             COL_NAME, QHeaderView.ResizeMode.Stretch
         )
         self._table.verticalHeader().setVisible(False)
-        self._table.setToolTip("Enter in 'New value' = write, Ctrl/Cmd+R = read current row")
+        self._table.setToolTip(
+            "Enter in 'New value' = write raw values (no scale/offset applied), "
+            "Ctrl/Cmd+R = read current row"
+        )
         self._table.itemChanged.connect(self._on_item_changed)
 
         read_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
@@ -117,6 +150,9 @@ class RegistersPanel(QWidget):
                     "address": address,
                     "count": count,
                     "format": format_combo.currentText(),
+                    "scale": self._float_at(index, COL_SCALE, 1.0),
+                    "offset": self._float_at(index, COL_OFFSET, 0.0),
+                    "unit": self._text_at(index, COL_UNIT),
                 }
             )
         return rows
@@ -134,6 +170,9 @@ class RegistersPanel(QWidget):
                     format=(
                         entry.get("format") if entry.get("format") in FORMATS else "dec"
                     ),
+                    scale=_entry_float(entry.get("scale"), 1.0),
+                    offset=_entry_float(entry.get("offset"), 0.0),
+                    unit=str(entry.get("unit") or ""),
                 )
             except (AttributeError, KeyError, TypeError, ValueError):
                 continue
@@ -167,6 +206,10 @@ class RegistersPanel(QWidget):
         format_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         format_combo.setToolTip("Display format (registers only; coils/discrete show 0/1)")
         self._table.setCellWidget(index, COL_FORMAT, format_combo)
+
+        self._table.setItem(index, COL_SCALE, QTableWidgetItem(f"{row.scale:g}"))
+        self._table.setItem(index, COL_OFFSET, QTableWidgetItem(f"{row.offset:g}"))
+        self._table.setItem(index, COL_UNIT, QTableWidgetItem(row.unit))
 
         value_item = QTableWidgetItem("")
         value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -206,6 +249,16 @@ class RegistersPanel(QWidget):
                 return index
         return None
 
+    def _text_at(self, index: int, col: int) -> str:
+        item = self._table.item(index, col)
+        return item.text().strip() if item else ""
+
+    def _float_at(self, index: int, col: int, default: float) -> float:
+        try:
+            return float(self._text_at(index, col))
+        except ValueError:
+            return default
+
     def _row_data(self, index: int) -> RegisterRow | None:
         type_combo = self._table.cellWidget(index, COL_TYPE)
         name_item = self._table.item(index, COL_NAME)
@@ -225,6 +278,9 @@ class RegistersPanel(QWidget):
             address=address,
             count=count,
             format=self._table.cellWidget(index, COL_FORMAT).currentText(),
+            scale=self._float_at(index, COL_SCALE, 1.0),
+            offset=self._float_at(index, COL_OFFSET, 0.0),
+            unit=self._text_at(index, COL_UNIT),
         )
 
     def _row_of_sender(self) -> int | None:
@@ -294,6 +350,12 @@ class RegistersPanel(QWidget):
         if kind not in REGISTER_KINDS:
             return format_values(values)
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        scale = self._float_at(index, COL_SCALE, 1.0)
+        offset = self._float_at(index, COL_OFFSET, 0.0)
+        unit = self._text_at(index, COL_UNIT)
+        # hex shows raw words — scaling hex is meaningless
+        if fmt != "hex" and (scale != 1.0 or offset != 0.0 or unit):
+            return format_scaled_values(values, scale, offset, unit)
         return format_register_values(values, fmt)
 
     @Slot(int, bool, list, str)

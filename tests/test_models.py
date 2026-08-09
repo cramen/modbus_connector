@@ -1,6 +1,11 @@
 import pytest
 
-from modbus_connector.models import format_register_values, format_values, parse_values
+from modbus_connector.models import (
+    format_register_values,
+    format_scaled_values,
+    format_values,
+    parse_values,
+)
 
 
 class TestParseRegisters:
@@ -98,3 +103,24 @@ class TestFormatRegisterValues:
     def test_empty(self) -> None:
         for fmt in ("dec", "hex", "s16", "u32", "s32", "f32"):
             assert format_register_values([], fmt) == ""
+
+
+class TestFormatScaledValues:
+    def test_default_passthrough(self) -> None:
+        assert format_scaled_values([1, 2, 300], 1.0, 0.0, "") == "1, 2, 300"
+
+    def test_scale_and_offset(self) -> None:
+        assert format_scaled_values([1, 2], 0.1, 5.0, "") == "5.1, 5.2"
+
+    def test_compact_float_formatting(self) -> None:
+        assert format_scaled_values([100], 0.1, 0.0, "") == "10"
+        assert format_scaled_values([1], 1.0 / 3.0, 0.0, "") == "0.3333"
+
+    def test_unit_appended(self) -> None:
+        assert format_scaled_values([20, 21], 1.0, 0.0, "°C") == "20, 21 °C"
+
+    def test_unit_with_scaling(self) -> None:
+        assert format_scaled_values([250], 0.1, -40.0, "V") == "-15 V"
+
+    def test_empty(self) -> None:
+        assert format_scaled_values([], 2.0, 1.0, "V") == ""

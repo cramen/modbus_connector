@@ -34,6 +34,9 @@ class RegisterRow:
     address: int
     count: int = 1
     format: DisplayFormat = "dec"
+    scale: float = 1.0
+    offset: float = 0.0
+    unit: str = ""
 
 
 @dataclass
@@ -125,3 +128,8 @@ def format_register_values(values: list[int], fmt: DisplayFormat) -> str:
     if len(values) % 2:
         parts.append(str(values[-1]))  # odd trailing register has no pair, show as decimal
     return ", ".join(parts)
+
+
+def format_scaled_values(values: list[int], scale: float, offset: float, unit: str) -> str:
+    text = ", ".join(f"{v * scale + offset:.4g}" for v in values)
+    return f"{text} {unit}" if text and unit else text
