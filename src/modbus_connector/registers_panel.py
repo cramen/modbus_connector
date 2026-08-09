@@ -145,9 +145,19 @@ class RegistersPanel(QWidget):
         read_all_button.clicked.connect(self.read_all)
         sort_button = QPushButton("Sort by address")
         sort_button.clicked.connect(self._sort_by_address)
-        mask_write_button = QPushButton("Mask write…")
+        mask_write_button = QPushButton("Mask write (0x16)…")
+        mask_write_button.setToolTip(
+            "Set or clear individual bits of a holding register without touching "
+            "others: result = (value AND and-mask) OR (or-mask AND NOT and-mask). "
+            "Typical use: bit fields in PLC configuration registers."
+        )
         mask_write_button.clicked.connect(self._on_mask_write)
-        readwrite_button = QPushButton("Read/Write…")
+        readwrite_button = QPushButton("Read/Write (0x17)…")
+        readwrite_button.setToolTip(
+            "Atomic transaction: write holding registers and read others in a "
+            "single Modbus exchange (function 0x17). Used when a device requires "
+            "read-modify-write without a race window."
+        )
         readwrite_button.clicked.connect(self._on_readwrite)
 
         self._filter_edit = QLineEdit()
@@ -475,6 +485,13 @@ class RegistersPanel(QWidget):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form = QFormLayout(dialog)
+        form.addRow(
+            QLabel(
+                "Set/clear bits of one holding register:\n"
+                "result = (value AND and-mask) OR (or-mask AND NOT and-mask).\n"
+                "Masks accept decimal or hex (e.g. 0xFF0F)."
+            )
+        )
         form.addRow("Unit:", unit_edit)
         form.addRow("Address:", address_edit)
         form.addRow("AND mask:", and_edit)
@@ -534,6 +551,13 @@ class RegistersPanel(QWidget):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form = QFormLayout(dialog)
+        form.addRow(
+            QLabel(
+                "One atomic exchange: write Values at Write address, then read\n"
+                "Read count registers from Read address; read values go to the log.\n"
+                "Addresses accept decimal or hex (e.g. 0x10)."
+            )
+        )
         form.addRow("Unit:", unit_edit)
         form.addRow("Write address:", write_address_edit)
         form.addRow("Values:", values_edit)

@@ -179,11 +179,13 @@ input registers are read-only by the protocol.
 
 ### Advanced protocol functions
 
-- **Mask write…** (button above the table) — Mask Write Register (0x16):
-  AND/OR masks applied to one holding register. Table rows covering the
-  address are re-read after a successful write.
-- **Read/Write…** — Read/Write Multiple Registers (0x17): writes values and
-  reads back a range in one transaction; the returned values go to the log.
+- **Mask write (0x16)…** (button above the table) — Mask Write Register:
+  AND/OR masks applied to one holding register, setting or clearing individual
+  bits without touching the others. Table rows covering the address are
+  re-read after a successful write.
+- **Read/Write (0x17)…** — Read/Write Multiple Registers: writes values and
+  reads back a range in one atomic transaction (no race window); the returned
+  values go to the log.
 - **Device ID…** (connection panel, enabled while connected) — Read Device
   Identification (0x2B/0x0E): vendor name, product code, revision and other
   objects reported by the device.

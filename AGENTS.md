@@ -99,9 +99,9 @@ src/modbus_connector/
                        # фильтр по имени/типу/адресу (QLineEdit) и кнопка
                        # "Sort by address" — физическая перестановка строк,
                        # токены и pending-запросы сохраняются,
-                       # "Mask write…" — диалог mask write (0x16), после успеха
+                       # "Mask write (0x16)…" — диалог mask write, после успеха
                        # перечитываются строки, покрывающие адрес,
-                       # "Read/Write…" — диалог read/write registers (0x17),
+                       # "Read/Write (0x17)…" — диалог read/write registers,
                        # прочитанные значения пишутся в лог,
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик
