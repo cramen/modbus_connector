@@ -4,7 +4,7 @@ import pytest
 from conftest import UNIT_ID
 from pymodbus.client import ModbusTcpClient
 
-from modbus_connector.backend import ModbusBackend
+from modbus_connector.backend import ModbusBackend, ModbusExceptionError
 from modbus_connector.models import ScanProbe, TcpParams
 
 
@@ -84,6 +84,17 @@ class TestRead:
 
     def test_read_partial(self, backend: ModbusBackend) -> None:
         assert backend.read(UNIT_ID, "holding_registers", 3, 2) == [103, 104]
+
+
+class TestReadErrors:
+    def test_out_of_range_address_is_human_readable(self, backend: ModbusBackend) -> None:
+        with pytest.raises(ModbusExceptionError, match="Illegal Data Address") as exc_info:
+            backend.read(UNIT_ID, "holding_registers", 10, 1)
+        assert exc_info.value.exception_code == 0x02
+
+    def test_out_of_range_write_is_human_readable(self, backend: ModbusBackend) -> None:
+        with pytest.raises(ModbusExceptionError, match=r"Illegal Data Address \(0x02\)"):
+            backend.write(UNIT_ID, "holding_registers", 10, [1])
 
 
 class TestWrite:

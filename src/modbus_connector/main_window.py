@@ -126,10 +126,21 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _update_stats(self, snapshot: StatsSnapshot) -> None:
-        self._stats_label.setText(
+        text = (
             f"Tx: {snapshot.total}  Err: {snapshot.errors} "
             f"({snapshot.error_percent:.1f}%)  Avg: {snapshot.avg_ms:.0f} ms"
         )
+        top = snapshot.top_error_kind
+        if top is not None:
+            text += f"  top: {top.removeprefix('exception:')}"
+        self._stats_label.setText(text)
+        tooltip = "\n".join(
+            f"{kind}: {count}"
+            for kind, count in sorted(
+                snapshot.error_kinds.items(), key=lambda item: -item[1]
+            )
+        )
+        self._stats_label.setToolTip(tooltip or "no errors yet")
 
     def _collect_state(self) -> dict[str, Any]:
         return {

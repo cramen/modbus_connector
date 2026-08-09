@@ -1,5 +1,5 @@
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_registers"]
@@ -181,16 +181,41 @@ def format_scaled_values(values: list[int], scale: float, offset: float, unit: s
     return f"{text} {unit}" if text and unit else text
 
 
+EXCEPTION_CODES: dict[int, str] = {
+    0x01: "Illegal Function",
+    0x02: "Illegal Data Address",
+    0x03: "Illegal Data Value",
+    0x04: "Slave Device Failure",
+    0x05: "Acknowledge",
+    0x06: "Slave Device Busy",
+    0x08: "Memory Parity Error",
+    0x0A: "Gateway Path Unavailable",
+    0x0B: "Gateway Target Device Failed to Respond",
+}
+
+
+def describe_exception(code: int) -> str:
+    name = EXCEPTION_CODES.get(code)
+    return f"{name} (0x{code:02X})" if name else f"Exception 0x{code:02X}"
+
+
 @dataclass(frozen=True)
 class StatsSnapshot:
     total: int = 0
     errors: int = 0
     avg_ms: float = 0.0  # mean duration of successful operations only
     last_ms: float = 0.0
+    error_kinds: dict[str, int] = field(default_factory=dict)
 
     @property
     def error_percent(self) -> float:
         return self.errors / self.total * 100 if self.total else 0.0
+
+    @property
+    def top_error_kind(self) -> str | None:
+        if not self.error_kinds:
+            return None
+        return max(self.error_kinds, key=lambda kind: self.error_kinds[kind])
 
 
 class Stats:
@@ -200,8 +225,9 @@ class Stats:
         self._ok_count = 0
         self._ok_ms = 0.0
         self._last_ms = 0.0
+        self._error_kinds: dict[str, int] = {}
 
-    def record(self, ok: bool, duration_ms: float) -> None:
+    def record(self, ok: bool, duration_ms: float, error_kind: str | None = None) -> None:
         self._total += 1
         self._last_ms = duration_ms
         if ok:
@@ -209,6 +235,8 @@ class Stats:
             self._ok_ms += duration_ms
         else:
             self._errors += 1
+            kind = error_kind or "other"
+            self._error_kinds[kind] = self._error_kinds.get(kind, 0) + 1
 
     def snapshot(self) -> StatsSnapshot:
         return StatsSnapshot(
@@ -216,6 +244,7 @@ class Stats:
             errors=self._errors,
             avg_ms=self._ok_ms / self._ok_count if self._ok_count else 0.0,
             last_ms=self._last_ms,
+            error_kinds=dict(self._error_kinds),
         )
 
     def reset(self) -> None:
@@ -224,3 +253,4 @@ class Stats:
         self._ok_count = 0
         self._ok_ms = 0.0
         self._last_ms = 0.0
+        self._error_kinds.clear()

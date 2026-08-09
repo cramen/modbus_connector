@@ -3,17 +3,38 @@ from collections.abc import Callable, Iterator
 
 from pymodbus.client import ModbusSerialClient, ModbusTcpClient
 from pymodbus.exceptions import ConnectionException, ModbusIOException
+from pymodbus.pdu import ExceptionResponse, ModbusResponse
 
 from .models import (
     ConnectionParams,
     RegisterKind,
     ScanProbe,
     TcpParams,
+    describe_exception,
 )
 
 logger = logging.getLogger(__name__)
 
 TrafficHook = Callable[[str, bytes], None]  # (direction "tx"/"rx", raw frame bytes)
+
+
+class ModbusExceptionError(ModbusIOException):
+    """Операция отклонена устройством: Modbus exception response с кодом."""
+
+    def __init__(self, message: str, exception_code: int) -> None:
+        super().__init__(message)
+        self.exception_code = exception_code
+
+
+def _raise_if_error(result: ModbusResponse, prefix: str) -> None:
+    if not result.isError():
+        return
+    if isinstance(result, ExceptionResponse):
+        raise ModbusExceptionError(
+            f"{prefix}: {describe_exception(result.exception_code)}",
+            result.exception_code,
+        )
+    raise ModbusIOException(f"{prefix}: {result}")
 
 
 class ModbusBackend:
@@ -112,8 +133,7 @@ class ModbusBackend:
             "input_registers": client.read_input_registers,
         }[kind]
         result = read(address, count=count, slave=unit)
-        if result.isError():
-            raise ModbusIOException(f"Ошибка чтения {kind}@{address}: {result}")
+        _raise_if_error(result, f"Ошибка чтения {kind}@{address}")
         if kind in ("coils", "discrete_inputs"):
             return list(result.bits[:count])
         return list(result.registers)
@@ -134,8 +154,7 @@ class ModbusBackend:
                 result = client.write_registers(address, [int(v) for v in values], slave=unit)
         else:
             raise ValueError(f"Запись в {kind} не поддерживается (только coils/holding_registers)")
-        if result.isError():
-            raise ModbusIOException(f"Ошибка записи {kind}@{address}: {result}")
+        _raise_if_error(result, f"Ошибка записи {kind}@{address}")
 
     def scan(
         self,

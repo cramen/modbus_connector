@@ -1,8 +1,9 @@
 import time
 
+from pymodbus.exceptions import ConnectionException, ModbusIOException
 from PySide6.QtCore import QObject, Signal, Slot
 
-from modbus_connector.backend import ModbusBackend
+from modbus_connector.backend import ModbusBackend, ModbusExceptionError
 from modbus_connector.models import (
     ConnectionParams,
     RegisterKind,
@@ -10,6 +11,7 @@ from modbus_connector.models import (
     ScanProbe,
     Stats,
     TcpParams,
+    describe_exception,
     format_values,
 )
 
@@ -18,6 +20,16 @@ def _describe(params: ConnectionParams) -> str:
     if isinstance(params, TcpParams):
         return f"tcp {params.host}:{params.port}"
     return f"rtu {params.port} @ {params.baudrate}"
+
+
+def _classify_error(exc: Exception) -> str:
+    if isinstance(exc, ModbusExceptionError):
+        return f"exception:{describe_exception(exc.exception_code)}"
+    if isinstance(exc, ModbusIOException):
+        return "timeout"
+    if isinstance(exc, (ConnectionException, ConnectionError, OSError)):
+        return "transport"
+    return "other"
 
 
 class ModbusWorker(QObject):
@@ -47,8 +59,9 @@ class ModbusWorker(QObject):
         arrow = "→" if direction == "tx" else "←"
         self.trafficLine.emit(f"{arrow} {direction} {hex_bytes}")
 
-    def _record_stats(self, ok: bool, started: float) -> None:
-        self._stats.record(ok, (time.monotonic() - started) * 1000)
+    def _record_stats(self, ok: bool, started: float, exc: Exception | None = None) -> None:
+        error_kind = _classify_error(exc) if not ok and exc is not None else None
+        self._stats.record(ok, (time.monotonic() - started) * 1000, error_kind)
         self.statsUpdated.emit(self._stats.snapshot())
 
     @Slot(object)
@@ -85,7 +98,7 @@ class ModbusWorker(QObject):
         try:
             values = self._backend.read(unit, row.kind, row.address, row.count)
         except Exception as exc:
-            self._record_stats(False, started)
+            self._record_stats(False, started, exc)
             self.logLine.emit(f"✗ read failed: {exc}")
             self.readFinished.emit(request_id, False, [], str(exc))
             return
@@ -102,7 +115,7 @@ class ModbusWorker(QObject):
         try:
             self._backend.write(unit, row.kind, row.address, values)
         except Exception as exc:
-            self._record_stats(False, started)
+            self._record_stats(False, started, exc)
             self.logLine.emit(f"✗ write failed: {exc}")
             self.writeFinished.emit(request_id, False, str(exc))
             return

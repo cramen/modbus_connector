@@ -2,6 +2,7 @@ import pytest
 
 from modbus_connector.models import (
     Stats,
+    describe_exception,
     format_register_values,
     format_scaled_values,
     format_values,
@@ -261,3 +262,40 @@ class TestStats:
         stats.record(False, 20.0)
         stats.reset()
         assert stats.snapshot() == Stats().snapshot()
+
+
+class TestDescribeException:
+    def test_known_codes(self) -> None:
+        assert describe_exception(0x01) == "Illegal Function (0x01)"
+        assert describe_exception(0x02) == "Illegal Data Address (0x02)"
+        assert describe_exception(0x0B) == "Gateway Target Device Failed to Respond (0x0B)"
+
+    def test_unknown_code(self) -> None:
+        assert describe_exception(0x63) == "Exception 0x63"
+
+
+class TestStatsErrorKinds:
+    def test_kinds_counted(self) -> None:
+        stats = Stats()
+        stats.record(False, 1.0, "timeout")
+        stats.record(False, 1.0, "timeout")
+        stats.record(False, 1.0, "exception:Illegal Data Address (0x02)")
+        stats.record(False, 1.0)  # no kind -> other
+        snapshot = stats.snapshot()
+        assert snapshot.error_kinds == {
+            "timeout": 2,
+            "exception:Illegal Data Address (0x02)": 1,
+            "other": 1,
+        }
+        assert snapshot.top_error_kind == "timeout"
+
+    def test_default_snapshot_has_empty_breakdown(self) -> None:
+        snapshot = Stats().snapshot()
+        assert snapshot.error_kinds == {}
+        assert snapshot.top_error_kind is None
+
+    def test_reset_clears_kinds(self) -> None:
+        stats = Stats()
+        stats.record(False, 1.0, "timeout")
+        stats.reset()
+        assert stats.snapshot().error_kinds == {}

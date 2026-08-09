@@ -35,9 +35,13 @@ src/modbus_connector/
                   # ByteOrder, parse_values(kind, text), format_values(values),
                   # format_register_values(values, fmt, order),
                   # format_scaled_values(values, scale, offset, unit),
-                  # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms)
+                  # EXCEPTION_CODES/describe_exception — имена Modbus-исключений,
+                  # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms,
+                  # разбивка ошибок по видам)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
+                  # ModbusExceptionError (.exception_code) для exception
+                  # responses, человекочитаемые сообщения об ошибках,
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
                   # (unit, hits) для каждого просканированного unit
                   # (hits пуст, если unit не ответил);
