@@ -2,7 +2,7 @@ from collections.abc import Callable
 from typing import get_args
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QBrush, QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -70,6 +70,7 @@ class RegistersPanel(QWidget):
         self._row_token_counter = 0
         self._pending_reads: dict[int, int] = {}
         self._pending_writes: dict[int, int] = {}
+        self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
 
         self._table = QTableWidget(0, 11)
         self._table.setHorizontalHeaderLabels(
@@ -297,6 +298,7 @@ class RegistersPanel(QWidget):
     def _on_delete_clicked(self) -> None:
         index = self._row_of_sender()
         if index is not None:
+            self._flash_generations.pop(self._token_at(index), None)
             self._table.removeRow(index)
 
     @Slot(QTableWidgetItem)
@@ -368,7 +370,27 @@ class RegistersPanel(QWidget):
             return
         item = self._table.item(index, COL_VALUE)
         if item is not None:
-            item.setText(self._display_text(index, values) if ok else f"✗ {error}")
+            text = self._display_text(index, values) if ok else f"✗ {error}"
+            if text != item.text():
+                self._flash_value_cell(token, item)
+            item.setText(text)
+
+    def _flash_value_cell(self, token: int, item: QTableWidgetItem) -> None:
+        item.setBackground(QColor(144, 238, 144))  # light green
+        generation = self._flash_generations.get(token, 0) + 1
+        self._flash_generations[token] = generation
+        QTimer.singleShot(2000, lambda: self._clear_flash(token, generation))
+
+    def _clear_flash(self, token: int, generation: int) -> None:
+        if self._flash_generations.get(token) != generation:
+            return  # superseded by a newer flash, its timer will do the clearing
+        self._flash_generations.pop(token, None)
+        index = self._find_row_by_token(token)  # the row may have been deleted or moved
+        if index is None:
+            return
+        item = self._table.item(index, COL_VALUE)
+        if item is not None:
+            item.setBackground(QBrush())
 
     @Slot(int, bool, str)
     def handle_write_finished(self, request_id: int, ok: bool, error: str) -> None:
