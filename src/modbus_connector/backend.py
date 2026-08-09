@@ -166,6 +166,32 @@ class ModbusBackend:
         )
         _raise_if_error(result, f"Ошибка mask write @{address}")
 
+    def readwrite_registers(
+        self,
+        unit: int,
+        read_address: int,
+        read_count: int,
+        write_address: int,
+        values: list[int],
+    ) -> list[int]:
+        client = self._require_client()
+        if not values:
+            raise ValueError("Нет значений для записи")
+        if not 1 <= read_count <= 125:
+            raise ValueError(f"read_count вне диапазона 1..125: {read_count}")
+        for value in values:
+            if not 0 <= value <= 0xFFFF:
+                raise ValueError(f"Значение регистра вне диапазона 0..65535: {value}")
+        result = client.readwrite_registers(
+            read_address=read_address,
+            read_count=read_count,
+            write_address=write_address,
+            values=values,
+            slave=unit,
+        )
+        _raise_if_error(result, f"Ошибка read/write @{read_address}")
+        return list(result.registers)
+
     def scan(
         self,
         probes: list[ScanProbe],

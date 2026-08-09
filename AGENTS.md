@@ -41,6 +41,7 @@ src/modbus_connector/
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
                   # mask_write_register (функция 0x16),
+                  # readwrite_registers (функция 0x17),
                   # ModbusExceptionError (.exception_code) для exception
                   # responses, человекочитаемые сообщения об ошибках,
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
@@ -83,6 +84,8 @@ src/modbus_connector/
                        # токены и pending-запросы сохраняются,
                        # "Mask write…" — диалог mask write (0x16), после успеха
                        # перечитываются строки, покрывающие адрес,
+                       # "Read/Write…" — диалог read/write registers (0x17),
+                       # прочитанные значения пишутся в лог,
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик
   scanner_panel.py     # сканер unit-адресов и адресов регистров (секция

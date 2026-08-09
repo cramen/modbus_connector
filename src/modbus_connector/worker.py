@@ -39,6 +39,7 @@ class ModbusWorker(QObject):
     scanProgress = Signal(int, int)
     scanHit = Signal(int, list)
     scanFinished = Signal()
+    readwriteFinished = Signal(int, bool, list, str)
     addrScanProgress = Signal(int, int)
     addrScanHit = Signal(int)
     addrScanFinished = Signal()
@@ -142,6 +143,34 @@ class ModbusWorker(QObject):
         self._record_stats(True, started)
         self.logLine.emit("← ok")
         self.writeFinished.emit(request_id, True, "")
+
+    @Slot(int, int, int, int, int, list)
+    def readwrite(
+        self,
+        request_id: int,
+        unit: int,
+        read_address: int,
+        read_count: int,
+        write_address: int,
+        values: list,
+    ) -> None:
+        self.logLine.emit(
+            f"→ read/write unit={unit} read@{read_address} x{read_count} "
+            f"write@{write_address} values={format_values(values)}"
+        )
+        started = time.monotonic()
+        try:
+            result = self._backend.readwrite_registers(
+                unit, read_address, read_count, write_address, values
+            )
+        except Exception as exc:
+            self._record_stats(False, started, exc)
+            self.logLine.emit(f"✗ read/write failed: {exc}")
+            self.readwriteFinished.emit(request_id, False, [], str(exc))
+            return
+        self._record_stats(True, started)
+        self.logLine.emit(f"← {format_values(result)}")
+        self.readwriteFinished.emit(request_id, True, list(result), "")
 
     @Slot(list, int, int)
     def start_scan(self, probes: list[ScanProbe], start: int, end: int) -> None:

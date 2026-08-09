@@ -83,9 +83,11 @@ class MainWindow(QMainWindow):
         self.registers_panel.readRequested.connect(self._worker.read)
         self.registers_panel.writeRequested.connect(self._worker.write)
         self.registers_panel.maskWriteRequested.connect(self._worker.mask_write)
+        self.registers_panel.readwriteRequested.connect(self._worker.readwrite)
         self._worker.readFinished.connect(self.registers_panel.handle_read_finished)
         self._worker.writeFinished.connect(self.registers_panel.handle_write_finished)
         self._worker.writeFinished.connect(self.registers_panel.handle_mask_write_finished)
+        self._worker.readwriteFinished.connect(self.registers_panel.handle_readwrite_finished)
 
         self.scanner_panel.scanStarted.connect(self.registers_panel.stop_polling)
         self.scanner_panel.scanRequested.connect(self._worker.start_scan)

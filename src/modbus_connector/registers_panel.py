@@ -74,6 +74,7 @@ class RegistersPanel(QWidget):
     readRequested = Signal(int, int, object)
     writeRequested = Signal(int, int, object, list)
     maskWriteRequested = Signal(int, int, int, int, int)
+    readwriteRequested = Signal(int, int, int, int, int, list)
     logLine = Signal(str)
 
     def __init__(
@@ -88,6 +89,7 @@ class RegistersPanel(QWidget):
         self._pending_reads: dict[int, int] = {}
         self._pending_writes: dict[int, int] = {}
         self._pending_mask_writes: dict[int, int] = {}  # request_id -> address
+        self._pending_readwrites: dict[int, int] = {}  # request_id -> write address
         self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
 
         self._table = QTableWidget(0, 13)
@@ -130,6 +132,8 @@ class RegistersPanel(QWidget):
         sort_button.clicked.connect(self._sort_by_address)
         mask_write_button = QPushButton("Mask write…")
         mask_write_button.clicked.connect(self._on_mask_write)
+        readwrite_button = QPushButton("Read/Write…")
+        readwrite_button.clicked.connect(self._on_readwrite)
 
         self._filter_edit = QLineEdit()
         self._filter_edit.setPlaceholderText("Filter…")
@@ -148,6 +152,7 @@ class RegistersPanel(QWidget):
         top.addWidget(read_all_button)
         top.addWidget(sort_button)
         top.addWidget(mask_write_button)
+        top.addWidget(readwrite_button)
         top.addWidget(self._filter_edit)
         top.addStretch(1)
         top.addWidget(QLabel("Interval:"))
@@ -402,6 +407,75 @@ class RegistersPanel(QWidget):
             if row is None or row.kind != "holding_registers":
                 continue
             if row.address <= address < row.address + row.count:
+                self._read_table_row(index)
+
+    @Slot()
+    def _on_readwrite(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Read/Write multiple registers (function 0x17)")
+        unit_edit = QLineEdit()
+        unit_edit.setPlaceholderText("empty = global unit")
+        write_address_edit = QLineEdit()
+        values_edit = QLineEdit()
+        values_edit.setPlaceholderText("comma/space separated, hex ok")
+        read_address_edit = QLineEdit()
+        read_count_edit = QSpinBox(minimum=1, maximum=125, value=1)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form = QFormLayout(dialog)
+        form.addRow("Unit:", unit_edit)
+        form.addRow("Write address:", write_address_edit)
+        form.addRow("Values:", values_edit)
+        form.addRow("Read address:", read_address_edit)
+        form.addRow("Read count:", read_count_edit)
+        form.addRow(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            write_address = int(write_address_edit.text().strip(), 0)
+            read_address = int(read_address_edit.text().strip(), 0)
+        except ValueError:
+            self.logLine.emit("✗ read/write: invalid address (dec or 0x… hex)")
+            return
+        if not 0 <= write_address <= 0xFFFF or not 0 <= read_address <= 0xFFFF:
+            self.logLine.emit("✗ read/write: address out of range 0..0xFFFF")
+            return
+        try:
+            values = parse_values("holding_registers", values_edit.text())
+        except ValueError as exc:
+            self.logLine.emit(f"✗ parse error: {exc}")
+            return
+        unit = _parse_unit_id(unit_edit.text().strip())
+        request_id = self._next_request_id()
+        self._pending_readwrites[request_id] = write_address
+        self.readwriteRequested.emit(
+            request_id,
+            unit if unit is not None else self._unit_id,
+            read_address,
+            read_count_edit.value(),
+            write_address,
+            [int(value) for value in values],
+        )
+
+    @Slot(int, bool, list, str)
+    def handle_readwrite_finished(
+        self, request_id: int, ok: bool, values: list, error: str
+    ) -> None:
+        write_address = self._pending_readwrites.pop(request_id, None)
+        if write_address is None:
+            return
+        if not ok:
+            return  # the worker already logged the failure
+        self.logLine.emit(f"← read/write read values: {format_values(values)}")
+        # re-read rows that cover the written address so the effect is visible
+        for index in range(self._table.rowCount()):
+            row = self._row_data(index)
+            if row is None or row.kind != "holding_registers":
+                continue
+            if row.address <= write_address < row.address + row.count:
                 self._read_table_row(index)
 
     def _token_at(self, index: int) -> int:
