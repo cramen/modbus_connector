@@ -150,12 +150,13 @@ class ConnectionPanel(QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.addLayout(settings_row)
         layout.addLayout(self._controls_row)
-        self._controls_row.addStretch(1)
-        self._controls_row.addWidget(self._status)
+        # Ignored policy keeps it out of the size hint; stretch factor 1 lets it
+        # occupy the spare row space, long text truncates visually
+        self._controls_row.addWidget(self._status, 1)
 
     def add_control(self, widget: QWidget) -> None:
         """Add a button to the panel's second row (before the status label)."""
-        self._controls_row.insertWidget(self._controls_row.count() - 2, widget)
+        self._controls_row.insertWidget(self._controls_row.count() - 1, widget)
 
     def unit_id(self) -> int:
         return self._unit.value()
