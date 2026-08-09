@@ -4,7 +4,7 @@ from typing import Literal
 
 RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_registers"]
 
-DisplayFormat = Literal["dec", "hex", "s16", "u32", "s32", "f32"]
+DisplayFormat = Literal["dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64"]
 
 ByteOrder = Literal["ABCD", "CDAB", "BADC", "DCBA"]
 
@@ -128,28 +128,41 @@ def _order_permutation(order: ByteOrder, n_bytes: int) -> list[int]:
     return list(range(n_bytes))
 
 
+_GROUP_SIZES = {"u32": 2, "s32": 2, "f32": 2, "u64": 4, "s64": 4, "f64": 4}
+
+
 def format_register_values(
     values: list[int], fmt: DisplayFormat, order: ByteOrder = "ABCD"
 ) -> str:
+    """Render raw registers in the given display format.
+
+    32-bit formats combine register pairs, 64-bit formats groups of four.
+    `order` permutes the bytes of each group (see _order_permutation; for
+    64-bit groups the pattern tiles over all 8 bytes: CDAB reverses the four
+    16-bit words, BADC swaps bytes within each word, DCBA reverses everything).
+    Trailing registers that do not fill a whole group are shown as decimals.
+    """
     if fmt == "dec":
         return format_values(values)
     if fmt == "hex":
         return ", ".join(f"0x{v:04X}" for v in values)
     if fmt == "s16":
         return ", ".join(str(_to_s16(v)) for v in values)
+    group = _GROUP_SIZES[fmt]
     parts = []
-    pairs_end = len(values) - len(values) % 2
-    for i in range(0, pairs_end, 2):
-        raw = values[i].to_bytes(2, "big") + values[i + 1].to_bytes(2, "big")
-        data = bytes(raw[j] for j in _order_permutation(order, 4))
-        if fmt == "u32":
+    groups_end = len(values) - len(values) % group
+    for i in range(0, groups_end, group):
+        raw = b"".join(value.to_bytes(2, "big") for value in values[i : i + group])
+        data = bytes(raw[j] for j in _order_permutation(order, len(raw)))
+        if fmt in ("u32", "u64"):
             parts.append(str(int.from_bytes(data, "big")))
-        elif fmt == "s32":
+        elif fmt in ("s32", "s64"):
             parts.append(str(int.from_bytes(data, "big", signed=True)))
-        else:  # f32
+        elif fmt == "f32":
             parts.append(f"{struct.unpack('>f', data)[0]:.6g}")
-    if len(values) % 2:
-        parts.append(str(values[-1]))  # odd trailing register has no pair, show as decimal
+        else:  # f64
+            parts.append(f"{struct.unpack('>d', data)[0]:.6g}")
+    parts.extend(str(value) for value in values[groups_end:])
     return ", ".join(parts)
 
 

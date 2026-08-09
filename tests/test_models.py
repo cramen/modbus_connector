@@ -102,8 +102,48 @@ class TestFormatRegisterValues:
         assert format_register_values([0x3F80, 0x0000, 7], "f32") == "1, 7"
 
     def test_empty(self) -> None:
-        for fmt in ("dec", "hex", "s16", "u32", "s32", "f32"):
+        for fmt in ("dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64"):
             assert format_register_values([], fmt) == ""
+
+
+class Test64BitFormats:
+    # u64 0x0102030405060708 = 72623859790382856
+    def test_u64_orders(self) -> None:
+        expected = "72623859790382856"
+        assert format_register_values([0x0102, 0x0304, 0x0506, 0x0708], "u64") == expected
+        assert (
+            format_register_values([0x0708, 0x0506, 0x0304, 0x0102], "u64", "CDAB")
+            == expected
+        )
+        assert (
+            format_register_values([0x0201, 0x0403, 0x0605, 0x0807], "u64", "BADC")
+            == expected
+        )
+        assert (
+            format_register_values([0x0807, 0x0605, 0x0403, 0x0201], "u64", "DCBA")
+            == expected
+        )
+
+    def test_s64(self) -> None:
+        assert format_register_values([0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF], "s64") == "-1"
+        assert format_register_values([0xFFFF, 0xFFFF, 0xFFFF, 0xFFFE], "s64") == "-2"
+        assert format_register_values([0x0000, 0x0000, 0x0000, 0x0001], "s64") == "1"
+
+    def test_f64(self) -> None:
+        assert format_register_values([0x3FF0, 0, 0, 0], "f64") == "1"
+        assert format_register_values([0x3FE0, 0, 0, 0], "f64") == "0.5"
+        assert format_register_values([0xC004, 0, 0, 0], "f64") == "-2.5"
+
+    def test_f64_with_order(self) -> None:
+        assert format_register_values([0, 0, 0, 0x3FF0], "f64", "CDAB") == "1"
+        assert format_register_values([0, 0, 0, 0xF03F], "f64", "DCBA") == "1"
+
+    def test_trailing_registers_as_decimal(self) -> None:
+        assert format_register_values([0x3FF0, 0, 0, 0, 7], "f64") == "1, 7"
+        assert format_register_values([0x3FF0, 0, 0], "f64") == "16368, 0, 0"
+        assert format_register_values([0x0102, 0x0304, 0x0506, 0x0708, 9], "u64").endswith(
+            ", 9"
+        )
 
 
 class TestByteOrder:

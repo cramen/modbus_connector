@@ -65,8 +65,9 @@ src/modbus_connector/
                        # колонка Unit ID — per-row unit (пусто = глобальный
                        # unit из панели подключения),
                        # колонка Format — формат отображения значений
-                       # (dec/hex/s16/u32/s32/f32, только для регистровых kind),
-                       # колонка Order — порядок байт 32-битных значений
+                       # (dec/hex/s16/u32/s32/f32/u64/s64/f64, только для
+                       # регистровых kind),
+                       # колонка Order — порядок байт 32/64-битных значений
                        # (ABCD/CDAB/BADC/DCBA),
                        # колонки Scale/Offset/Unit — показ scaled-значений
                        # (x*scale+offset, кроме hex; запись всегда raw),
