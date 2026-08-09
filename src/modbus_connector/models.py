@@ -55,6 +55,7 @@ class RegisterRow:
     offset: float = 0.0
     unit: str = ""
     unit_id: int | None = None  # None = use the global unit from the connection panel
+    poll_ms: int | None = None  # None = use the global polling interval
 
 
 @dataclass
