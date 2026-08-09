@@ -183,27 +183,50 @@ def test_unit_id_state_roundtrip(qapp: QApplication) -> None:
     assert cells == ["5", "", "", ""]
 
 
-def test_due_rows_respect_per_row_interval(qapp: QApplication) -> None:
+def test_per_row_poll_gets_own_timer(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
     panel.set_state(
         [
-            {"name": "fast", "kind": "holding_registers", "address": 0, "count": 1},
+            {"name": "global_row", "kind": "holding_registers", "address": 0, "count": 1},
             {"name": "slow", "kind": "holding_registers", "address": 1, "count": 1,
              "poll_ms": "5000"},
-            {"name": "junk", "kind": "holding_registers", "address": 2, "count": 1,
-             "poll_ms": "junk"},
         ]
     )
-    panel._last_poll[panel._token_at(1)] = 0.0
-    assert panel._due_rows(1.0) == [0, 2]  # 1s < 5000ms: slow row not due
-    assert panel._due_rows(5.0) == [0, 1, 2]  # due exactly at 5s
-
-
-def test_stop_polling_resets_last_poll(qapp: QApplication) -> None:
-    panel = RegistersPanel(itertools.count(1).__next__)
-    panel._last_poll[panel._token_at(0)] = 123.0
+    panel._toggle_polling()
+    global_token, slow_token = panel._token_at(0), panel._token_at(1)
+    assert slow_token in panel._row_timers
+    timer = panel._row_timers[slow_token]
+    assert timer.isActive()
+    assert timer.interval() == 5000
+    assert global_token not in panel._row_timers  # stays on the global tick
     panel.stop_polling()
-    assert panel._last_poll == {}
+    assert panel._row_timers == {}  # all timers torn down
+    assert not timer.isActive()
+
+
+def test_poll_cell_edit_swaps_timer(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel._toggle_polling()
+    token = panel._token_at(0)
+    item = panel._table.item(0, COL_POLL)
+    assert item is not None
+    assert token not in panel._row_timers
+
+    item.setText("200")  # valid interval: row gets its own timer
+    assert token in panel._row_timers
+    assert panel._row_timers[token].interval() == 200
+
+    item.setText("5000")  # editing restarts the timer with the new interval
+    assert panel._row_timers[token].interval() == 5000
+
+    item.setText("junk")  # invalid: back to the global tick
+    assert token not in panel._row_timers
+
+    item.setText("300")
+    assert token in panel._row_timers
+    item.setText("")  # empty: back to the global tick
+    assert token not in panel._row_timers
+    panel.stop_polling()
 
 
 def test_poll_ms_state_roundtrip(qapp: QApplication) -> None:

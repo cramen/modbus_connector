@@ -1,4 +1,3 @@
-import time
 from collections.abc import Callable
 from typing import get_args
 
@@ -100,7 +99,7 @@ class RegistersPanel(QWidget):
         self._pending_writes: dict[int, int] = {}
         self._pending_mask_writes: dict[int, int] = {}  # request_id -> address
         self._pending_readwrites: dict[int, int] = {}  # request_id -> write address
-        self._last_poll: dict[int, float] = {}  # row token -> time.monotonic() of last poll
+        self._row_timers: dict[int, QTimer] = {}  # row token -> per-row poll timer
         self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
 
         self._table = QTableWidget(0, 14)
@@ -157,7 +156,7 @@ class RegistersPanel(QWidget):
         self._poll_button = QPushButton("Start polling")
         self._poll_button.clicked.connect(self._toggle_polling)
         self._poll_timer = QTimer(self)
-        self._poll_timer.timeout.connect(self._poll_due)
+        self._poll_timer.timeout.connect(self._poll_global_rows)
 
         top = QHBoxLayout()
         top.addWidget(add_button)
@@ -264,7 +263,7 @@ class RegistersPanel(QWidget):
         poll_item = QTableWidgetItem("" if row.poll_ms is None else str(row.poll_ms))
         poll_item.setToolTip(
             "Per-row poll interval in ms, empty = global interval; "
-            "values below the global interval are clamped to it"
+            "a row with its own interval is polled by a dedicated timer"
         )
         self._table.setItem(index, COL_POLL, poll_item)
 
@@ -316,6 +315,7 @@ class RegistersPanel(QWidget):
                 self._table.setColumnWidth(col, width)
 
         self._apply_filter_to_row(index)
+        self._sync_row_timer(index)  # no-op unless polling is active
 
     @Slot()
     def _apply_filter(self) -> None:
@@ -563,13 +563,18 @@ class RegistersPanel(QWidget):
         if index is not None:
             token = self._token_at(index)
             self._flash_generations.pop(token, None)
-            self._last_poll.pop(token, None)
+            timer = self._row_timers.pop(token, None)
+            if timer is not None:
+                timer.stop()
+                timer.deleteLater()
             self._table.removeRow(index)
 
     @Slot(QTableWidgetItem)
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         if item.column() == COL_NEW_VALUE and item.text().strip():
             self._write_table_row(item.row())
+        elif item.column() == COL_POLL:
+            self._sync_row_timer(item.row())
 
     @Slot()
     def _read_current_row(self) -> None:
@@ -614,28 +619,38 @@ class RegistersPanel(QWidget):
         for index in range(self._table.rowCount()):
             self._read_table_row(index)
 
-    def _due_rows(self, now: float) -> list[int]:
-        # rows without a per-row interval are due on every tick; a per-row
-        # interval P makes the row due when now - last_poll >= P — finer
-        # intervals are effectively clamped to the global tick
-        due = []
-        for index in range(self._table.rowCount()):
-            row = self._row_data(index)
-            if row is None:
-                continue
-            if row.poll_ms is not None:
-                last = self._last_poll.get(self._token_at(index))
-                if last is not None and now - last < row.poll_ms / 1000:
-                    continue
-            due.append(index)
-        return due
-
     @Slot()
-    def _poll_due(self) -> None:
-        now = time.monotonic()
-        for index in self._due_rows(now):
-            self._last_poll[self._token_at(index)] = now
-            self._read_table_row(index)
+    def _poll_global_rows(self) -> None:
+        # rows with a per-row interval have their own timer in _row_timers
+        for index in range(self._table.rowCount()):
+            if _parse_poll_ms(self._text_at(index, COL_POLL)) is None:
+                self._read_table_row(index)
+
+    def _sync_row_timer(self, index: int) -> None:
+        token = self._token_at(index)
+        poll_ms = _parse_poll_ms(self._text_at(index, COL_POLL))
+        timer = self._row_timers.get(token)
+        if poll_ms is None or not self._poll_timer.isActive():
+            if timer is not None:
+                timer.stop()
+                timer.deleteLater()
+                del self._row_timers[token]
+            return
+        if timer is None:
+            timer = QTimer(self)
+            timer.timeout.connect(lambda token=token: self._read_row_by_token(token))
+            self._row_timers[token] = timer
+        timer.start(poll_ms)
+
+    def _read_row_by_token(self, token: int) -> None:
+        index = self._find_row_by_token(token)
+        if index is None:  # the row was deleted
+            timer = self._row_timers.pop(token, None)
+            if timer is not None:
+                timer.stop()
+                timer.deleteLater()
+            return
+        self._read_table_row(index)
 
     def _display_text(self, index: int, values: list) -> str:
         kind = self._table.cellWidget(index, COL_TYPE).currentText()
@@ -698,13 +713,18 @@ class RegistersPanel(QWidget):
             self.stop_polling()
         else:
             self._poll_timer.start(self._poll_interval.value())
+            for index in range(self._table.rowCount()):
+                self._sync_row_timer(index)
             self._poll_button.setText("Stop polling")
 
     @Slot()
     def stop_polling(self) -> None:
         self._poll_timer.stop()
         self._pending_reads.clear()  # late responses from already-queued reads are ignored
-        self._last_poll.clear()  # restarting polls every row immediately
+        for timer in self._row_timers.values():
+            timer.stop()
+            timer.deleteLater()
+        self._row_timers.clear()
         self._poll_button.setText("Start polling")
 
     def is_polling(self) -> bool:
