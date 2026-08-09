@@ -251,6 +251,10 @@ class RegistersPanel(QWidget):
         request_id = self._next_request_id()
         self._pending_writes[request_id] = self._token_at(index)
         self.writeRequested.emit(request_id, self._unit_id, row, values)
+        if new_value_item is not None:
+            # clear so re-entering the same value fires itemChanged again;
+            # the resulting empty-text itemChanged is ignored by _on_item_changed
+            new_value_item.setText("")
 
     @Slot()
     def read_all(self) -> None:
