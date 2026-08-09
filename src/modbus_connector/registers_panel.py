@@ -5,6 +5,9 @@ from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QBrush, QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -70,6 +73,7 @@ def _parse_unit_id(text: str) -> int | None:
 class RegistersPanel(QWidget):
     readRequested = Signal(int, int, object)
     writeRequested = Signal(int, int, object, list)
+    maskWriteRequested = Signal(int, int, int, int, int)
     logLine = Signal(str)
 
     def __init__(
@@ -83,6 +87,7 @@ class RegistersPanel(QWidget):
         self._row_token_counter = 0
         self._pending_reads: dict[int, int] = {}
         self._pending_writes: dict[int, int] = {}
+        self._pending_mask_writes: dict[int, int] = {}  # request_id -> address
         self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
 
         self._table = QTableWidget(0, 13)
@@ -123,6 +128,8 @@ class RegistersPanel(QWidget):
         read_all_button.clicked.connect(self.read_all)
         sort_button = QPushButton("Sort by address")
         sort_button.clicked.connect(self._sort_by_address)
+        mask_write_button = QPushButton("Mask write…")
+        mask_write_button.clicked.connect(self._on_mask_write)
 
         self._filter_edit = QLineEdit()
         self._filter_edit.setPlaceholderText("Filter…")
@@ -140,6 +147,7 @@ class RegistersPanel(QWidget):
         top.addWidget(add_button)
         top.addWidget(read_all_button)
         top.addWidget(sort_button)
+        top.addWidget(mask_write_button)
         top.addWidget(self._filter_edit)
         top.addStretch(1)
         top.addWidget(QLabel("Interval:"))
@@ -338,6 +346,63 @@ class RegistersPanel(QWidget):
                     self._table.setCellWidget(new_index, col, widget)
         self._table.blockSignals(False)
         self._apply_filter()
+
+    @Slot()
+    def _on_mask_write(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Mask write (function 0x16)")
+        unit_edit = QLineEdit()
+        unit_edit.setPlaceholderText("empty = global unit")
+        address_edit = QLineEdit()
+        and_edit = QLineEdit("0xFFFF")
+        or_edit = QLineEdit("0x0000")
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form = QFormLayout(dialog)
+        form.addRow("Unit:", unit_edit)
+        form.addRow("Address:", address_edit)
+        form.addRow("AND mask:", and_edit)
+        form.addRow("OR mask:", or_edit)
+        form.addRow(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            address = int(address_edit.text().strip(), 0)
+            and_mask = int(and_edit.text().strip(), 0)
+            or_mask = int(or_edit.text().strip(), 0)
+        except ValueError:
+            self.logLine.emit("✗ mask write: invalid address/mask (dec or 0x… hex)")
+            return
+        if not 0 <= address <= 0xFFFF or not 0 <= and_mask <= 0xFFFF or not (
+            0 <= or_mask <= 0xFFFF
+        ):
+            self.logLine.emit("✗ mask write: address/mask out of range 0..0xFFFF")
+            return
+        unit = _parse_unit_id(unit_edit.text().strip())
+        request_id = self._next_request_id()
+        self._pending_mask_writes[request_id] = address
+        self.maskWriteRequested.emit(
+            request_id, unit if unit is not None else self._unit_id, address,
+            and_mask, or_mask,
+        )
+
+    @Slot(int, bool, str)
+    def handle_mask_write_finished(self, request_id: int, ok: bool, error: str) -> None:
+        address = self._pending_mask_writes.pop(request_id, None)
+        if address is None:
+            return
+        if not ok:
+            return  # the worker already logged the failure
+        # re-read rows that cover the masked address so the effect is visible
+        for index in range(self._table.rowCount()):
+            row = self._row_data(index)
+            if row is None or row.kind != "holding_registers":
+                continue
+            if row.address <= address < row.address + row.count:
+                self._read_table_row(index)
 
     def _token_at(self, index: int) -> int:
         item = self._table.item(index, COL_NAME)

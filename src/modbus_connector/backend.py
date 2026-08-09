@@ -156,6 +156,16 @@ class ModbusBackend:
             raise ValueError(f"Запись в {kind} не поддерживается (только coils/holding_registers)")
         _raise_if_error(result, f"Ошибка записи {kind}@{address}")
 
+    def mask_write_register(self, unit: int, address: int, and_mask: int, or_mask: int) -> None:
+        client = self._require_client()
+        for name, mask in (("and_mask", and_mask), ("or_mask", or_mask)):
+            if not 0 <= mask <= 0xFFFF:
+                raise ValueError(f"{name} вне диапазона 0..65535: {mask}")
+        result = client.mask_write_register(
+            address, and_mask=and_mask, or_mask=or_mask, slave=unit
+        )
+        _raise_if_error(result, f"Ошибка mask write @{address}")
+
     def scan(
         self,
         probes: list[ScanProbe],

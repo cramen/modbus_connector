@@ -123,6 +123,26 @@ class ModbusWorker(QObject):
         self.logLine.emit("← ok")
         self.writeFinished.emit(request_id, True, "")
 
+    @Slot(int, int, int, int, int)
+    def mask_write(
+        self, request_id: int, unit: int, address: int, and_mask: int, or_mask: int
+    ) -> None:
+        self.logLine.emit(
+            f"→ mask write unit={unit} addr={address} "
+            f"and=0x{and_mask:04x} or=0x{or_mask:04x}"
+        )
+        started = time.monotonic()
+        try:
+            self._backend.mask_write_register(unit, address, and_mask, or_mask)
+        except Exception as exc:
+            self._record_stats(False, started, exc)
+            self.logLine.emit(f"✗ mask write failed: {exc}")
+            self.writeFinished.emit(request_id, False, str(exc))
+            return
+        self._record_stats(True, started)
+        self.logLine.emit("← ok")
+        self.writeFinished.emit(request_id, True, "")
+
     @Slot(list, int, int)
     def start_scan(self, probes: list[ScanProbe], start: int, end: int) -> None:
         self._scan_stop = False

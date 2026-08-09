@@ -203,6 +203,26 @@ class TestScanAddresses:
             list(ModbusBackend().scan_addresses(UNIT_ID, "holding_registers", 0, 1, lambda: False))
 
 
+class TestMaskWriteRegister:
+    def test_mask_write_applies_spec_formula(self, backend: ModbusBackend) -> None:
+        backend.write(UNIT_ID, "holding_registers", 5, [0xFFFF])
+        backend.mask_write_register(UNIT_ID, 5, 0xFF0F, 0x00A0)
+        # Modbus 0x16: (value AND and_mask) OR (or_mask AND NOT and_mask)
+        expected = (0xFFFF & 0xFF0F) | (0x00A0 & (0xFFFF ^ 0xFF0F))
+        assert expected == 0xFFAF
+        assert backend.read(UNIT_ID, "holding_registers", 5, 1) == [expected]
+
+    def test_mask_out_of_range_raises(self, backend: ModbusBackend) -> None:
+        with pytest.raises(ValueError):
+            backend.mask_write_register(UNIT_ID, 5, 0x10000, 0)
+        with pytest.raises(ValueError):
+            backend.mask_write_register(UNIT_ID, 5, 0, -1)
+
+    def test_mask_write_error_is_human_readable(self, backend: ModbusBackend) -> None:
+        with pytest.raises(ModbusExceptionError, match="Illegal Data Address"):
+            backend.mask_write_register(UNIT_ID, 10, 0xFFFF, 0)
+
+
 class TestScan:
     def test_finds_unit(self, backend: ModbusBackend) -> None:
         probes = [ScanProbe(kind="holding_registers", address=0, count=1)]
