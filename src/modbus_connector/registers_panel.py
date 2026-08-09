@@ -38,6 +38,7 @@ REGISTER_KINDS = ("holding_registers", "input_registers")
     COL_TYPE,
     COL_ADDRESS,
     COL_COUNT,
+    COL_UNIT_ID,
     COL_FORMAT,
     COL_SCALE,
     COL_OFFSET,
@@ -45,7 +46,7 @@ REGISTER_KINDS = ("holding_registers", "input_registers")
     COL_VALUE,
     COL_NEW_VALUE,
     COL_ACTIONS,
-) = range(11)
+) = range(12)
 
 
 def _entry_float(value: object, default: float) -> float:
@@ -53,6 +54,14 @@ def _entry_float(value: object, default: float) -> float:
         return float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return default
+
+
+def _parse_unit_id(text: str) -> int | None:
+    try:
+        unit = int(text) if text else None
+    except ValueError:
+        unit = None
+    return unit if unit is not None and 1 <= unit <= 247 else None
 
 
 class RegistersPanel(QWidget):
@@ -73,13 +82,14 @@ class RegistersPanel(QWidget):
         self._pending_writes: dict[int, int] = {}
         self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
 
-        self._table = QTableWidget(0, 11)
+        self._table = QTableWidget(0, 12)
         self._table.setHorizontalHeaderLabels(
             [
                 "Name",
                 "Type",
                 "Address",
                 "Count",
+                "Unit ID",
                 "Format",
                 "Scale",
                 "Offset",
@@ -160,6 +170,7 @@ class RegistersPanel(QWidget):
                     "kind": type_combo.currentText(),
                     "address": address,
                     "count": count,
+                    "unit_id": self._text_at(index, COL_UNIT_ID),
                     "format": format_combo.currentText(),
                     "scale": self._float_at(index, COL_SCALE, 1.0),
                     "offset": self._float_at(index, COL_OFFSET, 0.0),
@@ -184,6 +195,7 @@ class RegistersPanel(QWidget):
                     scale=_entry_float(entry.get("scale"), 1.0),
                     offset=_entry_float(entry.get("offset"), 0.0),
                     unit=str(entry.get("unit") or ""),
+                    unit_id=_parse_unit_id(str(entry.get("unit_id", "") or "").strip()),
                 )
             except (AttributeError, KeyError, TypeError, ValueError):
                 continue
@@ -210,6 +222,10 @@ class RegistersPanel(QWidget):
 
         self._table.setItem(index, COL_ADDRESS, QTableWidgetItem(str(row.address)))
         self._table.setItem(index, COL_COUNT, QTableWidgetItem(str(row.count)))
+
+        unit_id_item = QTableWidgetItem("" if row.unit_id is None else str(row.unit_id))
+        unit_id_item.setToolTip("Modbus unit 1..247, empty = unit from the connection panel")
+        self._table.setItem(index, COL_UNIT_ID, unit_id_item)
 
         format_combo = QComboBox()
         format_combo.addItems(FORMATS)
@@ -266,6 +282,7 @@ class RegistersPanel(QWidget):
                     self._text_at(index, COL_NAME),
                     self._table.cellWidget(index, COL_TYPE).currentText(),
                     self._text_at(index, COL_ADDRESS),
+                    self._text_at(index, COL_UNIT_ID),
                 )
             ).lower()
             visible = needle in haystack
@@ -349,6 +366,7 @@ class RegistersPanel(QWidget):
             scale=self._float_at(index, COL_SCALE, 1.0),
             offset=self._float_at(index, COL_OFFSET, 0.0),
             unit=self._text_at(index, COL_UNIT),
+            unit_id=_parse_unit_id(self._text_at(index, COL_UNIT_ID)),
         )
 
     def _row_of_sender(self) -> int | None:
@@ -388,7 +406,8 @@ class RegistersPanel(QWidget):
             return  # previous read still unanswered, don't pile up the worker queue
         request_id = self._next_request_id()
         self._pending_reads[request_id] = token
-        self.readRequested.emit(request_id, self._unit_id, row)
+        unit = row.unit_id if row.unit_id is not None else self._unit_id
+        self.readRequested.emit(request_id, unit, row)
 
     def _write_table_row(self, index: int) -> None:
         row = self._row_data(index)
@@ -403,7 +422,8 @@ class RegistersPanel(QWidget):
             return
         request_id = self._next_request_id()
         self._pending_writes[request_id] = self._token_at(index)
-        self.writeRequested.emit(request_id, self._unit_id, row, values)
+        unit = row.unit_id if row.unit_id is not None else self._unit_id
+        self.writeRequested.emit(request_id, unit, row, values)
         if new_value_item is not None:
             # clear so re-entering the same value fires itemChanged again;
             # the resulting empty-text itemChanged is ignored by _on_item_changed

@@ -62,6 +62,8 @@ src/modbus_connector/
                        # упал после таймаута (pymodbus переподключится сам);
                        # set_connected(ok, message) + слот set_alive(bool)
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
+                       # колонка Unit ID — per-row unit (пусто = глобальный
+                       # unit из панели подключения),
                        # колонка Format — формат отображения значений
                        # (dec/hex/s16/u32/s32/f32, только для регистровых kind),
                        # колонки Scale/Offset/Unit — показ scaled-значений

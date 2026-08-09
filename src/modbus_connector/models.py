@@ -37,6 +37,7 @@ class RegisterRow:
     scale: float = 1.0
     offset: float = 0.0
     unit: str = ""
+    unit_id: int | None = None  # None = use the global unit from the connection panel
 
 
 @dataclass

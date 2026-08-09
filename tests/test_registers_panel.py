@@ -20,6 +20,7 @@ from modbus_connector.models import RegisterRow  # noqa: E402
 from modbus_connector.registers_panel import (  # noqa: E402
     COL_ADDRESS,
     COL_NEW_VALUE,
+    COL_UNIT_ID,
     COL_VALUE,
     RegistersPanel,
 )
@@ -127,3 +128,55 @@ def test_sort_preserves_tokens_and_pending_reads(qapp: QApplication) -> None:
     panel.handle_read_finished(request_id, True, [42], "")
     assert panel._table.item(2, COL_VALUE).text() == "42"  # "c" followed its token
     assert panel._table.item(0, COL_VALUE).text() == ""
+
+
+def test_per_row_unit_id_used_for_reads_and_writes(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 1},
+            {"name": "b", "kind": "holding_registers", "address": 1, "count": 1},
+        ]
+    )
+    panel.set_unit_id(3)
+    unit_item = panel._table.item(0, COL_UNIT_ID)
+    assert unit_item is not None
+    unit_item.setText("5")
+
+    reads: list[tuple] = []
+    writes: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel._read_table_row(0)
+    panel._read_table_row(1)
+    assert reads[0][1] == 5  # per-row unit wins
+    assert reads[1][1] == 3  # empty unit falls back to the global unit
+
+    new_value = panel._table.item(0, COL_NEW_VALUE)
+    assert new_value is not None
+    new_value.setText("7")
+    assert writes[0][1] == 5
+
+
+def test_unit_id_state_roundtrip(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 1,
+             "unit_id": "5"},
+            {"name": "b", "kind": "holding_registers", "address": 1, "count": 1},
+            {"name": "c", "kind": "holding_registers", "address": 2, "count": 1,
+             "unit_id": "junk"},
+            {"name": "d", "kind": "holding_registers", "address": 3, "count": 1,
+             "unit_id": "300"},
+        ]
+    )
+    cells = [panel._table.item(i, COL_UNIT_ID).text() for i in range(4)]
+    assert cells == ["5", "", "", ""]  # invalid values tolerated as empty
+
+    state = panel.state()
+    assert [entry["unit_id"] for entry in state] == ["5", "", "", ""]
+
+    panel.set_state(state)
+    cells = [panel._table.item(i, COL_UNIT_ID).text() for i in range(4)]
+    assert cells == ["5", "", "", ""]
