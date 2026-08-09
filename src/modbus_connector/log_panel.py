@@ -1,8 +1,10 @@
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
     QCheckBox,
+    QFileDialog,
     QHBoxLayout,
     QPlainTextEdit,
     QPushButton,
@@ -24,10 +26,13 @@ class LogPanel(QWidget):
         clear_button.clicked.connect(self._clear)
         self._raw_checkbox = QCheckBox("Raw")  # unchecked: raw frames are noisy
         self._raw_checkbox.toggled.connect(self._render)
+        save_button = QPushButton("Save…")
+        save_button.clicked.connect(self._save_to_file)
 
         buttons = QHBoxLayout()
         buttons.addWidget(self._raw_checkbox)
         buttons.addStretch(1)
+        buttons.addWidget(save_button)
         buttons.addWidget(clear_button)
 
         layout = QVBoxLayout(self)
@@ -66,3 +71,24 @@ class LogPanel(QWidget):
         self._entries.clear()
         self._counts = [0, 0]
         self._edit.clear()
+
+    @Slot()
+    def _save_to_file(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Log",
+            str(Path.home() / "modbus.log"),
+            "Log files (*.log);;Text files (*.txt)",
+        )
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            # full content: normal + raw, chronological, regardless of the Raw toggle
+            path.write_text(
+                "\n".join(text for _, text in self._entries) + "\n", encoding="utf-8"
+            )
+        except OSError as exc:
+            self.append(f"✗ failed to save log to {path}: {exc}")
+            return
+        self.append(f"→ log saved to {path}")

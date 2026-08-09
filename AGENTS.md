@@ -71,7 +71,8 @@ src/modbus_connector/
   log_panel.py         # панель лога внизу главного окна, скрываемая кнопкой Log;
                        # чекбокс Raw (выкл. по умолчанию) показывает raw-кадры
                        # шины (append_raw), буфер (is_raw, текст) по 5000 строк
-                       # каждого вида, перерисовка при переключении
+                       # каждого вида, перерисовка при переключении;
+                       # Save… — выгрузка всего лога (нормальный + raw) в файл
   settings_store.py    # load_settings()/save_settings() — JSON в ~/.modbus_connector/
   main_window.py  # главное окно, компоновка панелей + worker в QThread;
                   # в статус-баре счётчики транзакций (statsUpdated);
