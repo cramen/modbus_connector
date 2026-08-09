@@ -34,7 +34,8 @@ src/modbus_connector/
                   # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
                   # parse_values(kind, text), format_values(values),
                   # format_register_values(values, fmt),
-                  # format_scaled_values(values, scale, offset, unit)
+                  # format_scaled_values(values, scale, offset, unit),
+                  # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
@@ -42,8 +43,9 @@ src/modbus_connector/
                   # (hits пуст, если unit не ответил)
   worker.py       # Qt: ModbusWorker(QObject) над backend — сигналы
                   # connectionChanged/readFinished/writeFinished/scanProgress/
-                  # scanHit/scanFinished/logLine; слоты connect_to/disconnect/
-                  # read/write/start_scan/stop_scan
+                  # scanHit/scanFinished/statsUpdated/logLine; слоты connect_to/
+                  # disconnect/read/write/start_scan/stop_scan; read/write
+                  # замеряют wall time и пишут в Stats
   connection_panel.py  # параметры подключения (TCP/RTU), state()/set_state()
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
                        # колонка Format — формат отображения значений
@@ -60,7 +62,8 @@ src/modbus_connector/
   scanner_panel.py     # сканер unit-адресов; открывается отдельным окном
   log_panel.py         # панель лога внизу главного окна, скрываемая кнопкой Log
   settings_store.py    # load_settings()/save_settings() — JSON в ~/.modbus_connector/
-  main_window.py  # главное окно, компоновка панелей + worker в QThread
+  main_window.py  # главное окно, компоновка панелей + worker в QThread;
+                  # в статус-баре счётчики транзакций (statsUpdated)
   app.py          # QApplication, entry point main()
   __main__.py     # python -m modbus_connector
 tests/

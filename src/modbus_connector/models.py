@@ -133,3 +133,48 @@ def format_register_values(values: list[int], fmt: DisplayFormat) -> str:
 def format_scaled_values(values: list[int], scale: float, offset: float, unit: str) -> str:
     text = ", ".join(f"{v * scale + offset:.4g}" for v in values)
     return f"{text} {unit}" if text and unit else text
+
+
+@dataclass(frozen=True)
+class StatsSnapshot:
+    total: int = 0
+    errors: int = 0
+    avg_ms: float = 0.0  # mean duration of successful operations only
+    last_ms: float = 0.0
+
+    @property
+    def error_percent(self) -> float:
+        return self.errors / self.total * 100 if self.total else 0.0
+
+
+class Stats:
+    def __init__(self) -> None:
+        self._total = 0
+        self._errors = 0
+        self._ok_count = 0
+        self._ok_ms = 0.0
+        self._last_ms = 0.0
+
+    def record(self, ok: bool, duration_ms: float) -> None:
+        self._total += 1
+        self._last_ms = duration_ms
+        if ok:
+            self._ok_count += 1
+            self._ok_ms += duration_ms
+        else:
+            self._errors += 1
+
+    def snapshot(self) -> StatsSnapshot:
+        return StatsSnapshot(
+            total=self._total,
+            errors=self._errors,
+            avg_ms=self._ok_ms / self._ok_count if self._ok_count else 0.0,
+            last_ms=self._last_ms,
+        )
+
+    def reset(self) -> None:
+        self._total = 0
+        self._errors = 0
+        self._ok_count = 0
+        self._ok_ms = 0.0
+        self._last_ms = 0.0

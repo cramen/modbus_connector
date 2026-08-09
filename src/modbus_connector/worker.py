@@ -1,3 +1,5 @@
+import time
+
 from PySide6.QtCore import QObject, Signal, Slot
 
 from modbus_connector.backend import ModbusBackend
@@ -5,6 +7,7 @@ from modbus_connector.models import (
     ConnectionParams,
     RegisterRow,
     ScanProbe,
+    Stats,
     TcpParams,
     format_values,
 )
@@ -23,12 +26,18 @@ class ModbusWorker(QObject):
     scanProgress = Signal(int, int)
     scanHit = Signal(int, list)
     scanFinished = Signal()
+    statsUpdated = Signal(object)
     logLine = Signal(str)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._backend = ModbusBackend()
         self._scan_stop = False
+        self._stats = Stats()
+
+    def _record_stats(self, ok: bool, started: float) -> None:
+        self._stats.record(ok, (time.monotonic() - started) * 1000)
+        self.statsUpdated.emit(self._stats.snapshot())
 
     @Slot(object)
     def connect_to(self, params: ConnectionParams) -> None:
@@ -55,12 +64,15 @@ class ModbusWorker(QObject):
     @Slot(int, int, object)
     def read(self, request_id: int, unit: int, row: RegisterRow) -> None:
         self.logLine.emit(f"→ read {row.kind} unit={unit} addr={row.address} count={row.count}")
+        started = time.monotonic()
         try:
             values = self._backend.read(unit, row.kind, row.address, row.count)
         except Exception as exc:
+            self._record_stats(False, started)
             self.logLine.emit(f"✗ read failed: {exc}")
             self.readFinished.emit(request_id, False, [], str(exc))
             return
+        self._record_stats(True, started)
         self.logLine.emit(f"← {format_values(values)}")
         self.readFinished.emit(request_id, True, list(values), "")
 
@@ -69,12 +81,15 @@ class ModbusWorker(QObject):
         self.logLine.emit(
             f"→ write {row.kind} unit={unit} addr={row.address} values={format_values(values)}"
         )
+        started = time.monotonic()
         try:
             self._backend.write(unit, row.kind, row.address, values)
         except Exception as exc:
+            self._record_stats(False, started)
             self.logLine.emit(f"✗ write failed: {exc}")
             self.writeFinished.emit(request_id, False, str(exc))
             return
+        self._record_stats(True, started)
         self.logLine.emit("← ok")
         self.writeFinished.emit(request_id, True, "")
 

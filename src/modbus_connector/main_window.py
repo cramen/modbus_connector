@@ -4,11 +4,12 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QMetaObject, Qt, QThread
+from PySide6.QtCore import QMetaObject, Qt, QThread, Slot
 from PySide6.QtGui import QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
     QPushButton,
     QVBoxLayout,
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from modbus_connector.connection_panel import ConnectionPanel
 from modbus_connector.log_panel import LogPanel
-from modbus_connector.models import ConnectionParams
+from modbus_connector.models import ConnectionParams, StatsSnapshot
 from modbus_connector.registers_panel import RegistersPanel
 from modbus_connector.scanner_panel import ScannerPanel
 from modbus_connector.settings_store import load_settings, save_settings
@@ -97,7 +98,19 @@ class MainWindow(QMainWindow):
         self._worker.logLine.connect(self.log_panel.append)
         self.registers_panel.logLine.connect(self.log_panel.append)
 
+        self._stats_label = QLabel()
+        self._update_stats(StatsSnapshot())
+        self.statusBar().addPermanentWidget(self._stats_label)
+        self._worker.statsUpdated.connect(self._update_stats)
+
         self._thread.start()
+
+    @Slot(object)
+    def _update_stats(self, snapshot: StatsSnapshot) -> None:
+        self._stats_label.setText(
+            f"Tx: {snapshot.total}  Err: {snapshot.errors} "
+            f"({snapshot.error_percent:.1f}%)  Avg: {snapshot.avg_ms:.0f} ms"
+        )
 
     def _collect_state(self) -> dict[str, Any]:
         return {

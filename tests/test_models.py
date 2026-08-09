@@ -1,6 +1,7 @@
 import pytest
 
 from modbus_connector.models import (
+    Stats,
     format_register_values,
     format_scaled_values,
     format_values,
@@ -124,3 +125,47 @@ class TestFormatScaledValues:
 
     def test_empty(self) -> None:
         assert format_scaled_values([], 2.0, 1.0, "V") == ""
+
+
+class TestStats:
+    def test_empty_snapshot_has_no_division_by_zero(self) -> None:
+        snapshot = Stats().snapshot()
+        assert snapshot.total == 0
+        assert snapshot.errors == 0
+        assert snapshot.error_percent == 0.0
+        assert snapshot.avg_ms == 0.0
+        assert snapshot.last_ms == 0.0
+
+    def test_counts_and_error_percent(self) -> None:
+        stats = Stats()
+        stats.record(True, 10.0)
+        stats.record(False, 20.0)
+        stats.record(True, 30.0)
+        stats.record(True, 20.0)
+        snapshot = stats.snapshot()
+        assert snapshot.total == 4
+        assert snapshot.errors == 1
+        assert snapshot.error_percent == 25.0
+
+    def test_average_covers_successful_ops_only(self) -> None:
+        stats = Stats()
+        stats.record(True, 10.0)
+        stats.record(True, 30.0)
+        stats.record(False, 999.0)
+        snapshot = stats.snapshot()
+        assert snapshot.avg_ms == 20.0
+        assert snapshot.last_ms == 999.0
+
+    def test_all_errors_gives_zero_average(self) -> None:
+        stats = Stats()
+        stats.record(False, 5.0)
+        snapshot = stats.snapshot()
+        assert snapshot.error_percent == 100.0
+        assert snapshot.avg_ms == 0.0
+
+    def test_reset(self) -> None:
+        stats = Stats()
+        stats.record(True, 10.0)
+        stats.record(False, 20.0)
+        stats.reset()
+        assert stats.snapshot() == Stats().snapshot()
