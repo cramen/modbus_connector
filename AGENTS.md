@@ -112,9 +112,16 @@ src/modbus_connector/
                        # каждого вида, перерисовка при переключении;
                        # Save… — выгрузка всего лога (нормальный + raw) в файл
   settings_store.py    # load_settings()/save_settings() — JSON в ~/.modbus_connector/
-  main_window.py  # главное окно, компоновка панелей + worker в QThread;
-                  # в статус-баре счётчики транзакций (statsUpdated);
-                  # QTimer (~2 с) queued-вызывает worker.check_alive
+  session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
+                    # RegistersPanel + LogPanel + ScannerPanel (окно) +
+                    # ModbusWorker в QThread, вся проводка сигналов внутри;
+                    # state()/set_state() (connection+registers+scanner,
+                    # backward compat со старым плоским форматом),
+                    # shutdown() — корректная остановка worker/потока;
+                    # сигнал statsUpdated(object) наружу для статус-бара
+  main_window.py  # главное окно: один SessionWidget, меню File
+                  # (save/load делегирует сессии), статус-бар со счётчиками
+                  # транзакций (session.statsUpdated)
   app.py          # QApplication, entry point main()
   __main__.py     # python -m modbus_connector
 tests/
@@ -127,6 +134,8 @@ tests/
                   # фикстура modbus_rtu_server — то же с framer=RTU
   test_models.py  # parse_values/format_values
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
+  test_registers_panel.py  # offscreen Qt тесты таблицы регистров
+  test_session_widget.py   # smoke: state round-trip + shutdown сессии
 ```
 
 ## Команды
