@@ -112,3 +112,17 @@ class TestScan:
         for hit in backend.scan(probes, 1, 10, lambda: bool(hits)):
             hits.append(hit)
         assert hits == [(1, [0])]
+
+    def test_should_stop_between_probes(self, backend: ModbusBackend) -> None:
+        probes = [
+            ScanProbe(kind="holding_registers", address=0, count=1),
+            ScanProbe(kind="input_registers", address=0, count=1),
+        ]
+        calls = 0
+
+        def stop() -> bool:
+            nonlocal calls
+            calls += 1
+            return calls > 2
+
+        assert list(backend.scan(probes, 1, 1, stop)) == []

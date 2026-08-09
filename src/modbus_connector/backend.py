@@ -108,6 +108,8 @@ class ModbusBackend:
                 return
             hits: list[int] = []
             for index, probe in enumerate(probes):
+                if should_stop():
+                    return
                 try:
                     self.read(unit, probe.kind, probe.address, probe.count)
                 except Exception:
