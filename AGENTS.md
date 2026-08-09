@@ -30,7 +30,8 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 ```
 pyproject.toml
 src/modbus_connector/
-  models.py       # без Qt: RegisterKind, TcpParams/RtuParams, ConnectionParams,
+  models.py       # без Qt: RegisterKind, TcpParams/RtuParams,
+                  # RtuOverTcpParams/RtuOverUdpParams, ConnectionParams,
                   # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
                   # ByteOrder, parse_values(kind, text), format_values(values),
                   # format_register_values(values, fmt, order),
@@ -65,7 +66,9 @@ src/modbus_connector/
                   # backend.connected, без трафика); один флаг _scan_stop на оба
                   # сканера (одновременно работает только один);
                   # read/write замеряют wall time и пишут в Stats
-  connection_panel.py  # параметры подключения (TCP/RTU), state()/set_state();
+  connection_panel.py  # параметры подключения (TCP / RTU / RTU over TCP /
+                       # RTU over UDP — страницы network/serial),
+                       # state()/set_state();
                        # статус трёх цветов: серый (отключён), зелёный (alive),
                        # оранжевый "(idle)" — connected, но backend.connected
                        # упал после таймаута (pymodbus переподключится сам);
@@ -118,7 +121,8 @@ tests/
                   # event loop; slaves={1: ...} (single=False), zero_mode=True;
                   # hr 0..9 = 100..109, ir 0..4 = 7..11,
                   # coils 0..7 = True/False чередуя, di 0..7 = с False; unit_id = 1;
-                  # identity (0x2B/0x0E): pymodbus/test-server/1.0
+                  # identity (0x2B/0x0E): pymodbus/test-server/1.0;
+                  # фикстура modbus_rtu_server — то же с framer=RTU
   test_models.py  # parse_values/format_values
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
 ```

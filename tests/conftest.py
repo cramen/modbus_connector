@@ -11,19 +11,19 @@ from pymodbus.datastore import (
     ModbusSlaveContext,
 )
 from pymodbus.device import ModbusDeviceIdentification
+from pymodbus.framer import Framer
 from pymodbus.server import ModbusTcpServer
 
 UNIT_ID = 1
 
 
-@pytest.fixture()
-def modbus_server() -> Iterator[int]:
+def _serve(framer: Framer) -> Iterator[int]:
     """Тестовый Modbus TCP сервер на 127.0.0.1, возвращает порт.
 
     holding registers 0..9 = 100..109, input registers 0..4 = 7..11,
     coils 0..7 = True/False чередуя (с True), discrete inputs 0..7 = с False.
     unit_id = 1. Сервер asyncio-based, работает в отдельном потоке
-    с собственным event loop.
+    с собственным event loop; framer — SOCKET (MBAP) или RTU (rtu over tcp).
     """
     slave = ModbusSlaveContext(
         di=ModbusSequentialDataBlock(0, [i % 2 == 1 for i in range(8)]),
@@ -44,7 +44,9 @@ def modbus_server() -> Iterator[int]:
         identity = ModbusDeviceIdentification(
             info={0x00: "pymodbus", 0x01: "test-server", 0x02: "1.0"}
         )
-        server = ModbusTcpServer(context, identity=identity, address=("127.0.0.1", port))
+        server = ModbusTcpServer(
+            context, framer=framer, identity=identity, address=("127.0.0.1", port)
+        )
         holder["server"] = server
         await server.serve_forever()
 
@@ -68,3 +70,13 @@ def modbus_server() -> Iterator[int]:
     asyncio.run_coroutine_threadsafe(holder["server"].shutdown(), loop).result(timeout=5.0)
     thread.join(timeout=5.0)
     loop.close()
+
+
+@pytest.fixture()
+def modbus_server() -> Iterator[int]:
+    yield from _serve(Framer.SOCKET)
+
+
+@pytest.fixture()
+def modbus_rtu_server() -> Iterator[int]:
+    yield from _serve(Framer.RTU)

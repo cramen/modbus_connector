@@ -8,6 +8,8 @@ from modbus_connector.models import (
     ConnectionParams,
     RegisterKind,
     RegisterRow,
+    RtuOverTcpParams,
+    RtuOverUdpParams,
     ScanProbe,
     Stats,
     TcpParams,
@@ -19,6 +21,10 @@ from modbus_connector.models import (
 def _describe(params: ConnectionParams) -> str:
     if isinstance(params, TcpParams):
         return f"tcp {params.host}:{params.port}"
+    if isinstance(params, RtuOverTcpParams):
+        return f"rtu/tcp {params.host}:{params.port}"
+    if isinstance(params, RtuOverUdpParams):
+        return f"rtu/udp {params.host}:{params.port}"
     return f"rtu {params.port} @ {params.baudrate}"
 
 

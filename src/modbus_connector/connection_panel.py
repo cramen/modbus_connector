@@ -18,7 +18,13 @@ from PySide6.QtWidgets import (
 )
 from serial.tools import list_ports
 
-from modbus_connector.models import ConnectionParams, RtuParams, TcpParams
+from modbus_connector.models import (
+    ConnectionParams,
+    RtuOverTcpParams,
+    RtuOverUdpParams,
+    RtuParams,
+    TcpParams,
+)
 
 BAUDRATES = ["9600", "19200", "38400", "57600", "115200"]
 
@@ -51,19 +57,19 @@ class ConnectionPanel(QWidget):
         self._status_message = "Disconnected"
 
         self._type_combo = QComboBox()
-        self._type_combo.addItems(["TCP", "RTU"])
+        self._type_combo.addItems(["TCP", "RTU", "RTU over TCP", "RTU over UDP"])
 
         self._tcp_host = QLineEdit("127.0.0.1")
         self._tcp_host.setMaximumWidth(140)
         self._tcp_port = QSpinBox(minimum=1, maximum=65535, value=502)
-        tcp_page = QWidget()
-        tcp_layout = QHBoxLayout(tcp_page)
-        tcp_layout.setContentsMargins(0, 0, 0, 0)
-        tcp_layout.addWidget(QLabel("Host:"))
-        tcp_layout.addWidget(self._tcp_host)
-        tcp_layout.addWidget(QLabel("Port:"))
-        tcp_layout.addWidget(self._tcp_port)
-        tcp_layout.addStretch(1)
+        network_page = QWidget()  # shared by TCP and both RTU-over-* types
+        network_layout = QHBoxLayout(network_page)
+        network_layout.setContentsMargins(0, 0, 0, 0)
+        network_layout.addWidget(QLabel("Host:"))
+        network_layout.addWidget(self._tcp_host)
+        network_layout.addWidget(QLabel("Port:"))
+        network_layout.addWidget(self._tcp_port)
+        network_layout.addStretch(1)
 
         self._rtu_port = QComboBox()
         self._rtu_port.setMinimumWidth(140)
@@ -93,9 +99,9 @@ class ConnectionPanel(QWidget):
         rtu_layout.addStretch(1)
 
         self._stack = QStackedWidget()
-        self._stack.addWidget(tcp_page)
+        self._stack.addWidget(network_page)
         self._stack.addWidget(rtu_page)
-        self._type_combo.currentIndexChanged.connect(self._stack.setCurrentIndex)
+        self._type_combo.currentIndexChanged.connect(self._on_type_changed)
         self._type_combo.setCurrentIndex(1)  # RTU by default
 
         self._unit = QSpinBox(minimum=1, maximum=247, value=1)
@@ -180,20 +186,37 @@ class ConnectionPanel(QWidget):
 
     def _build_params(self) -> ConnectionParams:
         timeout = self._timeout.value()
-        if self._type_combo.currentIndex() == 0:
-            return TcpParams(
+        type_index = self._type_combo.currentIndex()
+        if type_index == 1:
+            return RtuParams(
+                port=self._rtu_port.currentText(),
+                baudrate=int(self._rtu_baud.currentText()),
+                bytesize=int(self._rtu_bytesize.currentText()),
+                parity=self._rtu_parity.currentText(),
+                stopbits=int(self._rtu_stopbits.currentText()),
+                timeout=timeout,
+            )
+        if type_index == 2:
+            return RtuOverTcpParams(
                 host=self._tcp_host.text().strip(),
                 port=self._tcp_port.value(),
                 timeout=timeout,
             )
-        return RtuParams(
-            port=self._rtu_port.currentText(),
-            baudrate=int(self._rtu_baud.currentText()),
-            bytesize=int(self._rtu_bytesize.currentText()),
-            parity=self._rtu_parity.currentText(),
-            stopbits=int(self._rtu_stopbits.currentText()),
+        if type_index == 3:
+            return RtuOverUdpParams(
+                host=self._tcp_host.text().strip(),
+                port=self._tcp_port.value(),
+                timeout=timeout,
+            )
+        return TcpParams(
+            host=self._tcp_host.text().strip(),
+            port=self._tcp_port.value(),
             timeout=timeout,
         )
+
+    @Slot(int)
+    def _on_type_changed(self, index: int) -> None:
+        self._stack.setCurrentIndex(1 if index == 1 else 0)  # serial page or network page
 
     @Slot()
     def _on_button_clicked(self) -> None:

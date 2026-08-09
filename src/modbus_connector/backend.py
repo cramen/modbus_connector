@@ -1,13 +1,16 @@
 import logging
 from collections.abc import Callable, Iterator
 
-from pymodbus.client import ModbusSerialClient, ModbusTcpClient
+from pymodbus.client import ModbusSerialClient, ModbusTcpClient, ModbusUdpClient
 from pymodbus.exceptions import ConnectionException, ModbusIOException
+from pymodbus.framer import Framer
 from pymodbus.pdu import ExceptionResponse, ModbusResponse
 
 from .models import (
     ConnectionParams,
     RegisterKind,
+    RtuOverTcpParams,
+    RtuOverUdpParams,
     ScanProbe,
     TcpParams,
     describe_exception,
@@ -16,6 +19,8 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 TrafficHook = Callable[[str, bytes], None]  # (direction "tx"/"rx", raw frame bytes)
+
+AnyClient = ModbusTcpClient | ModbusSerialClient | ModbusUdpClient
 
 
 class ModbusExceptionError(ModbusIOException):
@@ -39,7 +44,7 @@ def _raise_if_error(result: ModbusResponse, prefix: str) -> None:
 
 class ModbusBackend:
     def __init__(self) -> None:
-        self._client: ModbusTcpClient | ModbusSerialClient | None = None
+        self._client: AnyClient | None = None
         self.traffic_hook: TrafficHook | None = None
 
     @property
@@ -51,6 +56,16 @@ class ModbusBackend:
         if isinstance(params, TcpParams):
             client = ModbusTcpClient(params.host, port=params.port, timeout=params.timeout)
             description = f"{params.host}:{params.port}"
+        elif isinstance(params, RtuOverTcpParams):
+            client = ModbusTcpClient(
+                params.host, port=params.port, framer=Framer.RTU, timeout=params.timeout
+            )
+            description = f"rtu/tcp {params.host}:{params.port}"
+        elif isinstance(params, RtuOverUdpParams):
+            client = ModbusUdpClient(
+                params.host, port=params.port, framer=Framer.RTU, timeout=params.timeout
+            )
+            description = f"rtu/udp {params.host}:{params.port}"
         else:
             client = ModbusSerialClient(
                 params.port,
@@ -73,7 +88,7 @@ class ModbusBackend:
         self._wrap_traffic(client)
         logger.info("Подключено к %s", description)
 
-    def _wrap_traffic(self, client: ModbusTcpClient | ModbusSerialClient) -> None:
+    def _wrap_traffic(self, client: AnyClient) -> None:
         # client.send/recv is the single choke point for raw bytes: every framer
         # (socket for TCP, rtu for serial) funnels frames through these methods
         original_send = client.send
@@ -94,7 +109,7 @@ class ModbusBackend:
         client.send = send
         client.recv = recv
 
-    def _unwrap_traffic(self, client: ModbusTcpClient | ModbusSerialClient) -> None:
+    def _unwrap_traffic(self, client: AnyClient) -> None:
         # dropping the instance attributes restores the class methods
         client.__dict__.pop("send", None)
         client.__dict__.pop("recv", None)
@@ -116,7 +131,7 @@ class ModbusBackend:
             logger.info("Соединение закрыто")
 
     @staticmethod
-    def _close_client(client: ModbusTcpClient | ModbusSerialClient) -> None:
+    def _close_client(client: AnyClient) -> None:
         try:
             client.close()
         except Exception:
@@ -300,7 +315,7 @@ class ModbusBackend:
                 continue
             yield address
 
-    def _require_client(self) -> ModbusTcpClient | ModbusSerialClient:
+    def _require_client(self) -> AnyClient:
         # pymodbus закрывает сокет после таймаута, но execute() сам переподключится;
         # «нет подключения» — только когда disconnect() уже вызван.
         if self._client is None:

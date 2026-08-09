@@ -5,7 +5,12 @@ from conftest import UNIT_ID
 from pymodbus.client import ModbusTcpClient
 
 from modbus_connector.backend import ModbusBackend, ModbusExceptionError
-from modbus_connector.models import ScanProbe, TcpParams
+from modbus_connector.models import (
+    RtuOverTcpParams,
+    RtuOverUdpParams,
+    ScanProbe,
+    TcpParams,
+)
 
 
 @pytest.fixture()
@@ -67,6 +72,43 @@ class TestConnect:
         assert b._client is None
         assert len(closed) == 1
         b.disconnect()
+
+
+class TestRtuOverTcp:
+    def test_connect_and_read(self, modbus_rtu_server: int) -> None:
+        b = ModbusBackend()
+        b.connect(RtuOverTcpParams(host="127.0.0.1", port=modbus_rtu_server))
+        try:
+            assert b.connected
+            assert b.read(UNIT_ID, "holding_registers", 0, 3) == [100, 101, 102]
+        finally:
+            b.disconnect()
+
+    def test_traffic_hook_captures_rtu_frames(self, modbus_rtu_server: int) -> None:
+        b = ModbusBackend()
+        frames: list[tuple[str, bytes]] = []
+        b.traffic_hook = lambda direction, data: frames.append((direction, data))
+        b.connect(RtuOverTcpParams(host="127.0.0.1", port=modbus_rtu_server))
+        try:
+            b.read(UNIT_ID, "holding_registers", 0, 2)
+        finally:
+            b.disconnect()
+        tx = [data for direction, data in frames if direction == "tx"]
+        assert tx
+        # RTU frame: unit, function, data, CRC — no MBAP header
+        assert tx[0][0] == UNIT_ID
+        assert tx[0][1] == 3
+        assert len(tx[0]) == 8
+
+
+class TestRtuOverUdp:
+    def test_udp_connect_opens_socket_without_peer(self) -> None:
+        # UDP has no handshake: pymodbus connect() just creates the socket
+        b = ModbusBackend()
+        b.connect(RtuOverUdpParams(host="127.0.0.1", port=9, timeout=0.5))
+        assert b.connected
+        b.disconnect()
+        assert not b.connected
 
 
 class TestRead:

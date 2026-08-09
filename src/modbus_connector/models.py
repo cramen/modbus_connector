@@ -17,6 +17,20 @@ class TcpParams:
 
 
 @dataclass(frozen=True)
+class RtuOverTcpParams:
+    host: str
+    port: int = 502
+    timeout: float = 3.0
+
+
+@dataclass(frozen=True)
+class RtuOverUdpParams:
+    host: str
+    port: int = 502
+    timeout: float = 3.0
+
+
+@dataclass(frozen=True)
 class RtuParams:
     port: str
     baudrate: int = 9600
@@ -26,7 +40,7 @@ class RtuParams:
     timeout: float = 3.0
 
 
-ConnectionParams = TcpParams | RtuParams
+ConnectionParams = TcpParams | RtuParams | RtuOverTcpParams | RtuOverUdpParams
 
 
 @dataclass
