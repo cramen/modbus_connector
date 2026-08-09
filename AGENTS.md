@@ -89,11 +89,11 @@ src/modbus_connector/
                        # колонка Format — формат отображения значений
                        # (dec/hex/s16/u32/s32/f32/u64/s64/f64/ascii, только для
                        # регистровых kind; ascii и hex не масштабируются),
-                       # колонка Order — порядок байт 32/64-битных значений
-                       # (ABCD/CDAB/BADC/DCBA),
-                       # колонки Scale/Offset/Unit — показ scaled-значений
-                       # (decode по Format/Order, затем x*scale+offset,
-                       # кроме hex/ascii; запись всегда raw),
+                       # Scale/Offset/Unit/Order — в диалоге "Display…",
+                       # хранилище _row_display по токену (RowDisplaySettings,
+                       # order None = глобальный Order-комбо над таблицей,
+                       # сохраняется как registers_options в session state),
+                       # колонки таблицы ресайзятся (Interactive),
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (по токену строки, с генерацией),
                        # фильтр по имени/типу/адресу (QLineEdit) и кнопка

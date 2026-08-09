@@ -27,6 +27,7 @@ from modbus_connector.models import (
     DisplayFormat,
     RegisterKind,
     RegisterRow,
+    RowDisplaySettings,
     decode_register_values,
     format_register_values,
     format_scaled_values,
@@ -47,14 +48,10 @@ REGISTER_KINDS = ("holding_registers", "input_registers")
     COL_UNIT_ID,
     COL_POLL,
     COL_FORMAT,
-    COL_ORDER,
-    COL_SCALE,
-    COL_OFFSET,
-    COL_UNIT,
     COL_VALUE,
     COL_NEW_VALUE,
     COL_ACTIONS,
-) = range(14)
+) = range(10)
 
 
 def _entry_float(value: object, default: float) -> float:
@@ -102,8 +99,10 @@ class RegistersPanel(QWidget):
         self._pending_readwrites: dict[int, int] = {}  # request_id -> write address
         self._row_timers: dict[int, QTimer] = {}  # row token -> per-row poll timer
         self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
+        self._row_display: dict[int, RowDisplaySettings] = {}  # token -> display settings
+        self._display_dialog: QDialog | None = None
 
-        self._table = QTableWidget(0, 14)
+        self._table = QTableWidget(0, 10)
         self._table.setHorizontalHeaderLabels(
             [
                 "Name",
@@ -113,18 +112,22 @@ class RegistersPanel(QWidget):
                 "Unit ID",
                 "Poll, ms",
                 "Format",
-                "Order",
-                "Scale",
-                "Offset",
-                "Unit",
                 "Value",
                 "New value",
                 "",
             ]
         )
         self._table.horizontalHeader().setSectionResizeMode(
-            COL_NAME, QHeaderView.ResizeMode.Stretch
+            QHeaderView.ResizeMode.Interactive
         )
+        for col, width in (
+            (COL_NAME, 160),
+            (COL_TYPE, 140),
+            (COL_FORMAT, 90),
+            (COL_VALUE, 140),
+            (COL_NEW_VALUE, 120),
+        ):
+            self._table.setColumnWidth(col, width)
         self._table.verticalHeader().setVisible(False)
         self._table.setToolTip(
             "Enter in 'New value' = write raw values (no scale/offset applied), "
@@ -152,6 +155,16 @@ class RegistersPanel(QWidget):
         self._filter_edit.setClearButtonEnabled(True)
         self._filter_edit.textChanged.connect(self._apply_filter)
 
+        display_button = QPushButton("Display…")
+        display_button.setToolTip("Per-row Scale/Offset/Unit and byte order settings")
+        display_button.clicked.connect(self._on_display_settings)
+        self._global_order_combo = QComboBox()
+        self._global_order_combo.addItems(ORDERS)
+        self._global_order_combo.setToolTip(
+            "Default byte order for 32/64-bit formats "
+            "(rows without an explicit order inherit it)"
+        )
+
         self._poll_interval = QSpinBox(minimum=100, maximum=600_000, value=1000)
         self._poll_interval.setSuffix(" ms")
         self._poll_button = QPushButton("Start polling")
@@ -166,7 +179,10 @@ class RegistersPanel(QWidget):
         top.addWidget(mask_write_button)
         top.addWidget(readwrite_button)
         top.addWidget(self._filter_edit)
+        top.addWidget(display_button)
         top.addStretch(1)
+        top.addWidget(QLabel("Order:"))
+        top.addWidget(self._global_order_combo)
         top.addWidget(QLabel("Interval:"))
         top.addWidget(self._poll_interval)
         top.addWidget(self._poll_button)
@@ -188,7 +204,7 @@ class RegistersPanel(QWidget):
             count_item = self._table.item(index, COL_COUNT)
             type_combo = self._table.cellWidget(index, COL_TYPE)
             format_combo = self._table.cellWidget(index, COL_FORMAT)
-            order_combo = self._table.cellWidget(index, COL_ORDER)
+            settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
             try:
                 address = int(address_item.text().strip(), 0)
                 count = int(count_item.text().strip(), 0)
@@ -203,13 +219,20 @@ class RegistersPanel(QWidget):
                     "unit_id": self._text_at(index, COL_UNIT_ID),
                     "poll_ms": self._text_at(index, COL_POLL),
                     "format": format_combo.currentText(),
-                    "order": order_combo.currentText(),
-                    "scale": self._float_at(index, COL_SCALE, 1.0),
-                    "offset": self._float_at(index, COL_OFFSET, 0.0),
-                    "unit": self._text_at(index, COL_UNIT),
+                    "order": settings.order or "",  # "" = inherit the global order
+                    "scale": settings.scale,
+                    "offset": settings.offset,
+                    "unit": settings.unit,
                 }
             )
         return rows
+
+    def options_state(self) -> dict:
+        return {"order": self._global_order_combo.currentText()}
+
+    def set_options(self, options: dict) -> None:
+        if isinstance(options, dict) and options.get("order") in ORDERS:
+            self._global_order_combo.setCurrentText(str(options["order"]))
 
     def set_state(self, rows: list) -> None:
         while self._table.rowCount():
@@ -224,7 +247,9 @@ class RegistersPanel(QWidget):
                     format=(
                         entry.get("format") if entry.get("format") in FORMATS else "dec"
                     ),
-                    order=(entry.get("order") if entry.get("order") in ORDERS else "ABCD"),
+                    order=(
+                        entry.get("order") if entry.get("order") in ORDERS else None
+                    ),
                     scale=_entry_float(entry.get("scale"), 1.0),
                     offset=_entry_float(entry.get("offset"), 0.0),
                     unit=str(entry.get("unit") or ""),
@@ -275,16 +300,9 @@ class RegistersPanel(QWidget):
         format_combo.setToolTip("Display format (registers only; coils/discrete show 0/1)")
         self._table.setCellWidget(index, COL_FORMAT, format_combo)
 
-        order_combo = QComboBox()
-        order_combo.addItems(ORDERS)
-        order_combo.setCurrentText(row.order)
-        order_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        order_combo.setToolTip("Byte order of 32-bit values (ignored by dec/hex/s16)")
-        self._table.setCellWidget(index, COL_ORDER, order_combo)
-
-        self._table.setItem(index, COL_SCALE, QTableWidgetItem(f"{row.scale:g}"))
-        self._table.setItem(index, COL_OFFSET, QTableWidgetItem(f"{row.offset:g}"))
-        self._table.setItem(index, COL_UNIT, QTableWidgetItem(row.unit))
+        self._row_display[self._row_token_counter] = RowDisplaySettings(
+            scale=row.scale, offset=row.offset, unit=row.unit, order=row.order
+        )
 
         value_item = QTableWidgetItem("")
         value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -304,16 +322,6 @@ class RegistersPanel(QWidget):
         actions_layout.addWidget(delete_button)
         self._table.setCellWidget(index, COL_ACTIONS, actions)
         self._table.blockSignals(False)
-
-        for col, widget in (
-            (COL_TYPE, type_combo),
-            (COL_FORMAT, format_combo),
-            (COL_ORDER, order_combo),
-            (COL_ACTIONS, actions),
-        ):
-            width = widget.sizeHint().width() + 8
-            if self._table.columnWidth(col) < width:
-                self._table.setColumnWidth(col, width)
 
         self._apply_filter_to_row(index)
         self._sync_row_timer(index)  # no-op unless polling is active
@@ -357,7 +365,7 @@ class RegistersPanel(QWidget):
                 self._table.takeItem(index, col) for col in range(self._table.columnCount())
             ]
             widgets = {}
-            for col in (COL_TYPE, COL_FORMAT, COL_ORDER, COL_ACTIONS):
+            for col in (COL_TYPE, COL_FORMAT, COL_ACTIONS):
                 widgets[col] = self._table.cellWidget(index, col)
                 self._table.removeCellWidget(index, col)  # detach, not delete
             snapshot.append((items, widgets))
@@ -374,6 +382,83 @@ class RegistersPanel(QWidget):
                     self._table.setCellWidget(new_index, col, widget)
         self._table.blockSignals(False)
         self._apply_filter()
+
+    @Slot()
+    def _on_display_settings(self) -> None:
+        if self._display_dialog is not None:  # already open
+            self._display_dialog.raise_()
+            self._display_dialog.activateWindow()
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Per-row display settings")
+        table = QTableWidget(0, 6)
+        table.setHorizontalHeaderLabels(
+            ["Name", "Address", "Scale", "Offset", "Unit", "Order"]
+        )
+        table.blockSignals(True)
+        for index in range(self._table.rowCount()):
+            token = self._token_at(index)
+            settings = self._row_display.setdefault(token, RowDisplaySettings())
+            row_index = table.rowCount()
+            table.insertRow(row_index)
+            name_item = QTableWidgetItem(self._text_at(index, COL_NAME))
+            name_item.setData(Qt.ItemDataRole.UserRole, token)
+            address_item = QTableWidgetItem(self._text_at(index, COL_ADDRESS))
+            for item in (name_item, address_item):
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(row_index, 0, name_item)
+            table.setItem(row_index, 1, address_item)
+            table.setItem(row_index, 2, QTableWidgetItem(f"{settings.scale:g}"))
+            table.setItem(row_index, 3, QTableWidgetItem(f"{settings.offset:g}"))
+            table.setItem(row_index, 4, QTableWidgetItem(settings.unit))
+            order_combo = QComboBox()
+            order_combo.addItems(["default", *ORDERS])
+            order_combo.setCurrentText(settings.order or "default")
+            order_combo.currentTextChanged.connect(
+                lambda text, t=token: self._set_row_order(t, text)
+            )
+            table.setCellWidget(row_index, 5, order_combo)
+        table.blockSignals(False)
+        table.itemChanged.connect(
+            lambda item: self._on_display_item_changed(table, item)
+        )
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("Rows added or deleted while this dialog is open"
+                                " appear after reopening it."))
+        layout.addWidget(table)
+        layout.addWidget(buttons)
+        dialog.resize(620, 350)
+        # non-modal; rows deleted meanwhile are ignored via the token lookup
+        dialog.finished.connect(self._on_display_dialog_closed)
+        self._display_dialog = dialog
+        dialog.show()
+
+    def _on_display_dialog_closed(self, _result: int) -> None:
+        self._display_dialog = None
+
+    def _set_row_order(self, token: int, text: str) -> None:
+        settings = self._row_display.get(token)
+        if settings is not None:
+            settings.order = text if text in ORDERS else None  # "default" = inherit
+
+    def _on_display_item_changed(
+        self, table: QTableWidget, item: QTableWidgetItem
+    ) -> None:
+        name_item = table.item(item.row(), 0)
+        if name_item is None:
+            return
+        settings = self._row_display.get(int(name_item.data(Qt.ItemDataRole.UserRole)))
+        if settings is None:
+            return
+        text = item.text().strip()
+        if item.column() == 2:
+            settings.scale = _entry_float(text, 1.0)
+        elif item.column() == 3:
+            settings.offset = _entry_float(text, 0.0)
+        elif item.column() == 4:
+            settings.unit = text
 
     @Slot()
     def _on_mask_write(self) -> None:
@@ -515,12 +600,6 @@ class RegistersPanel(QWidget):
         item = self._table.item(index, col)
         return item.text().strip() if item else ""
 
-    def _float_at(self, index: int, col: int, default: float) -> float:
-        try:
-            return float(self._text_at(index, col))
-        except ValueError:
-            return default
-
     def _row_data(self, index: int) -> RegisterRow | None:
         type_combo = self._table.cellWidget(index, COL_TYPE)
         name_item = self._table.item(index, COL_NAME)
@@ -534,16 +613,17 @@ class RegistersPanel(QWidget):
         if not 0 <= address <= 65535 or not 1 <= count <= 125:
             self.logLine.emit(f"✗ row {index + 1}: invalid address/count")
             return None
+        settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
         return RegisterRow(
             name=name_item.text() if name_item else "",
             kind=type_combo.currentText(),
             address=address,
             count=count,
             format=self._table.cellWidget(index, COL_FORMAT).currentText(),
-            order=self._table.cellWidget(index, COL_ORDER).currentText(),
-            scale=self._float_at(index, COL_SCALE, 1.0),
-            offset=self._float_at(index, COL_OFFSET, 0.0),
-            unit=self._text_at(index, COL_UNIT),
+            order=settings.order,
+            scale=settings.scale,
+            offset=settings.offset,
+            unit=settings.unit,
             unit_id=_parse_unit_id(self._text_at(index, COL_UNIT_ID)),
             poll_ms=_parse_poll_ms(self._text_at(index, COL_POLL)),
         )
@@ -564,6 +644,7 @@ class RegistersPanel(QWidget):
         if index is not None:
             token = self._token_at(index)
             self._flash_generations.pop(token, None)
+            self._row_display.pop(token, None)
             timer = self._row_timers.pop(token, None)
             if timer is not None:
                 timer.stop()
@@ -661,13 +742,13 @@ class RegistersPanel(QWidget):
         # hex and ascii show raw data — scaling them is meaningless
         if fmt in ("hex", "ascii"):
             return format_register_values(values, fmt)
-        order = self._table.cellWidget(index, COL_ORDER).currentText()
+        settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
+        order = settings.order or self._global_order_combo.currentText()
         decoded = decode_register_values(values, fmt, order)
-        scale = self._float_at(index, COL_SCALE, 1.0)
-        offset = self._float_at(index, COL_OFFSET, 0.0)
-        unit = self._text_at(index, COL_UNIT)
-        if scale != 1.0 or offset != 0.0 or unit:
-            return format_scaled_values(decoded, scale, offset, unit)
+        if settings.scale != 1.0 or settings.offset != 0.0 or settings.unit:
+            return format_scaled_values(
+                decoded, settings.scale, settings.offset, settings.unit
+            )
         return format_register_values(values, fmt, order)
 
     @Slot(int, bool, list, str)

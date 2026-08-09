@@ -140,15 +140,17 @@ serial numbers; the string ends at the first NUL byte). Coils and discrete
 inputs always show 0/1.
 
 Multi-register values are big-endian by default (the first register is the
-high word); the **Order** column covers devices with a different byte layout:
-`ABCD` (default), `CDAB` (word-swapped), `BADC` (byte-swapped words), `DCBA`
-(full reverse). A leftover register that does not fill a whole 32/64-bit group
-is shown as-is.
+high word); the **Order** combo above the table sets the byte layout for all
+rows (`ABCD` default, `CDAB` word-swapped, `BADC` byte-swapped words, `DCBA`
+full reverse), and a per-row override is available in the **Display…** dialog.
+A leftover register that does not fill a whole 32/64-bit group is shown as-is.
 
-The **Scale**, **Offset** and **Unit** columns show engineering values: the
-raw registers are first decoded according to Format and Order, then each
-decoded number is displayed as `x * scale + offset` with the unit appended
+The **Scale**, **Offset**, **Unit** and per-row **Order** settings live in the
+**Display…** dialog above the table (one row per register row). The raw
+registers are first decoded according to Format and Order, then each decoded
+number is displayed as `x * scale + offset` with the unit appended
 (e.g. `23.5 °C`). Scaling is skipped for the `hex` and `ascii` formats.
+Table columns can be resized by dragging the header separators.
 
 A value that changed since the previous read flashes green for ~2 seconds.
 

@@ -126,6 +126,7 @@ class SessionWidget(QWidget):
         return {
             "connection": self.connection_panel.state(),
             "registers": self.registers_panel.state(),
+            "registers_options": self.registers_panel.options_state(),
             "scanner": self.scanner_panel.state(),
         }
 
@@ -138,6 +139,9 @@ class SessionWidget(QWidget):
         registers = state.get("registers")
         if isinstance(registers, list):
             self.registers_panel.set_state(registers)
+        options = state.get("registers_options")
+        if isinstance(options, dict):
+            self.registers_panel.set_options(options)
         scanner = state.get("scanner")
         if isinstance(scanner, dict):
             self.scanner_panel.set_state(scanner)

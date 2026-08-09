@@ -60,12 +60,20 @@ class RegisterRow:
     address: int
     count: int = 1
     format: DisplayFormat = "dec"
-    order: ByteOrder = "ABCD"
+    order: ByteOrder | None = None  # None = inherit the panel's global order
     scale: float = 1.0
     offset: float = 0.0
     unit: str = ""
     unit_id: int | None = None  # None = use the global unit from the connection panel
     poll_ms: int | None = None  # None = use the global polling interval
+
+
+@dataclass
+class RowDisplaySettings:
+    scale: float = 1.0
+    offset: float = 0.0
+    unit: str = ""
+    order: ByteOrder | None = None  # None = inherit the panel's global order
 
 
 @dataclass

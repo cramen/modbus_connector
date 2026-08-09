@@ -45,3 +45,14 @@ def test_state_roundtrip_and_shutdown(qapp: QApplication) -> None:
     assert collected["scanner"]["start"] == 5
     assert collected["scanner"]["end"] == 9
     session.shutdown()  # must stop the worker thread without hanging
+
+
+def test_registers_options_roundtrip(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state({"registers_options": {"order": "CDAB"}})
+    assert session.state()["registers_options"] == {"order": "CDAB"}
+    session.set_state({"registers_options": {"order": "junk"}})  # invalid: keep
+    assert session.state()["registers_options"] == {"order": "CDAB"}
+    session.set_state({"registers": []})  # missing key: keep current value
+    assert session.state()["registers_options"] == {"order": "CDAB"}
+    session.shutdown()

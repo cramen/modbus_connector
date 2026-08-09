@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # A plain try/except is needed: pytest.importorskip re-raises ImportErrors coming
 # from a missing shared library inside an otherwise installed package.
 try:
-    from PySide6.QtWidgets import QApplication  # noqa: E402
+    from PySide6.QtWidgets import QApplication, QTableWidget  # noqa: E402
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
@@ -197,6 +197,81 @@ def test_display_text_decodes_then_scales(qapp: QApplication) -> None:
     assert panel._display_text(0, [0x3F80, 0x0000]) == "-39.9 °C"
     # hex bypasses scaling entirely
     assert panel._display_text(1, [0x001A]) == "0x001A"
+
+
+def test_display_settings_roundtrip_with_order_inherit(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 2,
+             "scale": 0.1, "offset": -40.0, "unit": "°C", "order": "CDAB"},
+            {"name": "b", "kind": "holding_registers", "address": 2, "count": 2},
+            {"name": "c", "kind": "holding_registers", "address": 4, "count": 2,
+             "order": ""},
+        ]
+    )
+    store = panel._row_display
+    assert store[panel._token_at(0)].order == "CDAB"
+    assert store[panel._token_at(0)].scale == 0.1
+    assert store[panel._token_at(1)].order is None  # missing key = inherit
+    assert store[panel._token_at(2)].order is None  # "" = inherit
+
+    state = panel.state()
+    assert state[0]["order"] == "CDAB"
+    assert state[1]["order"] == ""
+    panel.set_state(state)
+    store = panel._row_display
+    assert store[panel._token_at(0)].order == "CDAB"
+    assert store[panel._token_at(0)].unit == "°C"
+    assert store[panel._token_at(1)].order is None
+
+
+def test_display_text_uses_global_order_when_row_inherits(
+    qapp: QApplication,
+) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "inherit", "kind": "holding_registers", "address": 0,
+             "count": 2, "format": "u32"},
+            {"name": "explicit", "kind": "holding_registers", "address": 2,
+             "count": 2, "format": "u32", "order": "ABCD"},
+        ]
+    )
+    panel._global_order_combo.setCurrentText("CDAB")
+    # word-swapped wire data: global CDAB decodes, explicit ABCD does not
+    assert panel._display_text(0, [0x0000, 0x3F80]) == "1065353216"
+    assert panel._display_text(1, [0x0000, 0x3F80]) == "16256"
+    panel._global_order_combo.setCurrentText("ABCD")
+    assert panel._display_text(0, [0x0000, 0x3F80]) == "16256"
+
+
+def test_display_dialog_edits_update_the_store(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [{"name": "a", "kind": "holding_registers", "address": 0, "count": 2}]
+    )
+    panel._on_display_settings()
+    dialog = panel._display_dialog
+    assert dialog is not None
+    table = dialog.findChild(QTableWidget)
+    assert table is not None
+    scale_item = table.item(0, 2)
+    assert scale_item is not None
+    scale_item.setText("0.5")
+    unit_item = table.item(0, 4)
+    assert unit_item is not None
+    unit_item.setText("V")
+    order_combo = table.cellWidget(0, 5)
+    order_combo.setCurrentText("DCBA")
+    settings = panel._row_display[panel._token_at(0)]
+    assert settings.scale == 0.5
+    assert settings.unit == "V"
+    assert settings.order == "DCBA"
+    order_combo.setCurrentText("default")
+    assert settings.order is None  # back to inheriting the global order
+    dialog.close()
+    assert panel._display_dialog is None
 
 
 def test_per_row_poll_gets_own_timer(qapp: QApplication) -> None:
