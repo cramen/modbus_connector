@@ -26,6 +26,7 @@ class ScannerPanel(QWidget):
     scanStarted = Signal()
     scanRequested = Signal(list, int, int)
     scanStopRequested = Signal()
+    addrScanRequested = Signal(int, object, int, int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -51,6 +52,20 @@ class ScannerPanel(QWidget):
         self._progress.setValue(0)
         self._results = QListWidget()
 
+        self._addr_unit = QSpinBox(minimum=1, maximum=247, value=1)
+        self._addr_kind = QComboBox()
+        self._addr_kind.addItems(KINDS)
+        self._addr_from = QSpinBox(minimum=0, maximum=65535, value=0)
+        self._addr_to = QSpinBox(minimum=0, maximum=65535, value=99)
+        self._addr_start_button = QPushButton("Start")
+        self._addr_stop_button = QPushButton("Stop")
+        self._addr_stop_button.setEnabled(False)
+        self._addr_start_button.clicked.connect(self._on_addr_start)
+        self._addr_stop_button.clicked.connect(self.scanStopRequested)
+        self._addr_progress = QProgressBar()
+        self._addr_progress.setValue(0)
+        self._addr_results = QListWidget()
+
         range_layout = QHBoxLayout()
         range_layout.addWidget(QLabel("Unit range:"))
         range_layout.addWidget(self._start)
@@ -61,12 +76,29 @@ class ScannerPanel(QWidget):
         range_layout.addWidget(self._start_button)
         range_layout.addWidget(self._stop_button)
 
+        addr_layout = QHBoxLayout()
+        addr_layout.addWidget(QLabel("Unit:"))
+        addr_layout.addWidget(self._addr_unit)
+        addr_layout.addWidget(QLabel("Type:"))
+        addr_layout.addWidget(self._addr_kind)
+        addr_layout.addWidget(QLabel("Addresses:"))
+        addr_layout.addWidget(self._addr_from)
+        addr_layout.addWidget(QLabel("–"))
+        addr_layout.addWidget(self._addr_to)
+        addr_layout.addStretch(1)
+        addr_layout.addWidget(self._addr_start_button)
+        addr_layout.addWidget(self._addr_stop_button)
+
         layout = QVBoxLayout(self)
         layout.addLayout(range_layout)
         layout.addWidget(self._probes_table)
         layout.addWidget(self._progress)
         layout.addWidget(QLabel("Results:"))
         layout.addWidget(self._results)
+        layout.addWidget(QLabel("Address scan:"))
+        layout.addLayout(addr_layout)
+        layout.addWidget(self._addr_progress)
+        layout.addWidget(self._addr_results)
 
         for probe in DEFAULT_SCAN_PROBES:
             self._add_probe(probe)
@@ -149,8 +181,39 @@ class ScannerPanel(QWidget):
         self._start_button.setEnabled(True)
         self._stop_button.setEnabled(False)
 
+    @Slot()
+    def _on_addr_start(self) -> None:
+        if self._addr_from.value() > self._addr_to.value():
+            self._addr_from.setValue(self._addr_to.value())  # clamp inverted range
+        self._addr_results.clear()
+        self._addr_progress.setValue(0)
+        self._addr_progress.setMaximum(1)
+        self._addr_start_button.setEnabled(False)
+        self._addr_stop_button.setEnabled(True)
+        self.scanStarted.emit()
+        self.addrScanRequested.emit(
+            self._addr_unit.value(),
+            self._addr_kind.currentText(),
+            self._addr_from.value(),
+            self._addr_to.value(),
+        )
+
+    @Slot(int, int)
+    def handle_addr_scan_progress(self, done: int, total: int) -> None:
+        self._addr_progress.setMaximum(max(1, total))
+        self._addr_progress.setValue(done)
+
+    @Slot(int)
+    def handle_addr_scan_hit(self, address: int) -> None:
+        self._addr_results.addItem(f"0x{address:04X} ({address})")
+
+    @Slot()
+    def handle_addr_scan_finished(self) -> None:
+        self._addr_start_button.setEnabled(True)
+        self._addr_stop_button.setEnabled(False)
+
     def is_scanning(self) -> bool:
-        return self._stop_button.isEnabled()
+        return self._stop_button.isEnabled() or self._addr_stop_button.isEnabled()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.is_scanning():

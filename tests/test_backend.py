@@ -161,6 +161,37 @@ class TestTrafficHook:
         assert "recv" not in client.__dict__
 
 
+class TestScanAddresses:
+    def test_holding_registers(self, backend: ModbusBackend) -> None:
+        found = backend.scan_addresses(UNIT_ID, "holding_registers", 0, 14, lambda: False)
+        assert list(found) == list(range(10))
+
+    def test_input_registers(self, backend: ModbusBackend) -> None:
+        found = backend.scan_addresses(UNIT_ID, "input_registers", 0, 9, lambda: False)
+        assert list(found) == list(range(5))
+
+    def test_should_stop(self, backend: ModbusBackend) -> None:
+        found = []
+        for address in backend.scan_addresses(
+            UNIT_ID, "holding_registers", 0, 9, lambda: bool(found)
+        ):
+            found.append(address)
+        assert found == [0]
+
+    def test_dead_unit_yields_nothing(self, modbus_server: int) -> None:
+        b = ModbusBackend()
+        b.connect(TcpParams(host="127.0.0.1", port=modbus_server, timeout=0.2))
+        try:
+            found = b.scan_addresses(2, "holding_registers", 0, 2, lambda: False)
+            assert list(found) == []
+        finally:
+            b.disconnect()
+
+    def test_without_connect(self) -> None:
+        with pytest.raises(ConnectionError):
+            list(ModbusBackend().scan_addresses(UNIT_ID, "holding_registers", 0, 1, lambda: False))
+
+
 class TestScan:
     def test_finds_unit(self, backend: ModbusBackend) -> None:
         probes = [ScanProbe(kind="holding_registers", address=0, count=1)]

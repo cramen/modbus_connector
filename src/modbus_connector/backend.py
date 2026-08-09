@@ -168,6 +168,33 @@ class ModbusBackend:
                 hits.append(index)
             yield unit, hits
 
+    def scan_addresses(
+        self,
+        unit: int,
+        kind: RegisterKind,
+        start: int,
+        end: int,
+        should_stop: Callable[[], bool],
+    ) -> Iterator[int]:
+        """Читает адреса start..end по одному, отдаёт ответившие без ошибки.
+
+        Семантика ошибок как в scan(): ошибка уровня регистра (исключение
+        устройства, нет ответа) пропускается, обрыв транспорта — ConnectionError.
+        """
+        self._require_client()
+        for address in range(start, end + 1):
+            if should_stop():
+                return
+            try:
+                self.read(unit, kind, address, 1)
+            except (ConnectionException, OSError) as exc:
+                raise ConnectionError(
+                    f"Соединение потеряно при сканировании адресов unit={unit}"
+                ) from exc
+            except Exception:
+                continue
+            yield address
+
     def _require_client(self) -> ModbusTcpClient | ModbusSerialClient:
         # pymodbus закрывает сокет после таймаута, но execute() сам переподключится;
         # «нет подключения» — только когда disconnect() уже вызван.

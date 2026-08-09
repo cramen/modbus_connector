@@ -95,6 +95,11 @@ class MainWindow(QMainWindow):
         self._worker.scanHit.connect(self.scanner_panel.handle_scan_hit)
         self._worker.scanFinished.connect(self.scanner_panel.handle_scan_finished)
 
+        self.scanner_panel.addrScanRequested.connect(self._worker.start_addr_scan)
+        self._worker.addrScanProgress.connect(self.scanner_panel.handle_addr_scan_progress)
+        self._worker.addrScanHit.connect(self.scanner_panel.handle_addr_scan_hit)
+        self._worker.addrScanFinished.connect(self.scanner_panel.handle_addr_scan_finished)
+
         self._worker.logLine.connect(self.log_panel.append)
         self._worker.trafficLine.connect(self.log_panel.append_raw)
         self.registers_panel.logLine.connect(self.log_panel.append)

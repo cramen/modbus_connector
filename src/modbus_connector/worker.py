@@ -5,6 +5,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from modbus_connector.backend import ModbusBackend
 from modbus_connector.models import (
     ConnectionParams,
+    RegisterKind,
     RegisterRow,
     ScanProbe,
     Stats,
@@ -26,6 +27,9 @@ class ModbusWorker(QObject):
     scanProgress = Signal(int, int)
     scanHit = Signal(int, list)
     scanFinished = Signal()
+    addrScanProgress = Signal(int, int)
+    addrScanHit = Signal(int)
+    addrScanFinished = Signal()
     statsUpdated = Signal(object)
     aliveChanged = Signal(bool)
     trafficLine = Signal(str)
@@ -126,3 +130,25 @@ class ModbusWorker(QObject):
     @Slot()
     def stop_scan(self) -> None:
         self._scan_stop = True
+
+    @Slot(int, object, int, int)
+    def start_addr_scan(self, unit: int, kind: RegisterKind, start: int, end: int) -> None:
+        # single _scan_stop flag for both scans: only one scan runs at a time,
+        # stop_scan stops whichever is active
+        self._scan_stop = False
+        total = max(0, end - start + 1)
+        self.logLine.emit(f"→ scan addresses {kind} unit={unit} {start}..{end}")
+        try:
+            for address in self._backend.scan_addresses(
+                unit, kind, start, end, lambda: self._scan_stop
+            ):
+                self.addrScanHit.emit(address)
+                self.logLine.emit(f"← addr scan hit {kind}@{address}")
+                self.addrScanProgress.emit(address - start + 1, total)
+        except Exception as exc:
+            self.logLine.emit(f"✗ address scan failed: {exc}")
+        self.addrScanProgress.emit(total, total)
+        self.addrScanFinished.emit()
+        self.logLine.emit(
+            "← address scan stopped" if self._scan_stop else "← address scan finished"
+        )

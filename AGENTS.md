@@ -41,15 +41,21 @@ src/modbus_connector/
                   # scan(probes, start, end, should_stop) — генератор, отдаёт
                   # (unit, hits) для каждого просканированного unit
                   # (hits пуст, если unit не ответил);
+                  # scan_addresses(unit, kind, start, end, should_stop) —
+                  # генератор ответивших адресов (count=1), семантика ошибок
+                  # как у scan;
                   # traffic_hook — Callable[[str, bytes], None] (tx/rx),
                   # обёртка client.send/recv на время подключения
   worker.py       # Qt: ModbusWorker(QObject) над backend — сигналы
                   # connectionChanged/readFinished/writeFinished/scanProgress/
-                  # scanHit/scanFinished/statsUpdated/aliveChanged/trafficLine/
+                  # scanHit/scanFinished/addrScanProgress/addrScanHit/
+                  # addrScanFinished/statsUpdated/aliveChanged/trafficLine/
                   # logLine;
                   # слоты connect_to/disconnect/read/write/start_scan/stop_scan/
-                  # check_alive (локальная проверка backend.connected, без
-                  # трафика); read/write замеряют wall time и пишут в Stats
+                  # start_addr_scan/check_alive (локальная проверка
+                  # backend.connected, без трафика); один флаг _scan_stop на оба
+                  # сканера (одновременно работает только один);
+                  # read/write замеряют wall time и пишут в Stats
   connection_panel.py  # параметры подключения (TCP/RTU), state()/set_state();
                        # статус трёх цветов: серый (отключён), зелёный (alive),
                        # оранжевый "(idle)" — connected, но backend.connected
@@ -67,7 +73,8 @@ src/modbus_connector/
                        # токены и pending-запросы сохраняются,
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик
-  scanner_panel.py     # сканер unit-адресов; открывается отдельным окном
+  scanner_panel.py     # сканер unit-адресов и адресов регистров (секция
+                       # Address scan); открывается отдельным окном
   log_panel.py         # панель лога внизу главного окна, скрываемая кнопкой Log;
                        # чекбокс Raw (выкл. по умолчанию) показывает raw-кадры
                        # шины (append_raw), буфер (is_raw, текст) по 5000 строк
