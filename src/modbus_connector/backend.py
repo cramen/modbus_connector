@@ -2,7 +2,7 @@ import logging
 from collections.abc import Callable, Iterator
 
 from pymodbus.client import ModbusSerialClient, ModbusTcpClient
-from pymodbus.exceptions import ModbusIOException
+from pymodbus.exceptions import ConnectionException, ModbusIOException
 
 from .models import (
     ConnectionParams,
@@ -101,6 +101,7 @@ class ModbusBackend:
         """Сканирует unit-адреса start..end, для каждого отдаёт (unit, hits).
 
         hits — индексы сработавших probes; пустой список — unit не ответил.
+        Отсутствие ответа unit пропускается; обрыв соединения — ConnectionError.
         """
         self._require_client()
         for unit in range(start, end + 1):
@@ -112,13 +113,18 @@ class ModbusBackend:
                     return
                 try:
                     self.read(unit, probe.kind, probe.address, probe.count)
+                except (ConnectionException, OSError) as exc:
+                    raise ConnectionError(
+                        f"Соединение потеряно при сканировании unit={unit}"
+                    ) from exc
                 except Exception:
                     continue
                 hits.append(index)
             yield unit, hits
 
     def _require_client(self) -> ModbusTcpClient | ModbusSerialClient:
-        if not self.connected:
+        # pymodbus закрывает сокет после таймаута, но execute() сам переподключится;
+        # «нет подключения» — только когда disconnect() уже вызван.
+        if self._client is None:
             raise ConnectionError("Нет подключения к Modbus-устройству")
-        assert self._client is not None
         return self._client

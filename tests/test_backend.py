@@ -126,3 +126,17 @@ class TestScan:
             return calls > 2
 
         assert list(backend.scan(probes, 1, 1, stop)) == []
+
+    def test_aborts_on_connection_loss(self, backend: ModbusBackend) -> None:
+        probes = [ScanProbe(kind="holding_registers", address=0, count=1)]
+        calls = 0
+
+        def stop() -> bool:
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                backend.disconnect()
+            return False
+
+        with pytest.raises(ConnectionError):
+            list(backend.scan(probes, 1, 10, stop))
