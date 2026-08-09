@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.models import (
+    ByteOrder,
     DisplayFormat,
     RegisterKind,
     RegisterRow,
@@ -31,6 +32,7 @@ from modbus_connector.models import (
 
 KINDS = list(get_args(RegisterKind))
 FORMATS = list(get_args(DisplayFormat))
+ORDERS = list(get_args(ByteOrder))
 REGISTER_KINDS = ("holding_registers", "input_registers")
 
 (
@@ -40,13 +42,14 @@ REGISTER_KINDS = ("holding_registers", "input_registers")
     COL_COUNT,
     COL_UNIT_ID,
     COL_FORMAT,
+    COL_ORDER,
     COL_SCALE,
     COL_OFFSET,
     COL_UNIT,
     COL_VALUE,
     COL_NEW_VALUE,
     COL_ACTIONS,
-) = range(12)
+) = range(13)
 
 
 def _entry_float(value: object, default: float) -> float:
@@ -82,7 +85,7 @@ class RegistersPanel(QWidget):
         self._pending_writes: dict[int, int] = {}
         self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
 
-        self._table = QTableWidget(0, 12)
+        self._table = QTableWidget(0, 13)
         self._table.setHorizontalHeaderLabels(
             [
                 "Name",
@@ -91,6 +94,7 @@ class RegistersPanel(QWidget):
                 "Count",
                 "Unit ID",
                 "Format",
+                "Order",
                 "Scale",
                 "Offset",
                 "Unit",
@@ -159,6 +163,7 @@ class RegistersPanel(QWidget):
             count_item = self._table.item(index, COL_COUNT)
             type_combo = self._table.cellWidget(index, COL_TYPE)
             format_combo = self._table.cellWidget(index, COL_FORMAT)
+            order_combo = self._table.cellWidget(index, COL_ORDER)
             try:
                 address = int(address_item.text().strip(), 0)
                 count = int(count_item.text().strip(), 0)
@@ -172,6 +177,7 @@ class RegistersPanel(QWidget):
                     "count": count,
                     "unit_id": self._text_at(index, COL_UNIT_ID),
                     "format": format_combo.currentText(),
+                    "order": order_combo.currentText(),
                     "scale": self._float_at(index, COL_SCALE, 1.0),
                     "offset": self._float_at(index, COL_OFFSET, 0.0),
                     "unit": self._text_at(index, COL_UNIT),
@@ -192,6 +198,7 @@ class RegistersPanel(QWidget):
                     format=(
                         entry.get("format") if entry.get("format") in FORMATS else "dec"
                     ),
+                    order=(entry.get("order") if entry.get("order") in ORDERS else "ABCD"),
                     scale=_entry_float(entry.get("scale"), 1.0),
                     offset=_entry_float(entry.get("offset"), 0.0),
                     unit=str(entry.get("unit") or ""),
@@ -234,6 +241,13 @@ class RegistersPanel(QWidget):
         format_combo.setToolTip("Display format (registers only; coils/discrete show 0/1)")
         self._table.setCellWidget(index, COL_FORMAT, format_combo)
 
+        order_combo = QComboBox()
+        order_combo.addItems(ORDERS)
+        order_combo.setCurrentText(row.order)
+        order_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        order_combo.setToolTip("Byte order of 32-bit values (ignored by dec/hex/s16)")
+        self._table.setCellWidget(index, COL_ORDER, order_combo)
+
         self._table.setItem(index, COL_SCALE, QTableWidgetItem(f"{row.scale:g}"))
         self._table.setItem(index, COL_OFFSET, QTableWidgetItem(f"{row.offset:g}"))
         self._table.setItem(index, COL_UNIT, QTableWidgetItem(row.unit))
@@ -260,6 +274,7 @@ class RegistersPanel(QWidget):
         for col, widget in (
             (COL_TYPE, type_combo),
             (COL_FORMAT, format_combo),
+            (COL_ORDER, order_combo),
             (COL_ACTIONS, actions),
         ):
             width = widget.sizeHint().width() + 8
@@ -306,7 +321,7 @@ class RegistersPanel(QWidget):
                 self._table.takeItem(index, col) for col in range(self._table.columnCount())
             ]
             widgets = {}
-            for col in (COL_TYPE, COL_FORMAT, COL_ACTIONS):
+            for col in (COL_TYPE, COL_FORMAT, COL_ORDER, COL_ACTIONS):
                 widgets[col] = self._table.cellWidget(index, col)
                 self._table.removeCellWidget(index, col)  # detach, not delete
             snapshot.append((items, widgets))
@@ -363,6 +378,7 @@ class RegistersPanel(QWidget):
             address=address,
             count=count,
             format=self._table.cellWidget(index, COL_FORMAT).currentText(),
+            order=self._table.cellWidget(index, COL_ORDER).currentText(),
             scale=self._float_at(index, COL_SCALE, 1.0),
             offset=self._float_at(index, COL_OFFSET, 0.0),
             unit=self._text_at(index, COL_UNIT),
@@ -445,7 +461,8 @@ class RegistersPanel(QWidget):
         # hex shows raw words — scaling hex is meaningless
         if fmt != "hex" and (scale != 1.0 or offset != 0.0 or unit):
             return format_scaled_values(values, scale, offset, unit)
-        return format_register_values(values, fmt)
+        order = self._table.cellWidget(index, COL_ORDER).currentText()
+        return format_register_values(values, fmt, order)
 
     @Slot(int, bool, list, str)
     def handle_read_finished(self, request_id: int, ok: bool, values: list, error: str) -> None:

@@ -32,8 +32,8 @@ pyproject.toml
 src/modbus_connector/
   models.py       # без Qt: RegisterKind, TcpParams/RtuParams, ConnectionParams,
                   # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
-                  # parse_values(kind, text), format_values(values),
-                  # format_register_values(values, fmt),
+                  # ByteOrder, parse_values(kind, text), format_values(values),
+                  # format_register_values(values, fmt, order),
                   # format_scaled_values(values, scale, offset, unit),
                   # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
@@ -66,6 +66,8 @@ src/modbus_connector/
                        # unit из панели подключения),
                        # колонка Format — формат отображения значений
                        # (dec/hex/s16/u32/s32/f32, только для регистровых kind),
+                       # колонка Order — порядок байт 32-битных значений
+                       # (ABCD/CDAB/BADC/DCBA),
                        # колонки Scale/Offset/Unit — показ scaled-значений
                        # (x*scale+offset, кроме hex; запись всегда raw),
                        # изменившееся при чтении значение подсвечивается

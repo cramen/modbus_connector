@@ -106,6 +106,38 @@ class TestFormatRegisterValues:
             assert format_register_values([], fmt) == ""
 
 
+class TestByteOrder:
+    # f32 1.0 = 0x3F800000; u32 equivalent = 1065353216
+    def test_abcd_is_canonical(self) -> None:
+        assert format_register_values([0x3F80, 0x0000], "f32", "ABCD") == "1"
+        assert format_register_values([0x3F80, 0x0000], "u32", "ABCD") == "1065353216"
+
+    def test_cdab_word_swapped(self) -> None:
+        assert format_register_values([0x0000, 0x3F80], "f32", "CDAB") == "1"
+        assert format_register_values([0x0000, 0x3F80], "u32", "CDAB") == "1065353216"
+
+    def test_badc_byte_swapped(self) -> None:
+        assert format_register_values([0x803F, 0x0000], "f32", "BADC") == "1"
+        assert format_register_values([0x803F, 0x0000], "u32", "BADC") == "1065353216"
+
+    def test_dcba_full_reverse(self) -> None:
+        assert format_register_values([0x0000, 0x803F], "f32", "DCBA") == "1"
+        assert format_register_values([0x0000, 0x803F], "u32", "DCBA") == "1065353216"
+
+    def test_s32_with_order(self) -> None:
+        assert format_register_values([0xFFFF, 0xFFFF], "s32", "CDAB") == "-1"
+
+    def test_order_ignored_by_16_bit_formats(self) -> None:
+        values = [0x3F80, 0x0000]
+        for fmt in ("dec", "hex", "s16"):
+            assert format_register_values(values, fmt, "DCBA") == format_register_values(
+                values, fmt, "ABCD"
+            )
+
+    def test_default_order_unchanged(self) -> None:
+        assert format_register_values([0x3F80, 0x0000], "f32") == "1"
+
+
 class TestFormatScaledValues:
     def test_default_passthrough(self) -> None:
         assert format_scaled_values([1, 2, 300], 1.0, 0.0, "") == "1, 2, 300"

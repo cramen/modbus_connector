@@ -6,6 +6,8 @@ RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_r
 
 DisplayFormat = Literal["dec", "hex", "s16", "u32", "s32", "f32"]
 
+ByteOrder = Literal["ABCD", "CDAB", "BADC", "DCBA"]
+
 
 @dataclass(frozen=True)
 class TcpParams:
@@ -34,6 +36,7 @@ class RegisterRow:
     address: int
     count: int = 1
     format: DisplayFormat = "dec"
+    order: ByteOrder = "ABCD"
     scale: float = 1.0
     offset: float = 0.0
     unit: str = ""
@@ -105,11 +108,29 @@ def _to_s16(value: int) -> int:
     return value - 0x10000 if value >= 0x8000 else value
 
 
-def _to_s32(value: int) -> int:
-    return value - 0x1_0000_0000 if value >= 0x8000_0000 else value
+def _order_permutation(order: ByteOrder, n_bytes: int) -> list[int]:
+    """Indices that reorder arriving group bytes into canonical big-endian.
+
+    The literal names the byte roles in arrival order: ABCD = already canonical
+    (first register is the high word, big-endian bytes), CDAB = 16-bit words in
+    reverse order, BADC = bytes swapped within each 16-bit word,
+    DCBA = full byte reverse.
+    """
+    if order == "BADC":
+        return [i + 1 if i % 2 == 0 else i - 1 for i in range(n_bytes)]
+    if order == "CDAB":
+        perm = []
+        for word in range(n_bytes // 2 - 1, -1, -1):
+            perm += [word * 2, word * 2 + 1]
+        return perm
+    if order == "DCBA":
+        return list(range(n_bytes - 1, -1, -1))
+    return list(range(n_bytes))
 
 
-def format_register_values(values: list[int], fmt: DisplayFormat) -> str:
+def format_register_values(
+    values: list[int], fmt: DisplayFormat, order: ByteOrder = "ABCD"
+) -> str:
     if fmt == "dec":
         return format_values(values)
     if fmt == "hex":
@@ -119,13 +140,14 @@ def format_register_values(values: list[int], fmt: DisplayFormat) -> str:
     parts = []
     pairs_end = len(values) - len(values) % 2
     for i in range(0, pairs_end, 2):
-        combined = values[i] << 16 | values[i + 1]  # big-endian: first register is high word
+        raw = values[i].to_bytes(2, "big") + values[i + 1].to_bytes(2, "big")
+        data = bytes(raw[j] for j in _order_permutation(order, 4))
         if fmt == "u32":
-            parts.append(str(combined))
+            parts.append(str(int.from_bytes(data, "big")))
         elif fmt == "s32":
-            parts.append(str(_to_s32(combined)))
+            parts.append(str(int.from_bytes(data, "big", signed=True)))
         else:  # f32
-            parts.append(f"{struct.unpack('>f', struct.pack('>I', combined))[0]:.6g}")
+            parts.append(f"{struct.unpack('>f', data)[0]:.6g}")
     if len(values) % 2:
         parts.append(str(values[-1]))  # odd trailing register has no pair, show as decimal
     return ", ".join(parts)
