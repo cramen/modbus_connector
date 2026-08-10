@@ -55,6 +55,15 @@ register row (the "Display…" button above the table):
 
 ![Display settings](docs/screenshots/display_dialog.png)
 
+CSV export — choose which columns to write and their order (the "CSV" button
+above the table):
+
+![CSV export](docs/screenshots/export_dialog.png)
+
+CSV import — map file columns to register fields before loading the table:
+
+![CSV import](docs/screenshots/import_dialog.png)
+
 Address scanner — unit sweep with probes and the register address scan:
 
 ![Scanner](docs/screenshots/scanner.png)

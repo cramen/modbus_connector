@@ -56,6 +56,14 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 
 ![Настройки отображения](docs/screenshots/display_dialog.png)
 
+Экспорт CSV — выбор колонок и их порядка (кнопка «CSV» над таблицей):
+
+![Экспорт CSV](docs/screenshots/export_dialog.png)
+
+Импорт CSV — сопоставление колонок файла полям регистров перед загрузкой:
+
+![Импорт CSV](docs/screenshots/import_dialog.png)
+
 Сканер адресов — обход unit-адресов с пробами и скан адресов регистров:
 
 ![Сканер](docs/screenshots/scanner.png)
