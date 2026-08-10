@@ -1,4 +1,7 @@
+import csv
+import io
 from collections.abc import Callable
+from pathlib import Path
 from typing import get_args
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
@@ -7,11 +10,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QSpinBox,
     QStyle,
@@ -23,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.models import (
+    CSV_COLUMNS,
     ByteOrder,
     DisplayFormat,
     RegisterKind,
@@ -33,6 +39,9 @@ from modbus_connector.models import (
     format_scaled_values,
     format_values,
     parse_values,
+    row_to_csv_cells,
+    rows_from_csv,
+    rows_to_csv,
 )
 
 KINDS = list(get_args(RegisterKind))
@@ -168,6 +177,15 @@ class RegistersPanel(QWidget):
         display_button = QPushButton("Display…")
         display_button.setToolTip("Per-row Scale/Offset/Unit and byte order settings")
         display_button.clicked.connect(self._on_display_settings)
+        csv_button = QToolButton()
+        csv_button.setText("CSV")
+        csv_button.setToolTip("Import/export the register table as CSV")
+        csv_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        csv_menu = QMenu(csv_button)
+        csv_menu.addAction("Import table…", self._on_csv_import)
+        csv_menu.addAction("Export table…", self._on_csv_export)
+        csv_menu.addAction("Export values snapshot…", self._on_csv_snapshot)
+        csv_button.setMenu(csv_menu)
         self._global_order_combo = QComboBox()
         self._global_order_combo.addItems(ORDERS)
         self._global_order_combo.setToolTip(
@@ -190,6 +208,7 @@ class RegistersPanel(QWidget):
         top.addWidget(readwrite_button)
         top.addWidget(self._filter_edit)
         top.addWidget(display_button)
+        top.addWidget(csv_button)
         top.addStretch(1)
         top.addWidget(QLabel("Order:"))
         top.addWidget(self._global_order_combo)
@@ -392,6 +411,106 @@ class RegistersPanel(QWidget):
                     self._table.setCellWidget(new_index, col, widget)
         self._table.blockSignals(False)
         self._apply_filter()
+
+    @Slot()
+    def _on_csv_import(self) -> None:
+        path_str, _ = QFileDialog.getOpenFileName(
+            self, "Import registers from CSV", str(Path.home()), "CSV (*.csv)"
+        )
+        if path_str:
+            self.import_csv(Path(path_str))
+
+    @Slot()
+    def _on_csv_export(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Export registers to CSV", str(Path.home() / "registers.csv"),
+            "CSV (*.csv)",
+        )
+        if path_str:
+            self.export_csv(Path(path_str))
+
+    @Slot()
+    def _on_csv_snapshot(self) -> None:
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, "Export values snapshot to CSV", str(Path.home() / "snapshot.csv"),
+            "CSV (*.csv)",
+        )
+        if path_str:
+            self.export_csv_snapshot(Path(path_str))
+
+    def import_csv(self, path: Path) -> None:
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+        except OSError as exc:
+            self.logLine.emit(f"✗ failed to read {path}: {exc}")
+            return
+        try:
+            parsed = rows_from_csv(text)
+        except ValueError as exc:
+            self.logLine.emit(f"✗ failed to import {path}: {exc}")
+            return
+        self.set_state(  # import replaces the whole table
+            [
+                {
+                    "name": row.name,
+                    "kind": row.kind,
+                    "address": row.address,
+                    "count": row.count,
+                    "unit_id": "" if row.unit_id is None else str(row.unit_id),
+                    "poll_ms": "" if row.poll_ms is None else str(row.poll_ms),
+                    "format": row.format,
+                    "order": display.order or "",
+                    "scale": display.scale,
+                    "offset": display.offset,
+                    "unit": display.unit,
+                }
+                for row, display in parsed
+            ]
+        )
+        self.logLine.emit(f"← imported {len(parsed)} rows from {path}")
+
+    def _rows_and_displays(self) -> tuple[list[RegisterRow], list[RowDisplaySettings]]:
+        rows, displays = [], []
+        for index in range(self._table.rowCount()):
+            row = self._row_data(index)
+            if row is None:
+                continue
+            rows.append(row)
+            displays.append(
+                self._row_display.get(self._token_at(index), RowDisplaySettings())
+            )
+        return rows, displays
+
+    def export_csv(self, path: Path) -> None:
+        rows, displays = self._rows_and_displays()
+        try:
+            path.write_text(rows_to_csv(rows, displays), encoding="utf-8-sig")
+        except OSError as exc:
+            self.logLine.emit(f"✗ failed to write {path}: {exc}")
+            return
+        self.logLine.emit(f"→ exported {len(rows)} rows to {path}")
+
+    def export_csv_snapshot(self, path: Path) -> None:
+        # report snapshot: table columns plus the Value cell as displayed
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\n")
+        writer.writerow([*CSV_COLUMNS, "value"])
+        count = 0
+        for index in range(self._table.rowCount()):
+            row = self._row_data(index)
+            if row is None:
+                continue
+            settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
+            writer.writerow(
+                [*row_to_csv_cells(row, settings), self._text_at(index, COL_VALUE)]
+            )
+            count += 1
+        try:
+            path.write_text(buffer.getvalue(), encoding="utf-8-sig")
+        except OSError as exc:
+            self.logLine.emit(f"✗ failed to write {path}: {exc}")
+            return
+        self.logLine.emit(f"→ exported {count} rows snapshot to {path}")
 
     @Slot()
     def _on_display_settings(self) -> None:

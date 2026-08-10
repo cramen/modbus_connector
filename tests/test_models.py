@@ -1,6 +1,8 @@
 import pytest
 
 from modbus_connector.models import (
+    RegisterRow,
+    RowDisplaySettings,
     Stats,
     decode_register_values,
     describe_exception,
@@ -8,6 +10,8 @@ from modbus_connector.models import (
     format_scaled_values,
     format_values,
     parse_values,
+    rows_from_csv,
+    rows_to_csv,
 )
 
 
@@ -292,6 +296,56 @@ class TestStats:
         stats.record(False, 20.0)
         stats.reset()
         assert stats.snapshot() == Stats().snapshot()
+
+
+class TestCsv:
+    def test_roundtrip_preserves_all_fields(self) -> None:
+        rows = [
+            RegisterRow(
+                name="temp", kind="holding_registers", address=5, count=2,
+                format="f32", unit_id=3, poll_ms=5000,
+            ),
+            RegisterRow(name="bits, with comma", kind="coils", address=0),
+        ]
+        displays = [
+            RowDisplaySettings(scale=0.1, offset=-40.0, unit="°C", order="CDAB"),
+            RowDisplaySettings(),
+        ]
+        parsed = rows_from_csv(rows_to_csv(rows, displays))
+        assert parsed == list(zip(rows, displays, strict=True))
+
+    def test_missing_optional_and_unknown_columns(self) -> None:
+        text = "name,kind,address,comment\ntemp,holding_registers,5,hello\n"
+        parsed = rows_from_csv(text)
+        row, display = parsed[0]
+        assert row.address == 5
+        assert row.count == 1
+        assert row.unit_id is None
+        assert row.poll_ms is None
+        assert display.scale == 1.0
+        assert display.offset == 0.0
+        assert display.unit == ""
+        assert display.order is None
+
+    def test_kind_fallback_and_hex_address(self) -> None:
+        parsed = rows_from_csv("name,kind,address\nx,bogus,0x10\n")
+        row, _ = parsed[0]
+        assert row.kind == "holding_registers"
+        assert row.address == 16
+
+    def test_bad_rows_skipped(self) -> None:
+        text = "name,kind,address\ngood,coils,3\nbad,coils,abc\n"
+        parsed = rows_from_csv(text)
+        assert len(parsed) == 1
+        assert parsed[0][0].name == "good"
+
+    def test_all_rows_bad_raises(self) -> None:
+        with pytest.raises(ValueError):
+            rows_from_csv("name,kind,address\nbad,coils,abc\n")
+
+    def test_header_missing_address_raises(self) -> None:
+        with pytest.raises(ValueError):
+            rows_from_csv("name,kind,count\ntemp,coils,1\n")
 
 
 class TestDescribeException:

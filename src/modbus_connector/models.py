@@ -1,6 +1,8 @@
+import csv
+import io
 import struct
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, get_args
 
 RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_registers"]
 
@@ -74,6 +76,111 @@ class RowDisplaySettings:
     offset: float = 0.0
     unit: str = ""
     order: ByteOrder | None = None  # None = inherit the panel's global order
+
+
+CSV_COLUMNS = [
+    "name", "kind", "address", "count", "unit_id", "poll_ms",
+    "format", "scale", "offset", "unit", "order",
+]
+
+
+def row_to_csv_cells(row: RegisterRow, display: RowDisplaySettings) -> list[object]:
+    return [
+        row.name,
+        row.kind,
+        row.address,
+        row.count,
+        "" if row.unit_id is None else row.unit_id,
+        "" if row.poll_ms is None else row.poll_ms,
+        row.format,
+        display.scale,
+        display.offset,
+        display.unit,
+        display.order or "",  # "" = inherit the global order
+    ]
+
+
+def rows_to_csv(rows: list[RegisterRow], displays: list[RowDisplaySettings]) -> str:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(CSV_COLUMNS)
+    for row, display in zip(rows, displays, strict=True):
+        writer.writerow(row_to_csv_cells(row, display))
+    return buffer.getvalue()
+
+
+def _csv_int(text: str, default: int) -> int:
+    try:
+        return int(text, 0)
+    except ValueError:
+        return default
+
+
+def _csv_opt_int(text: str, lo: int, hi: int) -> int | None:
+    try:
+        value = int(text, 0) if text else None
+    except ValueError:
+        value = None
+    return value if value is not None and lo <= value <= hi else None
+
+
+def _csv_float(text: str, default: float) -> float:
+    try:
+        return float(text) if text else default
+    except ValueError:
+        return default
+
+
+def rows_from_csv(text: str) -> list[tuple[RegisterRow, RowDisplaySettings]]:
+    """Парсит CSV таблицы регистров (заголовок обязателен, регистр не важен).
+
+    Неизвестные колонки игнорируются, необязательные могут отсутствовать;
+    строки с нечитаемым address пропускаются. ValueError — нет обязательных
+    колонок (name/kind/address) или ни одной корректной строки.
+    """
+    reader = csv.DictReader(io.StringIO(text))
+    headers = {name.strip().lower() for name in reader.fieldnames or []}
+    for essential in ("name", "kind", "address"):
+        if essential not in headers:
+            raise ValueError(f"В CSV нет обязательной колонки {essential!r}")
+    result = []
+    for record in reader:
+        data = {
+            key.strip().lower(): (value or "").strip()
+            for key, value in record.items()
+            if key is not None
+        }
+        try:
+            address = int(data["address"], 0)
+        except ValueError:
+            continue  # rows without a parseable address are skipped
+        kind = data.get("kind", "")
+        fmt = data.get("format", "")
+        order = data.get("order", "")
+        result.append(
+            (
+                RegisterRow(
+                    name=data.get("name", ""),
+                    kind=(
+                        kind if kind in get_args(RegisterKind) else "holding_registers"
+                    ),
+                    address=address,
+                    count=_csv_int(data.get("count", ""), 1),
+                    format=fmt if fmt in get_args(DisplayFormat) else "dec",
+                    unit_id=_csv_opt_int(data.get("unit_id", ""), 1, 247),
+                    poll_ms=_csv_opt_int(data.get("poll_ms", ""), 100, 600_000),
+                ),
+                RowDisplaySettings(
+                    scale=_csv_float(data.get("scale", ""), 1.0),
+                    offset=_csv_float(data.get("offset", ""), 0.0),
+                    unit=data.get("unit", ""),
+                    order=order if order in get_args(ByteOrder) else None,
+                ),
+            )
+        )
+    if not result:
+        raise ValueError("В CSV нет ни одной корректной строки")
+    return result
 
 
 @dataclass

@@ -225,6 +225,25 @@ off by default to keep the log readable. **Save…** exports the entire log
 (including raw frames hidden by the checkbox) to a text file; **Clear**
 empties it.
 
+### CSV import/export
+
+The **CSV** drop-down above the table exchanges the register table with
+spreadsheet tools:
+
+- **Import table…** loads a CSV file and *replaces* the whole table (errors
+  are reported in the log, an invalid file leaves the table untouched).
+- **Export table…** writes the current table as CSV — re-importable later.
+- **Export values snapshot…** writes the same columns plus a final `value`
+  column with the currently displayed (formatted/scaled) text — a snapshot
+  for reports, not meant for re-import.
+
+The CSV has a header row with columns `name,kind,address,count,unit_id,
+poll_ms,format,scale,offset,unit,order`; empty `unit_id`/`poll_ms` mean
+"use the connection unit / global interval", empty `order` means "inherit the
+global order". Only `name`, `kind` and `address` are required on import —
+missing optional columns fall back to defaults and unknown columns are
+ignored. Files are written UTF-8 with BOM so Excel opens them cleanly.
+
 
 ## Building a standalone executable
 

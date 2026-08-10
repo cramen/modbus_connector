@@ -39,6 +39,8 @@ src/modbus_connector/
                   # decode_register_values(values, fmt, order) — decode до чисел,
                   # format_register_values (поверх decode),
                   # format_scaled_values (x*scale+offset по decoded),
+                  # rows_to_csv/rows_from_csv/row_to_csv_cells/CSV_COLUMNS —
+                  # CSV таблицы регистров (толерантный разбор),
                   # EXCEPTION_CODES/describe_exception — имена Modbus-исключений,
                   # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms,
                   # разбивка ошибок по видам)
@@ -97,6 +99,8 @@ src/modbus_connector/
                        # хранилище _row_display по токену (RowDisplaySettings,
                        # order None = глобальный Order-комбо над таблицей,
                        # сохраняется как registers_options в session state),
+                       # выпадающая кнопка CSV — import (заменяет таблицу) /
+                       # export таблицы / export снимка значений (+колонка value),
                        # колонки таблицы ресайзятся (Interactive),
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (по токену строки, с генерацией),

@@ -1,5 +1,6 @@
 import itertools
 import os
+from pathlib import Path
 
 import pytest
 
@@ -19,6 +20,7 @@ from PySide6.QtGui import QColor  # noqa: E402
 from modbus_connector.models import RegisterRow  # noqa: E402
 from modbus_connector.registers_panel import (  # noqa: E402
     COL_ADDRESS,
+    COL_NAME,
     COL_NEW_VALUE,
     COL_POLL,
     COL_UNIT_ID,
@@ -272,6 +274,57 @@ def test_display_dialog_edits_update_the_store(qapp: QApplication) -> None:
     assert settings.order is None  # back to inheriting the global order
     dialog.close()
     assert panel._display_dialog is None
+
+
+def test_csv_import_replaces_table(qapp: QApplication, tmp_path: Path) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    path = tmp_path / "import.csv"
+    path.write_text(
+        "name,kind,address,count,scale,order\n"
+        "temp,holding_registers,5,2,0.1,CDAB\n"
+        "pressure,holding_registers,6,1,,\n",
+        encoding="utf-8",
+    )
+    panel.import_csv(path)
+    assert panel._table.rowCount() == 2
+    assert panel._table.item(0, COL_NAME).text() == "temp"
+    settings = panel._row_display[panel._token_at(0)]
+    assert settings.scale == 0.1
+    assert settings.order == "CDAB"
+    assert panel._row_display[panel._token_at(1)].order is None
+
+    bad = tmp_path / "bad.csv"
+    bad.write_text("name,kind,count\nx,coils,1\n", encoding="utf-8")
+    panel.import_csv(bad)  # invalid file: table untouched
+    assert panel._table.rowCount() == 2
+
+
+def test_csv_export_roundtrip_and_snapshot(qapp: QApplication, tmp_path: Path) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "temp", "kind": "holding_registers", "address": 5, "count": 2,
+             "format": "f32", "scale": 0.1, "offset": -40.0, "unit": "°C"}
+        ]
+    )
+    panel._table.item(0, COL_VALUE).setText("-39.9 °C")
+
+    export_path = tmp_path / "export.csv"
+    panel.export_csv(export_path)
+    other = RegistersPanel(itertools.count(100).__next__)
+    other.import_csv(export_path)
+    assert other._table.rowCount() == 1
+    exported = other._row_display[other._token_at(0)]
+    assert exported.scale == 0.1
+    assert exported.offset == -40.0
+    assert exported.unit == "°C"
+
+    snapshot_path = tmp_path / "snapshot.csv"
+    panel.export_csv_snapshot(snapshot_path)
+    text = snapshot_path.read_text(encoding="utf-8-sig")
+    header, line = text.strip().split("\n")
+    assert header.endswith(",value")
+    assert line.endswith(",-39.9 °C")
 
 
 def test_per_row_poll_gets_own_timer(qapp: QApplication) -> None:
