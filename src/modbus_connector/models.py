@@ -83,30 +83,61 @@ CSV_COLUMNS = [
     "format", "scale", "offset", "unit", "order",
 ]
 
-
-def row_to_csv_cells(row: RegisterRow, display: RowDisplaySettings) -> list[object]:
-    return [
-        row.name,
-        row.kind,
-        row.address,
-        row.count,
-        "" if row.unit_id is None else row.unit_id,
-        "" if row.poll_ms is None else row.poll_ms,
-        row.format,
-        display.scale,
-        display.offset,
-        display.unit,
-        display.order or "",  # "" = inherit the global order
-    ]
+CSV_ALIASES = {"type": "kind"}  # file column name (lowercased) -> target field
 
 
-def rows_to_csv(rows: list[RegisterRow], displays: list[RowDisplaySettings]) -> str:
+def row_to_csv_record(row: RegisterRow, display: RowDisplaySettings) -> dict[str, object]:
+    return {
+        "name": row.name,
+        "kind": row.kind,
+        "address": row.address,
+        "count": row.count,
+        "unit_id": "" if row.unit_id is None else row.unit_id,
+        "poll_ms": "" if row.poll_ms is None else row.poll_ms,
+        "format": row.format,
+        "scale": display.scale,
+        "offset": display.offset,
+        "unit": display.unit,
+        "order": display.order or "",  # "" = inherit the global order
+    }
+
+
+def row_to_csv_cells(
+    row: RegisterRow, display: RowDisplaySettings, columns: list[str] | None = None
+) -> list[object]:
+    record = row_to_csv_record(row, display)
+    return [record[column] for column in (columns or CSV_COLUMNS)]
+
+
+def rows_to_csv(
+    rows: list[RegisterRow],
+    displays: list[RowDisplaySettings],
+    columns: list[str] | None = None,
+) -> str:
+    columns = columns or CSV_COLUMNS
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerow(CSV_COLUMNS)
+    writer.writerow(columns)
     for row, display in zip(rows, displays, strict=True):
-        writer.writerow(row_to_csv_cells(row, display))
+        writer.writerow(row_to_csv_cells(row, display, columns))
     return buffer.getvalue()
+
+
+def csv_header(text: str) -> list[str]:
+    first_line = text.split("\n", 1)[0]
+    return next(csv.reader([first_line]), [])
+
+
+def guess_column_mapping(header: list[str]) -> dict[str, str]:
+    """Угадывает сопоставление «колонка файла -> поле» по имени (регистр не важен)."""
+    mapping = {}
+    for column in header:
+        name = column.strip().lower()
+        if name in CSV_COLUMNS:
+            mapping[column] = name
+        elif name in CSV_ALIASES:
+            mapping[column] = CSV_ALIASES[name]
+    return mapping
 
 
 def _csv_int(text: str, default: int) -> int:
@@ -131,28 +162,36 @@ def _csv_float(text: str, default: float) -> float:
         return default
 
 
-def rows_from_csv(text: str) -> list[tuple[RegisterRow, RowDisplaySettings]]:
+def rows_from_csv(
+    text: str, mapping: dict[str, str] | None = None
+) -> list[tuple[RegisterRow, RowDisplaySettings]]:
     """Парсит CSV таблицы регистров (заголовок обязателен, регистр не важен).
 
-    Неизвестные колонки игнорируются, необязательные могут отсутствовать;
-    строки с нечитаемым address пропускаются. ValueError — нет обязательных
-    колонок (name/kind/address) или ни одной корректной строки.
+    mapping «колонка файла -> поле» задаётся явно или угадывается по именам;
+    колонки вне сопоставления игнорируются, поля вне сопоставления получают
+    значения по умолчанию; строки с нечитаемым address пропускаются.
+    ValueError — не сопоставлены обязательные поля (name/kind/address) или
+    ни одной корректной строки.
     """
     reader = csv.DictReader(io.StringIO(text))
-    headers = {name.strip().lower() for name in reader.fieldnames or []}
+    effective = (
+        {key.strip(): field for key, field in mapping.items()}
+        if mapping is not None
+        else guess_column_mapping([name for name in reader.fieldnames or []])
+    )
     for essential in ("name", "kind", "address"):
-        if essential not in headers:
-            raise ValueError(f"В CSV нет обязательной колонки {essential!r}")
+        if essential not in effective.values():
+            raise ValueError(f"В CSV не сопоставлено обязательное поле {essential!r}")
     result = []
     for record in reader:
         data = {
-            key.strip().lower(): (value or "").strip()
+            effective[key.strip()]: (value or "").strip()
             for key, value in record.items()
-            if key is not None
+            if key is not None and key.strip() in effective
         }
         try:
             address = int(data["address"], 0)
-        except ValueError:
+        except (KeyError, ValueError):
             continue  # rows without a parseable address are skipped
         kind = data.get("kind", "")
         fmt = data.get("format", "")

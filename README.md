@@ -230,20 +230,22 @@ empties it.
 The **CSV** drop-down above the table exchanges the register table with
 spreadsheet tools:
 
-- **Import table…** loads a CSV file and *replaces* the whole table (errors
-  are reported in the log, an invalid file leaves the table untouched).
-- **Export…** writes the current table as CSV: all table columns plus a final
-  `value` column with the currently displayed (formatted/scaled) text —
-  readable as a report and re-importable: the `value` column is simply
-  ignored on import, so the round trip "export → edit in Excel → import"
-  works out of the box.
+- **Import table…** loads a CSV file and *replaces* the whole table. A
+  mapping dialog appears first: every file column can be matched to a
+  register field (name, kind, address, count, unit_id, poll_ms, format,
+  scale, offset, unit, order) or skipped; matches are guessed from column
+  names ("type" counts as kind) and the essential fields name/kind/address
+  must be mapped. Errors are reported in the log, an invalid file leaves the
+  table untouched.
+- **Export…** opens a column chooser first — check which columns to write
+  and reorder them (arrows/Space/Ctrl+Up/Ctrl+Down) — then writes the CSV:
+  the chosen columns plus an optional `value` column with the currently
+  displayed (formatted/scaled) text — readable as a report and re-importable:
+  the `value` column is simply skipped by default in the mapping dialog, so
+  the round trip "export → edit in Excel → import" works out of the box.
 
-The CSV has a header row with columns `name,kind,address,count,unit_id,
-poll_ms,format,scale,offset,unit,order` (plus `value` in exports); empty
-`unit_id`/`poll_ms` mean "use the connection unit / global interval", empty
-`order` means "inherit the global order". Only `name`, `kind` and `address`
-are required on import — missing optional columns fall back to defaults and
-unknown columns are ignored. Files are written UTF-8 with BOM so Excel opens
+Only `name`, `kind` and `address` are required on import — unmapped optional
+fields fall back to defaults. Files are written UTF-8 with BOM so Excel opens
 them cleanly.
 
 

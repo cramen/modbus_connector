@@ -4,11 +4,13 @@ from modbus_connector.models import (
     RegisterRow,
     RowDisplaySettings,
     Stats,
+    csv_header,
     decode_register_values,
     describe_exception,
     format_register_values,
     format_scaled_values,
     format_values,
+    guess_column_mapping,
     parse_values,
     rows_from_csv,
     rows_to_csv,
@@ -346,6 +348,38 @@ class TestCsv:
     def test_header_missing_address_raises(self) -> None:
         with pytest.raises(ValueError):
             rows_from_csv("name,kind,count\ntemp,coils,1\n")
+
+    def test_export_column_subset_and_order(self) -> None:
+        rows = [RegisterRow(name="t", kind="coils", address=5, count=3)]
+        displays = [RowDisplaySettings(scale=2.0)]
+        text = rows_to_csv(rows, displays, ["address", "name", "scale"])
+        header, line = text.strip().split("\n")
+        assert header == "address,name,scale"
+        assert line == "5,t,2.0"
+
+    def test_guess_column_mapping(self) -> None:
+        assert guess_column_mapping(["Name", "type", "value", "wat", " scale "]) == {
+            "Name": "name",
+            "type": "kind",
+            " scale ": "scale",
+        }
+
+    def test_explicit_mapping(self) -> None:
+        text = "Register Name,type,addr,ignore me\nx,coils,5,junk\n"
+        mapping = {"Register Name": "name", "type": "kind", "addr": "address"}
+        parsed = rows_from_csv(text, mapping)
+        row, _ = parsed[0]
+        assert row.name == "x"
+        assert row.kind == "coils"
+        assert row.address == 5
+
+    def test_mapping_missing_essential_raises(self) -> None:
+        with pytest.raises(ValueError):
+            rows_from_csv("name,kind,address\nx,coils,5\n", {"name": "name"})
+
+    def test_csv_header(self) -> None:
+        assert csv_header("a,b,c\n1,2,3\n") == ["a", "b", "c"]
+        assert csv_header("") == []
 
 
 class TestDescribeException:

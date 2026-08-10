@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
 from modbus_connector.models import (
     CSV_COLUMNS,
     ByteOrder,
@@ -34,12 +35,13 @@ from modbus_connector.models import (
     RegisterKind,
     RegisterRow,
     RowDisplaySettings,
+    csv_header,
     decode_register_values,
     format_register_values,
     format_scaled_values,
     format_values,
     parse_values,
-    row_to_csv_cells,
+    row_to_csv_record,
     rows_from_csv,
 )
 
@@ -415,26 +417,46 @@ class RegistersPanel(QWidget):
         path_str, _ = QFileDialog.getOpenFileName(
             self, "Import registers from CSV", str(Path.home()), "CSV (*.csv)"
         )
-        if path_str:
-            self.import_csv(Path(path_str))
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            header = csv_header(path.read_text(encoding="utf-8-sig"))
+        except OSError as exc:
+            self.logLine.emit(f"✗ failed to read {path}: {exc}")
+            return
+        if not header:  # no header row at all: let the parser report it in the log
+            self.import_csv(path)
+            return
+        dialog = ImportMappingDialog(header, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.import_csv(path, dialog.mapping())
 
     @Slot()
     def _on_csv_export(self) -> None:
+        dialog = ExportColumnsDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        columns = dialog.columns()
+        if not columns:
+            self.logLine.emit("✗ export: no columns selected")
+            return
         path_str, _ = QFileDialog.getSaveFileName(
             self, "Export registers to CSV", str(Path.home() / "registers.csv"),
             "CSV (*.csv)",
         )
         if path_str:
-            self.export_csv(Path(path_str))
+            self.export_csv(Path(path_str), columns)
 
-    def import_csv(self, path: Path) -> None:
+    def import_csv(self, path: Path, mapping: dict[str, str] | None = None) -> None:
         try:
             text = path.read_text(encoding="utf-8-sig")
         except OSError as exc:
             self.logLine.emit(f"✗ failed to read {path}: {exc}")
             return
         try:
-            parsed = rows_from_csv(text)
+            parsed = rows_from_csv(text, mapping)
         except ValueError as exc:
             self.logLine.emit(f"✗ failed to import {path}: {exc}")
             return
@@ -458,21 +480,22 @@ class RegistersPanel(QWidget):
         )
         self.logLine.emit(f"← imported {len(parsed)} rows from {path}")
 
-    def export_csv(self, path: Path) -> None:
-        # the full snapshot format: table columns plus the Value cell as
-        # displayed (the value column is ignored when importing back)
+    def export_csv(self, path: Path, columns: list[str] | None = None) -> None:
+        # full snapshot format by default: table columns plus the Value cell
+        # as displayed (the value column is ignored when importing back)
+        columns = columns or [*CSV_COLUMNS, "value"]
         buffer = io.StringIO()
         writer = csv.writer(buffer, lineterminator="\n")
-        writer.writerow([*CSV_COLUMNS, "value"])
+        writer.writerow(columns)
         count = 0
         for index in range(self._table.rowCount()):
             row = self._row_data(index)
             if row is None:
                 continue
             settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
-            writer.writerow(
-                [*row_to_csv_cells(row, settings), self._text_at(index, COL_VALUE)]
-            )
+            record = row_to_csv_record(row, settings)
+            record["value"] = self._text_at(index, COL_VALUE)
+            writer.writerow([record.get(column, "") for column in columns])
             count += 1
         try:
             path.write_text(buffer.getvalue(), encoding="utf-8-sig")

@@ -11,18 +11,24 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # A plain try/except is needed: pytest.importorskip re-raises ImportErrors coming
 # from a missing shared library inside an otherwise installed package.
 try:
+    from PySide6.QtCore import Qt  # noqa: E402
     from PySide6.QtWidgets import QApplication, QTableWidget  # noqa: E402
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
 from PySide6.QtGui import QColor  # noqa: E402
 
-from modbus_connector.models import RegisterRow  # noqa: E402
+from modbus_connector.csv_dialogs import (  # noqa: E402
+    ExportColumnsDialog,
+    ImportMappingDialog,
+)
+from modbus_connector.models import RegisterRow, csv_header  # noqa: E402
 from modbus_connector.registers_panel import (  # noqa: E402
     COL_ADDRESS,
     COL_NAME,
     COL_NEW_VALUE,
     COL_POLL,
+    COL_TYPE,
     COL_UNIT_ID,
     COL_VALUE,
     RegistersPanel,
@@ -325,6 +331,60 @@ def test_csv_export_roundtrip_and_snapshot(qapp: QApplication, tmp_path: Path) -
     assert exported.offset == -40.0
     assert exported.unit == "°C"
     assert other._table.item(0, COL_VALUE).text() == ""  # value is not imported
+
+
+def test_export_dialog_drives_column_selection(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    dialog = ExportColumnsDialog(panel)
+    list_widget = dialog._list
+    order_row = next(
+        row for row in range(list_widget.count())
+        if list_widget.item(row).text() == "order"
+    )
+    list_widget.item(order_row).setCheckState(Qt.CheckState.Unchecked)
+    dialog._move_current(1)  # current row 0 ("name") moves down one position
+    columns = dialog.columns()
+    assert "order" not in columns
+    assert columns[0] == "kind"
+    assert columns[1] == "name"
+
+    path = tmp_path / "subset.csv"
+    panel.export_csv(path, columns)
+    header = path.read_text(encoding="utf-8-sig").strip().split("\n")[0]
+    assert header == ",".join(columns)
+
+
+def test_import_dialog_mapping_drives_import(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    path = tmp_path / "scrambled.csv"
+    path.write_text("Register Name,type,address\nx,coils,5\n", encoding="utf-8")
+    header = csv_header(path.read_text(encoding="utf-8-sig"))
+    dialog = ImportMappingDialog(header)
+    combos = {
+        dialog._table.item(row, 0).text(): dialog._table.cellWidget(row, 1)
+        for row in range(dialog._table.rowCount())
+    }
+    assert combos["type"].currentText() == "kind"  # alias guessed
+    assert combos["Register Name"].currentText() == "— skip —"  # unknown: skip
+    assert combos["address"].currentText() == "address"
+    combos["Register Name"].setCurrentText("name")
+
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.import_csv(path, dialog.mapping())
+    assert panel._table.rowCount() == 1
+    assert panel._table.item(0, COL_NAME).text() == "x"
+    assert panel._table.cellWidget(0, COL_TYPE).currentText() == "coils"
+
+
+def test_import_dialog_warns_on_unmapped_essential(qapp: QApplication) -> None:
+    dialog = ImportMappingDialog(["comment", "notes"])
+    dialog._validate()  # nothing mapped to name/kind/address
+    assert not dialog._warning.isHidden()
+    assert "name" in dialog._warning.text()
+    assert dialog.result() == 0  # still open, not accepted
 
 
 def test_per_row_poll_gets_own_timer(qapp: QApplication) -> None:
