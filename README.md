@@ -232,17 +232,19 @@ spreadsheet tools:
 
 - **Import table…** loads a CSV file and *replaces* the whole table (errors
   are reported in the log, an invalid file leaves the table untouched).
-- **Export table…** writes the current table as CSV — re-importable later.
-- **Export values snapshot…** writes the same columns plus a final `value`
-  column with the currently displayed (formatted/scaled) text — a snapshot
-  for reports, not meant for re-import.
+- **Export…** writes the current table as CSV: all table columns plus a final
+  `value` column with the currently displayed (formatted/scaled) text —
+  readable as a report and re-importable: the `value` column is simply
+  ignored on import, so the round trip "export → edit in Excel → import"
+  works out of the box.
 
 The CSV has a header row with columns `name,kind,address,count,unit_id,
-poll_ms,format,scale,offset,unit,order`; empty `unit_id`/`poll_ms` mean
-"use the connection unit / global interval", empty `order` means "inherit the
-global order". Only `name`, `kind` and `address` are required on import —
-missing optional columns fall back to defaults and unknown columns are
-ignored. Files are written UTF-8 with BOM so Excel opens them cleanly.
+poll_ms,format,scale,offset,unit,order` (plus `value` in exports); empty
+`unit_id`/`poll_ms` mean "use the connection unit / global interval", empty
+`order` means "inherit the global order". Only `name`, `kind` and `address`
+are required on import — missing optional columns fall back to defaults and
+unknown columns are ignored. Files are written UTF-8 with BOM so Excel opens
+them cleanly.
 
 
 ## Building a standalone executable

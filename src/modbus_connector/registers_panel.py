@@ -41,7 +41,6 @@ from modbus_connector.models import (
     parse_values,
     row_to_csv_cells,
     rows_from_csv,
-    rows_to_csv,
 )
 
 KINDS = list(get_args(RegisterKind))
@@ -183,8 +182,7 @@ class RegistersPanel(QWidget):
         csv_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         csv_menu = QMenu(csv_button)
         csv_menu.addAction("Import table…", self._on_csv_import)
-        csv_menu.addAction("Export table…", self._on_csv_export)
-        csv_menu.addAction("Export values snapshot…", self._on_csv_snapshot)
+        csv_menu.addAction("Export…", self._on_csv_export)
         csv_button.setMenu(csv_menu)
         self._global_order_combo = QComboBox()
         self._global_order_combo.addItems(ORDERS)
@@ -429,15 +427,6 @@ class RegistersPanel(QWidget):
         if path_str:
             self.export_csv(Path(path_str))
 
-    @Slot()
-    def _on_csv_snapshot(self) -> None:
-        path_str, _ = QFileDialog.getSaveFileName(
-            self, "Export values snapshot to CSV", str(Path.home() / "snapshot.csv"),
-            "CSV (*.csv)",
-        )
-        if path_str:
-            self.export_csv_snapshot(Path(path_str))
-
     def import_csv(self, path: Path) -> None:
         try:
             text = path.read_text(encoding="utf-8-sig")
@@ -469,29 +458,9 @@ class RegistersPanel(QWidget):
         )
         self.logLine.emit(f"← imported {len(parsed)} rows from {path}")
 
-    def _rows_and_displays(self) -> tuple[list[RegisterRow], list[RowDisplaySettings]]:
-        rows, displays = [], []
-        for index in range(self._table.rowCount()):
-            row = self._row_data(index)
-            if row is None:
-                continue
-            rows.append(row)
-            displays.append(
-                self._row_display.get(self._token_at(index), RowDisplaySettings())
-            )
-        return rows, displays
-
     def export_csv(self, path: Path) -> None:
-        rows, displays = self._rows_and_displays()
-        try:
-            path.write_text(rows_to_csv(rows, displays), encoding="utf-8-sig")
-        except OSError as exc:
-            self.logLine.emit(f"✗ failed to write {path}: {exc}")
-            return
-        self.logLine.emit(f"→ exported {len(rows)} rows to {path}")
-
-    def export_csv_snapshot(self, path: Path) -> None:
-        # report snapshot: table columns plus the Value cell as displayed
+        # the full snapshot format: table columns plus the Value cell as
+        # displayed (the value column is ignored when importing back)
         buffer = io.StringIO()
         writer = csv.writer(buffer, lineterminator="\n")
         writer.writerow([*CSV_COLUMNS, "value"])
@@ -510,7 +479,7 @@ class RegistersPanel(QWidget):
         except OSError as exc:
             self.logLine.emit(f"✗ failed to write {path}: {exc}")
             return
-        self.logLine.emit(f"→ exported {count} rows snapshot to {path}")
+        self.logLine.emit(f"→ exported {count} rows to {path}")
 
     @Slot()
     def _on_display_settings(self) -> None:

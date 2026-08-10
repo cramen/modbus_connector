@@ -311,6 +311,12 @@ def test_csv_export_roundtrip_and_snapshot(qapp: QApplication, tmp_path: Path) -
 
     export_path = tmp_path / "export.csv"
     panel.export_csv(export_path)
+    text = export_path.read_text(encoding="utf-8-sig")
+    header, line = text.strip().split("\n")
+    assert header.endswith(",value")  # snapshot format with the displayed value
+    assert line.endswith(",-39.9 °C")
+
+    # the exported snapshot re-imports cleanly: the value column is ignored
     other = RegistersPanel(itertools.count(100).__next__)
     other.import_csv(export_path)
     assert other._table.rowCount() == 1
@@ -318,13 +324,7 @@ def test_csv_export_roundtrip_and_snapshot(qapp: QApplication, tmp_path: Path) -
     assert exported.scale == 0.1
     assert exported.offset == -40.0
     assert exported.unit == "°C"
-
-    snapshot_path = tmp_path / "snapshot.csv"
-    panel.export_csv_snapshot(snapshot_path)
-    text = snapshot_path.read_text(encoding="utf-8-sig")
-    header, line = text.strip().split("\n")
-    assert header.endswith(",value")
-    assert line.endswith(",-39.9 °C")
+    assert other._table.item(0, COL_VALUE).text() == ""  # value is not imported
 
 
 def test_per_row_poll_gets_own_timer(qapp: QApplication) -> None:
