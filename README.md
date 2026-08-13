@@ -139,10 +139,14 @@ the table is fully navigable with the keyboard. The ✕ button deletes a row.
 
 - **Ctrl+R** (**Cmd+R** on macOS) — reads the row that has the keyboard focus.
 - **Read all** — reads every row once.
-- **Start polling** — reads all rows repeatedly with the interval set in the
-  "Interval" field (milliseconds); press **Stop polling** to stop. The
-  optional **Poll, ms** column overrides the interval per row (empty = global
-  interval; finer values are effectively clamped to the global tick).
+- **Start polling and record** — a split button: the main action reads all
+  rows repeatedly with the interval set in the "Interval" field
+  (milliseconds) and records value history; press **Stop polling** to stop.
+  The dropdown offers **Start polling** (without recording) and **Start
+  polling and record** — picking one while polling runs switches the
+  recording mode on the fly, and the last choice becomes the main action.
+  The optional **Poll, ms** column overrides the interval per row (empty =
+  global interval; finer values are effectively clamped to the global tick).
 
 Read values appear in the **Value** column; every request and response is also
 shown in the log panel (toggled with the "Log" button).
@@ -230,13 +234,12 @@ settings along with everything else.
 
 ### Graphs
 
-Every register row captures its value history while reads run (scaled
-engineering value; hex/ascii rows are skipped) and shows it as a small trend
-sparkline in the **Trend** column. Capture is toggled by the **Record**
-button in the table toolbar (on by default; the buffer is bounded to ~10k
-samples per row) — when off, sparklines and graph curves freeze on the last
-recorded data. **Graph…** (connection panel) opens the
-full plot window:
+Every register row captures its value history while polling runs in the
+poll-and-record mode (scaled engineering value; hex/ascii rows are skipped)
+and shows it as a small trend sparkline in the **Trend** column. The buffer
+is bounded to ~10k samples per row; when recording is off, sparklines and
+graph curves freeze on the last recorded data. **Graph…** (connection panel)
+opens the full plot window:
 
 - the **Series** checklist on the left picks which table rows are plotted
   (new rows join checked by default);
@@ -249,7 +252,10 @@ full plot window:
   table with per-series min/max/avg between them plus Δt, updated live;
 - **Clear** empties the recorded history and restarts the relative time
   axis (markers are re-placed once new data arrives); right-clicking a Trend
-  cell in the table offers the same "Clear history".
+  cell in the table offers the same "Clear history";
+- **Start polling and record** duplicates the table's poll control: starts
+  polling with recording (or just enables recording if polling already runs),
+  turns into **Stop polling** while recording is active.
 
 Closing the graph window only hides it; the data stays.
 

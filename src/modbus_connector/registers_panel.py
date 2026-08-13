@@ -147,6 +147,7 @@ class RegistersPanel(QWidget):
     maskWriteRequested = Signal(int, int, int, int, int)
     readwriteRequested = Signal(int, int, int, int, int, list)
     rowsChanged = Signal()  # a row was added or removed
+    pollStateChanged = Signal(bool, bool)  # (polling, recording) after any change
     logLine = Signal(str)
 
     def __init__(
@@ -256,17 +257,26 @@ class RegistersPanel(QWidget):
 
         self._poll_interval = QSpinBox(minimum=100, maximum=600_000, value=1000)
         self._poll_interval.setSuffix(" ms")
-        self._poll_button = QPushButton("Start polling")
-        self._poll_button.clicked.connect(self._toggle_polling)
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_global_rows)
-        self._record_button = QPushButton("Record")
-        self._record_button.setCheckable(True)
-        self._record_button.setChecked(True)  # history capture on by default
-        self._record_button.setToolTip(
-            "Record value history for sparklines and the graph window "
+        self._record_mode = True  # last chosen start mode: poll+record by default
+        self._recording = False  # capture runs only while polling with record
+        self._poll_button = QToolButton()
+        self._poll_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self._poll_button.setToolTip(
+            "Poll all rows with the Interval period; the dropdown chooses whether "
+            "value history is recorded for sparklines and the graph window "
             "(bounded buffer, ~10k samples per row)"
         )
+        poll_menu = QMenu(self._poll_button)
+        self._start_poll_action = poll_menu.addAction("Start polling")
+        self._start_record_action = poll_menu.addAction("Start polling and record")
+        self._start_poll_action.triggered.connect(lambda: self.start_polling(False))
+        self._start_record_action.triggered.connect(lambda: self.start_polling(True))
+        self._poll_button.setMenu(poll_menu)
+        self._poll_button.clicked.connect(self._toggle_polling)
+        self.pollStateChanged.connect(self._sync_poll_button)
+        self._poll_button.setText("Start polling and record")
 
         top = QHBoxLayout()
         top.addWidget(add_button)
@@ -283,7 +293,6 @@ class RegistersPanel(QWidget):
         top.addWidget(QLabel("Interval:"))
         top.addWidget(self._poll_interval)
         top.addWidget(self._poll_button)
-        top.addWidget(self._record_button)
 
         layout = QVBoxLayout(self)
         layout.addLayout(top)
@@ -1019,7 +1028,7 @@ class RegistersPanel(QWidget):
         index = self._find_row_by_token(token)
         if index is None:
             return
-        if ok and self._record_button.isChecked():
+        if ok and self._recording:
             primary = self._primary_value(index, values)
             if primary is not None:
                 self._series[token].append(time.monotonic(), primary)
@@ -1062,10 +1071,18 @@ class RegistersPanel(QWidget):
         if self._poll_timer.isActive():
             self.stop_polling()
         else:
+            self.start_polling(self._record_mode)
+
+    def start_polling(self, record: bool) -> None:
+        # choosing a mode while polling runs flips recording
+        # without restarting the timers
+        self._record_mode = record
+        self._recording = record
+        if not self._poll_timer.isActive():
             self._poll_timer.start(self._poll_interval.value())
             for index in range(self._table.rowCount()):
                 self._sync_row_timer(index)
-            self._poll_button.setText("Stop polling")
+        self.pollStateChanged.emit(True, record)
 
     @Slot()
     def stop_polling(self) -> None:
@@ -1075,7 +1092,21 @@ class RegistersPanel(QWidget):
             timer.stop()
             timer.deleteLater()
         self._row_timers.clear()
-        self._poll_button.setText("Start polling")
+        self._recording = False
+        self.pollStateChanged.emit(False, False)
 
     def is_polling(self) -> bool:
         return self._poll_timer.isActive()
+
+    def is_recording(self) -> bool:
+        return self._recording
+
+    @Slot(bool, bool)
+    def _sync_poll_button(self, polling: bool, recording: bool) -> None:
+        del recording
+        if polling:
+            self._poll_button.setText("Stop polling")
+        else:
+            self._poll_button.setText(
+                "Start polling and record" if self._record_mode else "Start polling"
+            )

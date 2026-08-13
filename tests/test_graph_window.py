@@ -157,3 +157,27 @@ def test_clear_restarts_history_and_time_axis(qapp: QApplication) -> None:
     times, _ = window._curves[panel._token_at(0)].getData()
     assert list(times) == [float(i) for i in range(30)]
     assert not window._markers_need_placement  # placed again on the new data
+
+
+def test_poll_button_drives_panel_and_follows_state(qapp: QApplication) -> None:
+    panel = _panel()
+    window = GraphWindow(panel)
+    assert window._poll_button.text() == "Start polling and record"
+
+    window._poll_button.click()  # starts polling with recording on the panel
+    assert panel.is_polling() and panel.is_recording()
+    assert window._poll_button.text() == "Stop polling"
+    assert panel._poll_button.text() == "Stop polling"  # both controls in sync
+
+    panel.start_polling(False)  # flipped to poll-only from the panel side
+    assert panel.is_polling() and not panel.is_recording()
+    assert window._poll_button.text() == "Start polling and record"
+
+    window._poll_button.click()  # polling runs: enables recording on top
+    assert panel.is_polling() and panel.is_recording()
+    assert window._poll_button.text() == "Stop polling"
+
+    window._poll_button.click()  # now stops everything
+    assert not panel.is_polling() and not panel.is_recording()
+    assert window._poll_button.text() == "Start polling and record"
+    assert panel._poll_button.text() == "Start polling and record"

@@ -62,6 +62,11 @@ class GraphWindow(QWidget):
         self._clear_button = QPushButton("Clear")
         self._clear_button.setToolTip("Clear recorded history and restart the time axis")
         self._clear_button.clicked.connect(self._on_clear)
+        self._poll_button = QPushButton()
+        self._poll_button.setToolTip(
+            "Poll the register table and record value history for this graph"
+        )
+        self._poll_button.clicked.connect(self._on_poll_toggle)
 
         self._plot = pg.PlotWidget()
         self._plot.showGrid(x=True, y=True, alpha=0.3)
@@ -92,6 +97,7 @@ class GraphWindow(QWidget):
         controls.addWidget(markers_button)
         controls.addWidget(reset_button)
         controls.addWidget(self._clear_button)
+        controls.addWidget(self._poll_button)
         controls.addStretch(1)
 
         right = QVBoxLayout()
@@ -113,6 +119,8 @@ class GraphWindow(QWidget):
         self._timer.timeout.connect(self._refresh)
 
         panel.rowsChanged.connect(self._rebuild_rows)
+        panel.pollStateChanged.connect(self._sync_poll_button)
+        self._sync_poll_button(panel.is_polling(), panel.is_recording())
         self._rebuild_rows()
 
     # --- series checklist ------------------------------------------------
@@ -254,6 +262,20 @@ class GraphWindow(QWidget):
         if self._marker_lines:  # re-place once new data arrives
             self._markers_need_placement = True
         self._update_stats()
+
+    @Slot()
+    def _on_poll_toggle(self) -> None:
+        if self._panel.is_polling() and self._panel.is_recording():
+            self._panel.stop_polling()
+        else:
+            # stopped, or polling without recording: (re)start with recording on
+            self._panel.start_polling(True)
+
+    @Slot(bool, bool)
+    def _sync_poll_button(self, polling: bool, recording: bool) -> None:
+        self._poll_button.setText(
+            "Stop polling" if polling and recording else "Start polling and record"
+        )
 
     # --- markers ----------------------------------------------------------
 

@@ -100,9 +100,11 @@ def test_reads_append_to_row_series(qapp: QApplication) -> None:
     assert panel._table.cellWidget(0, COL_TREND) is panel._sparklines[token_a]
     assert panel._table.cellWidget(1, COL_TREND) is panel._sparklines[token_h]
 
+    panel.start_polling(True)  # history capture follows the poll+record mode
     panel.handle_read_finished(_read_row(panel, 0), True, [3], "")
     panel.handle_read_finished(_read_row(panel, 0), True, [4], "")
     panel.handle_read_finished(_read_row(panel, 1), True, [0x1A], "")
+    panel.stop_polling()
     assert panel._series[token_a].points()[1] == [6.0, 8.0]  # scale applied
     assert len(panel._series[token_h]) == 0  # hex is not numeric: not captured
 
@@ -111,32 +113,68 @@ def test_reads_append_bits_for_coils(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
     panel.set_state([{"name": "c", "kind": "coils", "address": 0, "count": 4}])
     token = panel._token_at(0)
+    panel.start_polling(True)
     panel.handle_read_finished(_read_row(panel, 0), True, [True, False, True], "")
+    panel.stop_polling()
     assert panel._series[token].points()[1] == [1.0]  # the first bit only
 
 
-def test_recording_toggle_pauses_capture(qapp: QApplication) -> None:
+def test_recording_follows_poll_mode(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
     token = panel._token_at(0)
-    assert panel._record_button.isChecked()  # on by default, runtime-only
 
     panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
-    assert len(panel._series[token]) == 1
+    assert len(panel._series[token]) == 0  # stopped: manual reads are not recorded
 
-    panel._record_button.setChecked(False)  # paused: no new samples
+    panel.start_polling(False)  # polling without recording
+    panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
+    assert len(panel._series[token]) == 0
+
+    panel.start_polling(True)  # flip mid-poll: recording on, timers keep running
+    assert panel.is_polling()
     panel.handle_read_finished(_read_row(panel, 0), True, [6], "")
-    assert len(panel._series[token]) == 1
-    assert panel._series[token].points()[1] == [5.0]  # old data kept, not cleared
+    assert panel._series[token].points()[1] == [6.0]
 
-    panel._record_button.setChecked(True)
+    panel.start_polling(False)  # flip back: capture pauses, old data kept
     panel.handle_read_finished(_read_row(panel, 0), True, [7], "")
-    assert panel._series[token].points()[1] == [5.0, 7.0]
+    assert panel._series[token].points()[1] == [6.0]
+
+    panel.stop_polling()
+    assert not panel.is_recording()
+    panel.handle_read_finished(_read_row(panel, 0), True, [8], "")
+    assert panel._series[token].points()[1] == [6.0]  # stopped again: no capture
+
+
+def test_poll_split_button_drives_mode(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    states: list[tuple] = []
+    panel.pollStateChanged.connect(lambda *args: states.append(args))
+    assert panel._poll_button.text() == "Start polling and record"  # default mode
+
+    panel._start_poll_action.trigger()  # menu: poll without recording
+    assert panel.is_polling() and not panel.is_recording()
+    assert panel._poll_button.text() == "Stop polling"
+
+    panel._start_record_action.trigger()  # menu while running: flip to recording
+    assert panel.is_polling() and panel.is_recording()
+
+    panel._poll_button.click()  # main action while running: stop everything
+    assert not panel.is_polling() and not panel.is_recording()
+    assert panel._poll_button.text() == "Start polling and record"  # last mode kept
+
+    panel._poll_button.click()  # main action restarts with the last chosen mode
+    assert panel.is_polling() and panel.is_recording()
+    panel.stop_polling()
+    assert states == [(True, False), (True, True), (False, False), (True, True),
+                      (False, False)]
 
 
 def test_clear_series_empties_history(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
     token = panel._token_at(0)
+    panel.start_polling(True)
     panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
+    panel.stop_polling()
     assert len(panel._series[token]) == 1
     panel.clear_series()
     assert len(panel._series[token]) == 0

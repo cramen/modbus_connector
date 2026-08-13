@@ -89,6 +89,16 @@ src/modbus_connector/
                        # кнопка "Diagnostics…" — диалог диагностики (0x08):
                        # loopback, счётчики, clear counters
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
+                       # split-кнопка поллинга (QToolButton MenuButtonPopup,
+                       # меню "Start polling" / "Start polling and record",
+                       # режим запоминается; выбор пункта на ходу переключает
+                       # запись без перезапуска таймеров; во время поллинга
+                       # основная кнопка — "Stop polling"),
+                       # start_polling(record)/stop_polling/is_polling/
+                       # is_recording, сигнал pollStateChanged(polling,
+                       # recording) — по нему синхронизируются кнопки панели
+                       # и окна графика; история пишется только в режиме
+                       # poll+record (ручные чтения без поллинга не пишутся),
                        # колонка Poll, ms — per-row интервал поллинга
                        # (пусто = глобальный тик; у такой строки свой QTimer,
                        # пересоздаётся при правке ячейки на лету),
@@ -115,13 +125,14 @@ src/modbus_connector/
                     # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
                     # rect, маркеры A/B с min/max/avg и Δt (размещение внутри
                     # видимых данных), Clear — сброс истории и оси времени,
+                    # кнопка-дублёр "Start polling and record"/"Stop polling"
+                    # (управляет панелью, следит за pollStateChanged),
                     # QTimer 500 мс
                     # читает панель (row_tokens/row_label/series, rowsChanged)
                        # колонки таблицы ресайзятся (Interactive),
                        # колонка Trend — SparklineWidget (QPainter) по ряду
                        # _series[token] (TimeSeries; пишется primary-значение
-                       # при чтении, hex/ascii не захватываются), кнопка Record
-                       # включает запись истории (runtime-only), clear_series()
+                       # при чтении, hex/ascii не захватываются), clear_series()
                        # и контекстное меню "Clear history" на колонке Trend,
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (по токену строки, с генерацией),
