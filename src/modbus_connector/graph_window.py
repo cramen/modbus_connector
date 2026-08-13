@@ -63,6 +63,7 @@ class GraphWindow(QWidget):
         self._clear_button.setToolTip("Clear recorded history and restart the time axis")
         self._clear_button.clicked.connect(self._on_clear)
         self._poll_button = QPushButton()
+        self._poll_button.setEnabled(False)  # no bus access until a connection is up
         self._poll_button.setToolTip(
             "Poll the register table and record value history for this graph"
         )
@@ -262,6 +263,9 @@ class GraphWindow(QWidget):
         if self._marker_lines:  # re-place once new data arrives
             self._markers_need_placement = True
         self._update_stats()
+
+    def set_bus_enabled(self, ok: bool) -> None:
+        self._poll_button.setEnabled(ok)
 
     @Slot()
     def _on_poll_toggle(self) -> None:

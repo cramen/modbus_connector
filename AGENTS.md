@@ -89,6 +89,11 @@ src/modbus_connector/
                        # кнопка "Diagnostics…" — диалог диагностики (0x08):
                        # loopback, счётчики, clear counters
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
+                       # set_bus_enabled(ok) — гейтинг контролов, ходящих на
+                       # шину (Read all, split-поллинг, Log to file, mask
+                       # write, read/write; _read/_write_table_row молча
+                       # игнорируют), по умолчанию выключены; Add/Filter/
+                       # Sort/Display…/CSV/⚙ — локальные, всегда доступны,
                        # split-кнопка поллинга (QToolButton MenuButtonPopup,
                        # меню "Start polling" / "Start polling and record",
                        # режим запоминается; выбор пункта на ходу переключает
@@ -152,6 +157,7 @@ src/modbus_connector/
                     # видимых данных), Clear — сброс истории и оси времени,
                     # кнопка-дублёр "Start polling and record"/"Stop polling"
                     # (управляет панелью, следит за pollStateChanged),
+                    # set_bus_enabled(ok) — гейтинг этой кнопки,
                     # QTimer 500 мс
                     # читает панель (row_tokens/row_label/series, rowsChanged)
                        # колонки таблицы ресайзятся (Interactive),
@@ -171,7 +177,9 @@ src/modbus_connector/
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик
   scanner_panel.py     # сканер unit-адресов и адресов регистров (секция
-                       # Registers scan); открывается отдельным окном; двойной
+                       # Registers scan); открывается отдельным окном;
+                       # set_bus_enabled(ok) — гейтинг Start-кнопок (Stop
+                       # доступны всегда), по умолчанию выключены; двойной
                        # клик по найденному unit выбирает его в панели
                        # подключения (unitSelected); probes-таблица — текстовые
                        # ячейки (dec/0x-hex), невалидные строки пропускаются;
@@ -186,6 +194,8 @@ src/modbus_connector/
   session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
                     # RegistersPanel + LogPanel + ScannerPanel (окно) +
                     # ModbusWorker в QThread, вся проводка сигналов внутри;
+                    # connectionChanged → set_bus_enabled(ok) панели/сканера/
+                    # окна графика, при разрыве — stop_logging + stop_polling;
                     # state()/set_state() (connection+registers+
                     # registers_options+logging+scanner,
                     # backward compat со старым плоским форматом),

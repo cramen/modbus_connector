@@ -178,6 +178,7 @@ class RegistersPanel(QWidget):
         self._display_dialog: QDialog | None = None
         self._series: dict[int, TimeSeries] = {}  # token -> value history (runtime only)
         self._sparklines: dict[int, SparklineWidget] = {}
+        self._bus_enabled = False  # no bus access until a connection is up
 
         self._table = QTableWidget(0, 11)
         self._table.setHorizontalHeaderLabels(
@@ -222,24 +223,24 @@ class RegistersPanel(QWidget):
 
         add_button = QPushButton("Add register")
         add_button.clicked.connect(lambda: self._add_row())
-        read_all_button = QPushButton("Read all")
-        read_all_button.clicked.connect(self.read_all)
+        self._read_all_button = QPushButton("Read all")
+        self._read_all_button.clicked.connect(self.read_all)
         sort_button = QPushButton("Sort by address")
         sort_button.clicked.connect(self._sort_by_address)
-        mask_write_button = QPushButton("Mask write (0x16)…")
-        mask_write_button.setToolTip(
+        self._mask_write_button = QPushButton("Mask write (0x16)…")
+        self._mask_write_button.setToolTip(
             "Set or clear individual bits of a holding register without touching "
             "others: result = (value AND and-mask) OR (or-mask AND NOT and-mask). "
             "Typical use: bit fields in PLC configuration registers."
         )
-        mask_write_button.clicked.connect(self._on_mask_write)
-        readwrite_button = QPushButton("Read/Write (0x17)…")
-        readwrite_button.setToolTip(
+        self._mask_write_button.clicked.connect(self._on_mask_write)
+        self._readwrite_button = QPushButton("Read/Write (0x17)…")
+        self._readwrite_button.setToolTip(
             "Atomic transaction: write holding registers and read others in a "
             "single Modbus exchange (function 0x17). Used when a device requires "
             "read-modify-write without a race window."
         )
-        readwrite_button.clicked.connect(self._on_readwrite)
+        self._readwrite_button.clicked.connect(self._on_readwrite)
 
         self._filter_edit = QLineEdit()
         self._filter_edit.setPlaceholderText("Filter…")
@@ -305,10 +306,10 @@ class RegistersPanel(QWidget):
 
         top = QHBoxLayout()
         top.addWidget(add_button)
-        top.addWidget(read_all_button)
+        top.addWidget(self._read_all_button)
         top.addWidget(sort_button)
-        top.addWidget(mask_write_button)
-        top.addWidget(readwrite_button)
+        top.addWidget(self._mask_write_button)
+        top.addWidget(self._readwrite_button)
         top.addWidget(self._filter_edit)
         top.addWidget(display_button)
         top.addWidget(csv_button)
@@ -326,6 +327,19 @@ class RegistersPanel(QWidget):
         layout.addWidget(self._table)
 
         self._add_row()
+        self.set_bus_enabled(False)  # the app starts disconnected
+
+    def set_bus_enabled(self, ok: bool) -> None:
+        """Включить/выключить контролы, ходящие на шину (по connectionChanged)."""
+        self._bus_enabled = ok
+        for button in (
+            self._read_all_button,
+            self._mask_write_button,
+            self._readwrite_button,
+            self._poll_button,
+            self._log_button,
+        ):
+            button.setEnabled(ok)
 
     def set_unit_id(self, unit: int) -> None:
         self._unit_id = unit
@@ -973,6 +987,8 @@ class RegistersPanel(QWidget):
             self._read_table_row(index)
 
     def _read_table_row(self, index: int) -> None:
+        if not self._bus_enabled:
+            return  # no connection: bus controls are disabled, stay silent
         row = self._row_data(index)
         if row is None:
             return
@@ -985,6 +1001,8 @@ class RegistersPanel(QWidget):
         self.readRequested.emit(request_id, unit, row)
 
     def _write_table_row(self, index: int) -> None:
+        if not self._bus_enabled:
+            return  # no connection: bus controls are disabled, stay silent
         row = self._row_data(index)
         if row is None:
             return

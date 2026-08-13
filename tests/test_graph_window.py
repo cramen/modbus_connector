@@ -162,6 +162,7 @@ def test_clear_restarts_history_and_time_axis(qapp: QApplication) -> None:
 def test_poll_button_drives_panel_and_follows_state(qapp: QApplication) -> None:
     panel = _panel()
     window = GraphWindow(panel)
+    window.set_bus_enabled(True)  # polling needs a connection
     assert window._poll_button.text() == "Start polling and record"
 
     window._poll_button.click()  # starts polling with recording on the panel

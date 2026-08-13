@@ -47,6 +47,7 @@ def qapp() -> QApplication:
 
 def test_same_value_written_twice(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)  # a write requires a connection
     writes: list[tuple] = []
     panel.writeRequested.connect(lambda *args: writes.append(args))
 
@@ -68,6 +69,7 @@ def test_same_value_written_twice(qapp: QApplication) -> None:
 def _read_row(panel: RegistersPanel, index: int) -> int:
     reads: list[tuple] = []
     panel.readRequested.connect(lambda *args: reads.append(args))
+    panel.set_bus_enabled(True)  # a read requires a connection
     panel._read_table_row(index)
     assert len(reads) == 1
     return int(reads[0][0])
@@ -151,6 +153,7 @@ def test_recording_follows_poll_mode(qapp: QApplication) -> None:
 
 def test_poll_split_button_drives_mode(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)  # polling needs a connection
     states: list[tuple] = []
     panel.pollStateChanged.connect(lambda *args: states.append(args))
     assert panel._poll_button.text() == "Start polling and record"  # default mode
@@ -251,6 +254,7 @@ def test_per_row_unit_id_used_for_reads_and_writes(qapp: QApplication) -> None:
         ]
     )
     panel.set_unit_id(3)
+    panel.set_bus_enabled(True)  # reads/writes require a connection
     unit_item = panel._table.item(0, COL_UNIT_ID)
     assert unit_item is not None
     unit_item.setText("5")
@@ -751,3 +755,37 @@ def test_logging_skips_unchecked_rows(qapp: QApplication, tmp_path: Path) -> Non
     panel._add_row(RegisterRow(name="c", kind="holding_registers", address=2))
     new_token = panel._token_at(panel._table.rowCount() - 1)
     assert panel._row_display[new_token].log is True
+
+
+# --- bus gating while disconnected -------------------------------------------
+
+
+def test_bus_controls_disabled_until_connected(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    gated = [
+        panel._read_all_button,
+        panel._mask_write_button,
+        panel._readwrite_button,
+        panel._poll_button,
+        panel._log_button,
+    ]
+    assert all(not button.isEnabled() for button in gated)  # default: disconnected
+    assert panel._log_settings_button.isEnabled()  # ⚙ stays configurable
+
+    reads: list[tuple] = []
+    writes: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+
+    panel._table.setCurrentCell(0, COL_ADDRESS)
+    panel._read_current_row()  # the Ctrl+R path
+    assert reads == []
+    panel._table.item(0, COL_NEW_VALUE).setText("5")  # Enter in New value
+    assert writes == []
+
+    panel.set_bus_enabled(True)
+    assert all(button.isEnabled() for button in gated)
+    panel._read_current_row()
+    assert len(reads) == 1
+    panel.set_bus_enabled(False)
+    assert all(not button.isEnabled() for button in gated)

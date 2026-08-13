@@ -33,6 +33,7 @@ class ScannerPanel(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._bus_enabled = False  # no bus access until a connection is up
 
         self._start = QSpinBox(minimum=1, maximum=247, value=1)
         self._end = QSpinBox(minimum=1, maximum=247, value=247)
@@ -46,6 +47,7 @@ class ScannerPanel(QWidget):
         add_probe_button.clicked.connect(lambda: self._add_probe())
 
         self._start_button = QPushButton("Start scan")
+        self._start_button.setEnabled(False)
         self._stop_button = QPushButton("Stop")
         self._stop_button.setEnabled(False)
         self._start_button.clicked.connect(self._on_start)
@@ -63,6 +65,7 @@ class ScannerPanel(QWidget):
         self._addr_from = QSpinBox(minimum=0, maximum=65535, value=0)
         self._addr_to = QSpinBox(minimum=0, maximum=65535, value=99)
         self._addr_start_button = QPushButton("Start")
+        self._addr_start_button.setEnabled(False)
         self._addr_stop_button = QPushButton("Stop")
         self._addr_stop_button.setEnabled(False)
         self._addr_start_button.clicked.connect(self._on_addr_start)
@@ -252,9 +255,17 @@ class ScannerPanel(QWidget):
         if isinstance(unit, int):
             self.unitSelected.emit(unit)
 
+    def set_bus_enabled(self, ok: bool) -> None:
+        """Включить/выключить кнопки Start по connectionChanged (Stop — всегда)."""
+        self._bus_enabled = ok
+        self._start_button.setEnabled(ok and not self._stop_button.isEnabled())
+        self._addr_start_button.setEnabled(
+            ok and not self._addr_stop_button.isEnabled()
+        )
+
     @Slot()
     def handle_scan_finished(self) -> None:
-        self._start_button.setEnabled(True)
+        self._start_button.setEnabled(self._bus_enabled)
         self._stop_button.setEnabled(False)
 
     @Slot()
@@ -285,7 +296,7 @@ class ScannerPanel(QWidget):
 
     @Slot()
     def handle_addr_scan_finished(self) -> None:
-        self._addr_start_button.setEnabled(True)
+        self._addr_start_button.setEnabled(self._bus_enabled)
         self._addr_stop_button.setEnabled(False)
 
     def is_scanning(self) -> bool:

@@ -30,6 +30,7 @@ class SessionWidget(QWidget):
         self._title = self.DEFAULT_TITLE
         self._params: ConnectionParams | None = None
         self._last_stats = StatsSnapshot()
+        self._bus_enabled = False  # app starts disconnected; gates bus controls
 
         self.connection_panel = ConnectionPanel(lambda: next(self._request_ids))
         self.registers_panel = RegistersPanel(lambda: next(self._request_ids))
@@ -164,6 +165,7 @@ class SessionWidget(QWidget):
             from modbus_connector.graph_window import GraphWindow
 
             self._graph_window = GraphWindow(self.registers_panel, self)
+            self._graph_window.set_bus_enabled(self._bus_enabled)
         self._graph_window.show()
         self._graph_window.raise_()
         self._graph_window.activateWindow()
@@ -180,6 +182,14 @@ class SessionWidget(QWidget):
             else self.DEFAULT_TITLE
         )
         self.titleChanged.emit(self._title)
+        self._bus_enabled = ok
+        if not ok:  # a dead bus must not keep timers and the logger running
+            self.registers_panel.stop_logging()
+            self.registers_panel.stop_polling()
+        self.registers_panel.set_bus_enabled(ok)
+        self.scanner_panel.set_bus_enabled(ok)
+        if self._graph_window is not None:
+            self._graph_window.set_bus_enabled(ok)
 
     def title(self) -> str:
         return self._title

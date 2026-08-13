@@ -164,7 +164,10 @@ the table is fully navigable with the keyboard. The ✕ button deletes a row.
   global interval; finer values are effectively clamped to the global tick).
 
 Read values appear in the **Value** column; every request and response is also
-shown in the log panel (toggled with the "Log" button).
+shown in the log panel (toggled with the "Log" button). Bus-reading controls
+(Read all, polling, logging, the 0x16/0x17 dialogs and the scanner's Start
+buttons) are enabled only while a connection is up — dropping the connection
+stops polling and logging.
 
 ### Display formats, scaling and units
 

@@ -76,3 +76,34 @@ def test_status_label_never_widens_the_window(qapp: QApplication) -> None:
     policy = session.connection_panel._status.sizePolicy()
     assert policy.horizontalPolicy() == QSizePolicy.Policy.Ignored
     session.shutdown()
+
+
+def test_bus_controls_follow_connection(qapp: QApplication, tmp_path) -> None:
+    session = SessionWidget()
+    panel = session.registers_panel
+    scanner = session.scanner_panel
+    assert not panel._read_all_button.isEnabled()  # starts disconnected
+    assert not scanner._start_button.isEnabled()
+    assert not scanner._addr_start_button.isEnabled()
+
+    session._show_graph()
+    graph = session._graph_window
+    assert graph is not None
+    assert not graph._poll_button.isEnabled()
+
+    session._on_connection_changed(True, "Connected")  # worker signal path
+    assert panel._read_all_button.isEnabled()
+    assert scanner._start_button.isEnabled()
+    assert scanner._addr_start_button.isEnabled()
+    assert graph._poll_button.isEnabled()
+
+    # polling + logging active when the connection drops: both must stop
+    panel.set_logging_state({"path": str(tmp_path / "bus.csv")})
+    panel.start_logging()
+    assert panel.is_polling() and panel.is_logging()
+    session._on_connection_changed(False, "Disconnected")
+    assert not panel.is_polling() and not panel.is_logging()
+    assert not panel._poll_button.isEnabled()
+    assert not scanner._start_button.isEnabled()
+    assert not graph._poll_button.isEnabled()
+    session.shutdown()
