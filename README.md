@@ -2,6 +2,8 @@
 
 [Russian version: README_ru.md](README_ru.md)
 
+**[Download ready-made builds for macOS / Windows / Linux → Releases](https://github.com/cramen/modbus_connector/releases)**
+
 A PySide6 GUI application for debugging Modbus buses and developing Modbus
 devices. Works with Modbus TCP and Modbus RTU via synchronous pymodbus clients;
 all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.

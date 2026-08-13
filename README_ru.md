@@ -2,6 +2,8 @@
 
 [English version: README.md](README.md)
 
+**[Скачать готовые сборки для macOS / Windows / Linux → Releases](https://github.com/cramen/modbus_connector/releases)**
+
 GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
 Работает с Modbus TCP и Modbus RTU через синхронные клиенты pymodbus;
 вся Modbus-логика выполняется в отдельном потоке (QThread), GUI не блокируется.
