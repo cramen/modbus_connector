@@ -262,6 +262,7 @@ class GraphWindow(QWidget):
         # a user zoom/pan leaves Follow/Full — make the mode change visible
         if not self._updating_range and self._mode_combo.currentText() != "Manual":
             self._mode_combo.setCurrentText("Manual")
+        self._pin_readout()
 
     @Slot(bool)
     def _on_zoom_rect_toggled(self, on: bool) -> None:
@@ -423,10 +424,18 @@ class GraphWindow(QWidget):
                 dot_brushes.append(pg.mkBrush(color))
             lines.append(f'<span style="color: {color}">{name}: {text}</span>')
         self._readout.setHtml("<br>".join(lines))
+        self._readout.setVisible(True)
+        self._pin_readout()
+        self._crosshair_dots.setData(dot_xs, dot_ys, brush=dot_brushes)
+
+    def _pin_readout(self) -> None:
+        # TextItem lives in data coordinates (GraphicsObject has no anchor
+        # mixin like the legend's), so re-pin it to the view corner whenever
+        # the range changes — otherwise it would drift while panning
+        if not self._readout.isVisible():
+            return
         (vx0, vx1), (vy0, vy1) = self._viewbox.viewRange()  # top-right corner
         self._readout.setPos(vx1 - (vx1 - vx0) * 0.02, vy1 - (vy1 - vy0) * 0.03)
-        self._readout.setVisible(True)
-        self._crosshair_dots.setData(dot_xs, dot_ys, brush=dot_brushes)
 
     @staticmethod
     def _nearest_index(xdata: np.ndarray, view_x: float) -> int:

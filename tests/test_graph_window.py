@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Qt needs system libraries (libEGL etc.) that headless Linux CI runners lack;
 # skip the whole module there — it still runs on macOS/Windows CI and dev machines.
 try:
-    import pyqtgraph  # noqa: E402,F401
+    import pyqtgraph as pg  # noqa: E402
     from PySide6.QtCore import QPoint, Qt  # noqa: E402
     from PySide6.QtTest import QTest  # noqa: E402
     from PySide6.QtWidgets import QApplication  # noqa: E402
@@ -246,4 +246,34 @@ def test_crosshair_follows_real_mouse_moves(qapp: QApplication) -> None:
     assert "temp:" in window._readout.textItem.toPlainText()
     (vx0, vx1), _ = window._viewbox.viewRange()
     assert vx0 <= window._crosshair.value() <= vx1
+    window.hide()
+
+
+def test_crosshair_readout_stays_put_when_panning(qapp: QApplication) -> None:
+    # the readout is anchored to the PlotItem in item coordinates (like the
+    # legend); the hair stays in data coordinates and must pan with the data
+    panel = _panel()
+    window = GraphWindow(panel)
+    series = panel.series(panel._token_at(0))
+    assert series is not None
+    for i in range(50):
+        series.append(1000.0 + i, float(i))
+    window.show()
+    window._refresh()
+    window._update_crosshair(20.0)
+    qapp.processEvents()
+
+    readout_before = window._readout.scenePos()
+    hair_scene_x_before = window._viewbox.mapViewToScene(pg.Point(20.0, 0.0)).x()
+
+    window._viewbox.setXRange(500.0, 560.0, padding=0)  # pan far from the data
+    qapp.processEvents()
+
+    readout_after = window._readout.scenePos()
+    # re-pinned to the same view corner (a few px of jitter are the axes
+    # relayouting; pre-fix the readout drifted with the data by 100s of px)
+    assert abs(readout_after.x() - readout_before.x()) < 30
+    assert abs(readout_after.y() - readout_before.y()) < 30
+    hair_scene_x_after = window._viewbox.mapViewToScene(pg.Point(20.0, 0.0)).x()
+    assert abs(hair_scene_x_after - hair_scene_x_before) > 100  # moved with data
     window.hide()
