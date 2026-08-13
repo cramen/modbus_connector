@@ -232,7 +232,10 @@ settings along with everything else.
 
 Every register row captures its value history while reads run (scaled
 engineering value; hex/ascii rows are skipped) and shows it as a small trend
-sparkline in the **Trend** column. **Graph…** (connection panel) opens the
+sparkline in the **Trend** column. Capture is toggled by the **Record**
+button in the table toolbar (on by default; the buffer is bounded to ~10k
+samples per row) — when off, sparklines and graph curves freeze on the last
+recorded data. **Graph…** (connection panel) opens the
 full plot window:
 
 - the **Series** checklist on the left picks which table rows are plotted
@@ -243,7 +246,10 @@ full plot window:
   the mode to Manual so the change is visible; **Reset view** returns to
   Follow;
 - **Markers** shows two draggable vertical lines (green A, red B) and a stats
-  table with per-series min/max/avg between them plus Δt, updated live.
+  table with per-series min/max/avg between them plus Δt, updated live;
+- **Clear** empties the recorded history and restarts the relative time
+  axis (markers are re-placed once new data arrives); right-clicking a Trend
+  cell in the table offers the same "Clear history".
 
 Closing the graph window only hides it; the data stays.
 

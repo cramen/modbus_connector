@@ -131,3 +131,29 @@ def test_markers_land_on_data_when_toggled_before_first_refresh(
     window._marker_lines[0].setValue(vx0 + 5)
     window._refresh()
     assert window._marker_lines[0].value() == vx0 + 5
+
+
+def test_clear_restarts_history_and_time_axis(qapp: QApplication) -> None:
+    panel = _panel()
+    window = GraphWindow(panel)
+    series = panel.series(panel._token_at(0))
+    assert series is not None
+    for i in range(50):
+        series.append(1000.0 + i, float(i))
+    window._refresh()
+    assert window._origin == 1000.0
+
+    window._toggle_markers(True)
+    window._refresh()
+    window._clear_button.click()
+    assert len(series) == 0
+    assert window._origin is None
+    assert window._markers_need_placement  # re-place when new data arrives
+
+    for i in range(30):
+        series.append(5000.0 + i, float(i))
+    window._refresh()
+    assert window._origin == 5000.0  # relative axis restarts near zero
+    times, _ = window._curves[panel._token_at(0)].getData()
+    assert list(times) == [float(i) for i in range(30)]
+    assert not window._markers_need_placement  # placed again on the new data

@@ -133,6 +133,19 @@ def test_recording_toggle_pauses_capture(qapp: QApplication) -> None:
     assert panel._series[token].points()[1] == [5.0, 7.0]
 
 
+def test_clear_series_empties_history(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    token = panel._token_at(0)
+    panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
+    assert len(panel._series[token]) == 1
+    panel.clear_series()
+    assert len(panel._series[token]) == 0
+    # an empty sparkline repaints without crashing
+    panel._sparklines[token].grab()
+    panel._series[token].append(1.0, 2.0)  # a single point paints fine too
+    panel._sparklines[token].grab()
+
+
 def test_filter_hides_and_unhides_rows(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
     panel.set_state(

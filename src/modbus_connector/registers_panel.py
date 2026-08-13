@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import get_args
 
-from PySide6.QtCore import Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -88,10 +88,11 @@ class SparklineWidget(QWidget):
 
     def refresh(self) -> None:
         values = self._series.points()[1][-self.MAX_POINTS :]
-        if values:
-            self.setToolTip(
-                f"min {min(values):g}  max {max(values):g}  last {values[-1]:g}"
-            )
+        self.setToolTip(
+            f"min {min(values):g}  max {max(values):g}  last {values[-1]:g}"
+            if values
+            else ""
+        )
         self.update()  # Qt coalesces repaints per event-loop pass
 
     def paintEvent(self, event: QPaintEvent) -> None:
@@ -202,6 +203,8 @@ class RegistersPanel(QWidget):
             "Ctrl/Cmd+R = read current row"
         )
         self._table.itemChanged.connect(self._on_item_changed)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_table_context_menu)
 
         read_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         read_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -819,6 +822,19 @@ class RegistersPanel(QWidget):
 
     def series(self, token: int) -> TimeSeries | None:
         return self._series.get(token)
+
+    def clear_series(self) -> None:
+        for series in self._series.values():
+            series.clear()
+        for sparkline in self._sparklines.values():
+            sparkline.refresh()
+
+    def _on_table_context_menu(self, pos: QPoint) -> None:
+        if self._table.columnAt(pos.x()) != COL_TREND:
+            return
+        menu = QMenu(self)
+        menu.addAction("Clear history", self.clear_series)
+        menu.exec(self._table.viewport().mapToGlobal(pos))
 
     def _text_at(self, index: int, col: int) -> str:
         item = self._table.item(index, col)

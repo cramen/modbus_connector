@@ -109,15 +109,20 @@ src/modbus_connector/
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)
   timeseries.py     # TimeSeries — кольцевой буфер (t, value) для графиков:
-                    # append/clear/len/points/stats(t0, t1), без Qt
+                    # append/clear/len/points/stats(t0, t1), без Qt;
+                    # MAX_SAMPLES=10000 (~2.7 ч при поллинге 1 Гц)
   graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
                     # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
-                    # rect, маркеры A/B с min/max/avg и Δt, QTimer 500 мс
+                    # rect, маркеры A/B с min/max/avg и Δt (размещение внутри
+                    # видимых данных), Clear — сброс истории и оси времени,
+                    # QTimer 500 мс
                     # читает панель (row_tokens/row_label/series, rowsChanged)
                        # колонки таблицы ресайзятся (Interactive),
                        # колонка Trend — SparklineWidget (QPainter) по ряду
                        # _series[token] (TimeSeries; пишется primary-значение
-                       # при чтении, hex/ascii не захватываются),
+                       # при чтении, hex/ascii не захватываются), кнопка Record
+                       # включает запись истории (runtime-only), clear_series()
+                       # и контекстное меню "Clear history" на колонке Trend,
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (по токену строки, с генерацией),
                        # фильтр по имени/типу/адресу (QLineEdit) и кнопка

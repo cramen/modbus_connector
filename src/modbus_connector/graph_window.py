@@ -59,6 +59,9 @@ class GraphWindow(QWidget):
         markers_button.toggled.connect(self._toggle_markers)
         reset_button = QPushButton("Reset view")
         reset_button.clicked.connect(self._reset_view)
+        self._clear_button = QPushButton("Clear")
+        self._clear_button.setToolTip("Clear recorded history and restart the time axis")
+        self._clear_button.clicked.connect(self._on_clear)
 
         self._plot = pg.PlotWidget()
         self._plot.showGrid(x=True, y=True, alpha=0.3)
@@ -88,6 +91,7 @@ class GraphWindow(QWidget):
         controls.addWidget(zoom_rect_button)
         controls.addWidget(markers_button)
         controls.addWidget(reset_button)
+        controls.addWidget(self._clear_button)
         controls.addStretch(1)
 
         right = QVBoxLayout()
@@ -239,6 +243,17 @@ class GraphWindow(QWidget):
         finally:
             self._updating_range = False
         self._mode_combo.setCurrentText("Follow")
+
+    @Slot()
+    def _on_clear(self) -> None:
+        self._panel.clear_series()
+        for curve in self._curves.values():
+            curve.setData([], [])
+        self._origin = None  # the next sample restarts the relative axis at ~0
+        self._view_ranged = False
+        if self._marker_lines:  # re-place once new data arrives
+            self._markers_need_placement = True
+        self._update_stats()
 
     # --- markers ----------------------------------------------------------
 
