@@ -21,6 +21,7 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 ## Стек
 
 - Python 3.11+, PySide6
+- `pyqtgraph` (тянет numpy) — живые графики значений регистров
 - `pymodbus[serial]==3.6.9` — sync-клиенты; методы чтения/записи принимают
   ключевой `slave=`, результат: `.registers` (регистры) / `.bits` (coils,
   discrete inputs), ошибки — `result.isError()`
@@ -107,7 +108,12 @@ src/modbus_connector/
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)
+  timeseries.py     # TimeSeries — кольцевой буфер (t, value) для графиков:
+                    # append/clear/len/points/stats(t0, t1), без Qt
                        # колонки таблицы ресайзятся (Interactive),
+                       # колонка Trend — SparklineWidget (QPainter) по ряду
+                       # _series[token] (TimeSeries; пишется primary-значение
+                       # при чтении, hex/ascii не захватываются),
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (по токену строки, с генерацией),
                        # фильтр по имени/типу/адресу (QLineEdit) и кнопка
@@ -163,6 +169,7 @@ tests/
                            # закрытие вкладок
   test_scanner_panel.py    # probes-таблица (текстовые ячейки, пропуск
                            # невалидных), round-trip настроек сканера
+  test_timeseries.py       # TimeSeries: буфер, вытеснение, stats
 ```
 
 ## Команды

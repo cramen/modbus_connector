@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pymodbus[serial]==3.6.9",
     "PySide6",
+    "pyqtgraph",
 ]
 
 [project.gui-scripts]

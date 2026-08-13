@@ -28,6 +28,7 @@ from modbus_connector.registers_panel import (  # noqa: E402
     COL_NAME,
     COL_NEW_VALUE,
     COL_POLL,
+    COL_TREND,
     COL_TYPE,
     COL_UNIT_ID,
     COL_VALUE,
@@ -83,6 +84,35 @@ def test_changed_value_flashes_background(qapp: QApplication) -> None:
     request_id = _read_row(panel, 0)
     panel.handle_read_finished(request_id, True, [1], "")
     assert panel._flash_generations[token] == generation  # same value: no new flash
+
+
+def test_reads_append_to_row_series(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 1,
+             "scale": 2.0},
+            {"name": "h", "kind": "holding_registers", "address": 1, "count": 1,
+             "format": "hex"},
+        ]
+    )
+    token_a, token_h = panel._token_at(0), panel._token_at(1)
+    assert panel._table.cellWidget(0, COL_TREND) is panel._sparklines[token_a]
+    assert panel._table.cellWidget(1, COL_TREND) is panel._sparklines[token_h]
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [3], "")
+    panel.handle_read_finished(_read_row(panel, 0), True, [4], "")
+    panel.handle_read_finished(_read_row(panel, 1), True, [0x1A], "")
+    assert panel._series[token_a].points()[1] == [6.0, 8.0]  # scale applied
+    assert len(panel._series[token_h]) == 0  # hex is not numeric: not captured
+
+
+def test_reads_append_bits_for_coils(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state([{"name": "c", "kind": "coils", "address": 0, "count": 4}])
+    token = panel._token_at(0)
+    panel.handle_read_finished(_read_row(panel, 0), True, [True, False, True], "")
+    assert panel._series[token].points()[1] == [1.0]  # the first bit only
 
 
 def test_filter_hides_and_unhides_rows(qapp: QApplication) -> None:

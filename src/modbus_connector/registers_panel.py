@@ -1,11 +1,21 @@
 import csv
 import io
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import get_args
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QBrush, QColor, QKeySequence, QShortcut
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QKeySequence,
+    QPainter,
+    QPainterPath,
+    QPaintEvent,
+    QPen,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -44,6 +54,7 @@ from modbus_connector.models import (
     row_to_csv_record,
     rows_from_csv,
 )
+from modbus_connector.timeseries import TimeSeries
 
 KINDS = list(get_args(RegisterKind))
 FORMATS = list(get_args(DisplayFormat))
@@ -60,8 +71,50 @@ REGISTER_KINDS = ("holding_registers", "input_registers")
     COL_FORMAT,
     COL_VALUE,
     COL_NEW_VALUE,
+    COL_TREND,
     COL_ACTIONS,
-) = range(10)
+) = range(11)
+
+
+class SparklineWidget(QWidget):
+    """Крошечный тренд строки: линия по последним точкам, авто-масштаб Y."""
+
+    MAX_POINTS = 300
+
+    def __init__(self, series: TimeSeries, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._series = series
+        self.setFixedSize(110, 28)
+
+    def refresh(self) -> None:
+        values = self._series.points()[1][-self.MAX_POINTS :]
+        if values:
+            self.setToolTip(
+                f"min {min(values):g}  max {max(values):g}  last {values[-1]:g}"
+            )
+        self.update()  # Qt coalesces repaints per event-loop pass
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        del event
+        values = self._series.points()[1][-self.MAX_POINTS :]
+        if len(values) < 2:
+            return
+        lo, hi = min(values), max(values)
+        span = hi - lo or 1.0
+        width, height = self.width() - 1, self.height() - 1
+        path = QPainterPath()
+        for i, value in enumerate(values):
+            x = i * width / (len(values) - 1)
+            y = height - (value - lo) * height / span
+            if i == 0:
+                path.moveTo(x, y)
+            else:
+                path.lineTo(x, y)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(30, 120, 200), 1))
+        painter.drawPath(path)
+        painter.end()
 
 
 def _entry_float(value: object, default: float) -> float:
@@ -111,8 +164,10 @@ class RegistersPanel(QWidget):
         self._flash_generations: dict[int, int] = {}  # token -> latest flash generation
         self._row_display: dict[int, RowDisplaySettings] = {}  # token -> display settings
         self._display_dialog: QDialog | None = None
+        self._series: dict[int, TimeSeries] = {}  # token -> value history (runtime only)
+        self._sparklines: dict[int, SparklineWidget] = {}
 
-        self._table = QTableWidget(0, 10)
+        self._table = QTableWidget(0, 11)
         self._table.setHorizontalHeaderLabels(
             [
                 "Name",
@@ -124,6 +179,7 @@ class RegistersPanel(QWidget):
                 "Format",
                 "Value",
                 "New value",
+                "Trend",
                 "",
             ]
         )
@@ -136,6 +192,7 @@ class RegistersPanel(QWidget):
             (COL_FORMAT, 90),
             (COL_VALUE, 140),
             (COL_NEW_VALUE, 120),
+            (COL_TREND, 118),
         ):
             self._table.setColumnWidth(col, width)
         self._table.verticalHeader().setVisible(False)
@@ -338,6 +395,12 @@ class RegistersPanel(QWidget):
         self._table.setItem(index, COL_VALUE, value_item)
         self._table.setItem(index, COL_NEW_VALUE, QTableWidgetItem(""))
 
+        series = TimeSeries()
+        sparkline = SparklineWidget(series)
+        self._series[self._row_token_counter] = series
+        self._sparklines[self._row_token_counter] = sparkline
+        self._table.setCellWidget(index, COL_TREND, sparkline)
+
         delete_button = QToolButton()
         delete_button.setIcon(
             self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarCloseButton)
@@ -394,7 +457,7 @@ class RegistersPanel(QWidget):
                 self._table.takeItem(index, col) for col in range(self._table.columnCount())
             ]
             widgets = {}
-            for col in (COL_TYPE, COL_FORMAT, COL_ACTIONS):
+            for col in (COL_TYPE, COL_FORMAT, COL_TREND, COL_ACTIONS):
                 widgets[col] = self._table.cellWidget(index, col)
                 self._table.removeCellWidget(index, col)  # detach, not delete
             snapshot.append((items, widgets))
@@ -780,6 +843,8 @@ class RegistersPanel(QWidget):
             token = self._token_at(index)
             self._flash_generations.pop(token, None)
             self._row_display.pop(token, None)
+            self._series.pop(token, None)
+            self._sparklines.pop(token, None)
             timer = self._row_timers.pop(token, None)
             if timer is not None:
                 timer.stop()
@@ -886,6 +951,23 @@ class RegistersPanel(QWidget):
             )
         return format_register_values(values, fmt, order)
 
+    def _primary_value(self, index: int, values: list) -> float | None:
+        """Первое декодированное число строки (со scale/offset) для графика."""
+        if not values:
+            return None
+        kind = self._table.cellWidget(index, COL_TYPE).currentText()
+        if kind not in REGISTER_KINDS:
+            return float(int(values[0]))  # coil/discrete bit as 0.0/1.0
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt in ("hex", "ascii"):
+            return None  # not numeric
+        settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
+        order = settings.order or self._global_order_combo.currentText()
+        decoded = decode_register_values(values, fmt, order)
+        if not decoded:
+            return None
+        return decoded[0] * settings.scale + settings.offset
+
     @Slot(int, bool, list, str)
     def handle_read_finished(self, request_id: int, ok: bool, values: list, error: str) -> None:
         token = self._pending_reads.pop(request_id, None)
@@ -894,6 +976,11 @@ class RegistersPanel(QWidget):
         index = self._find_row_by_token(token)
         if index is None:
             return
+        if ok:
+            primary = self._primary_value(index, values)
+            if primary is not None:
+                self._series[token].append(time.monotonic(), primary)
+                self._sparklines[token].refresh()
         item = self._table.item(index, COL_VALUE)
         if item is not None:
             text = self._display_text(index, values) if ok else f"✗ {error}"
