@@ -115,6 +115,24 @@ def test_reads_append_bits_for_coils(qapp: QApplication) -> None:
     assert panel._series[token].points()[1] == [1.0]  # the first bit only
 
 
+def test_recording_toggle_pauses_capture(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    token = panel._token_at(0)
+    assert panel._record_button.isChecked()  # on by default, runtime-only
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
+    assert len(panel._series[token]) == 1
+
+    panel._record_button.setChecked(False)  # paused: no new samples
+    panel.handle_read_finished(_read_row(panel, 0), True, [6], "")
+    assert len(panel._series[token]) == 1
+    assert panel._series[token].points()[1] == [5.0]  # old data kept, not cleared
+
+    panel._record_button.setChecked(True)
+    panel.handle_read_finished(_read_row(panel, 0), True, [7], "")
+    assert panel._series[token].points()[1] == [5.0, 7.0]
+
+
 def test_filter_hides_and_unhides_rows(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)
     panel.set_state(

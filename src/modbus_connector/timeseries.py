@@ -3,7 +3,7 @@
 from collections import deque
 from collections.abc import Iterator
 
-MAX_SAMPLES = 20000
+MAX_SAMPLES = 10000  # ~2.7 h at 1 Hz polling, ~17 min at 100 ms
 
 
 class TimeSeries:

@@ -257,6 +257,13 @@ class RegistersPanel(QWidget):
         self._poll_button.clicked.connect(self._toggle_polling)
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_global_rows)
+        self._record_button = QPushButton("Record")
+        self._record_button.setCheckable(True)
+        self._record_button.setChecked(True)  # history capture on by default
+        self._record_button.setToolTip(
+            "Record value history for sparklines and the graph window "
+            "(bounded buffer, ~10k samples per row)"
+        )
 
         top = QHBoxLayout()
         top.addWidget(add_button)
@@ -273,6 +280,7 @@ class RegistersPanel(QWidget):
         top.addWidget(QLabel("Interval:"))
         top.addWidget(self._poll_interval)
         top.addWidget(self._poll_button)
+        top.addWidget(self._record_button)
 
         layout = QVBoxLayout(self)
         layout.addLayout(top)
@@ -995,7 +1003,7 @@ class RegistersPanel(QWidget):
         index = self._find_row_by_token(token)
         if index is None:
             return
-        if ok:
+        if ok and self._record_button.isChecked():
             primary = self._primary_value(index, values)
             if primary is not None:
                 self._series[token].append(time.monotonic(), primary)
