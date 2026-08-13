@@ -50,12 +50,28 @@ def test_state_roundtrip_and_shutdown(qapp: QApplication) -> None:
 def test_registers_options_roundtrip(qapp: QApplication) -> None:
     session = SessionWidget()
     session.set_state({"registers_options": {"order": "CDAB"}})
-    assert session.state()["registers_options"] == {"order": "CDAB"}
+    assert session.state()["registers_options"]["order"] == "CDAB"
     session.set_state({"registers_options": {"order": "junk"}})  # invalid: keep
-    assert session.state()["registers_options"] == {"order": "CDAB"}
+    assert session.state()["registers_options"]["order"] == "CDAB"
     session.set_state({"registers": []})  # missing key: keep current value
-    assert session.state()["registers_options"] == {"order": "CDAB"}
+    assert session.state()["registers_options"]["order"] == "CDAB"
     session.shutdown()
+
+
+def test_column_widths_roundtrip(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.registers_panel._table.setColumnWidth(0, 222)
+    widths = session.state()["registers_options"]["column_widths"]
+    assert widths[0] == 222
+    assert len(widths) == session.registers_panel._table.columnCount()
+
+    fresh = SessionWidget()
+    fresh.set_state({"registers_options": {"column_widths": widths}})
+    header = fresh.registers_panel._table.horizontalHeader()
+    assert header.sectionSize(0) == 222
+    assert header.sectionSize(1) == widths[1]
+    session.shutdown()
+    fresh.shutdown()
 
 
 def test_logging_settings_roundtrip(qapp: QApplication) -> None:

@@ -115,7 +115,9 @@ src/modbus_connector/
                        # Scale/Offset/Unit/Order — в диалоге "Display…",
                        # хранилище _row_display по токену (RowDisplaySettings,
                        # order None = глобальный Order-комбо над таблицей,
-                       # сохраняется как registers_options в session state),
+                       # сохраняется как registers_options в session state,
+                       # там же column_widths — ширины колонок таблицы,
+                       # clamp 30..2000, толерантный разбор),
                        # выпадающая кнопка CSV — import (заменяет таблицу,
                        # диалог сопоставления колонок) / export (диалог выбора
                        # и порядка колонок, +колонка value при экспорте,

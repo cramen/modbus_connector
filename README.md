@@ -138,7 +138,7 @@ corner opens another independent session — its own connection, register table,
 log and scanner window. The tab title follows the connection (e.g. `tcp
 192.168.1.10:502`); the last remaining tab cannot be closed. The status bar
 statistics follow the active tab. All tabs are saved to the settings on exit
-and restored on the next launch.
+and restored on the next launch — including each table's column widths.
 
 ### Adding registers
 

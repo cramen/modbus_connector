@@ -789,3 +789,23 @@ def test_bus_controls_disabled_until_connected(qapp: QApplication) -> None:
     assert len(reads) == 1
     panel.set_bus_enabled(False)
     assert all(not button.isEnabled() for button in gated)
+
+
+def test_column_widths_tolerate_garbage(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    header = panel._table.horizontalHeader()
+    default_widths = [header.sectionSize(col) for col in range(header.count())]
+
+    panel.set_options({"column_widths": "junk"})  # not a list: ignored
+    panel.set_options({"column_widths": [None, "wide", True]})  # non-numbers: skip
+    assert [header.sectionSize(col) for col in range(header.count())] == default_widths
+
+    panel.set_options({"column_widths": [5, 10**9, 150]})  # clamped to 30..2000
+    assert header.sectionSize(0) == 30
+    assert header.sectionSize(1) == 2000
+    assert header.sectionSize(2) == 150
+    # a short list leaves the remaining columns at their current widths
+    assert header.sectionSize(3) == default_widths[3]
+
+    panel.set_options({"order": "ABCD"})  # missing key: widths untouched
+    assert header.sectionSize(0) == 30

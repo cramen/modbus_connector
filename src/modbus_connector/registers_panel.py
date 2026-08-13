@@ -377,11 +377,26 @@ class RegistersPanel(QWidget):
         return rows
 
     def options_state(self) -> dict:
-        return {"order": self._global_order_combo.currentText()}
+        header = self._table.horizontalHeader()
+        return {
+            "order": self._global_order_combo.currentText(),
+            "column_widths": [
+                header.sectionSize(col) for col in range(header.count())
+            ],
+        }
 
     def set_options(self, options: dict) -> None:
-        if isinstance(options, dict) and options.get("order") in ORDERS:
+        if not isinstance(options, dict):
+            return
+        if options.get("order") in ORDERS:
             self._global_order_combo.setCurrentText(str(options["order"]))
+        widths = options.get("column_widths")
+        if isinstance(widths, list):
+            header = self._table.horizontalHeader()
+            for col, width in enumerate(widths[: header.count()]):
+                # clamp so a corrupted file cannot hide or explode a column
+                if isinstance(width, int | float) and not isinstance(width, bool):
+                    header.resizeSection(col, int(min(2000, max(30, width))))
 
     def logging_state(self) -> dict:
         # settings persist; the on/off state is runtime-only
