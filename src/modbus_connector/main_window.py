@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Slot
-from PySide6.QtGui import QCloseEvent, QKeySequence
+from PySide6.QtGui import QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from modbus_connector.models import StatsSnapshot
 from modbus_connector.session_widget import SessionWidget
 from modbus_connector.settings_store import load_settings, save_settings
+from modbus_connector.theme import THEMES, apply_theme, current_theme
 
 
 class MainWindow(QMainWindow):
@@ -44,6 +45,18 @@ class MainWindow(QMainWindow):
         save_action.setShortcut(QKeySequence.StandardKey.Save)
         load_action = file_menu.addAction("Load Settings from File…", self._load_from_file)
         load_action.setShortcut(QKeySequence.StandardKey.Open)
+
+        view_menu = self.menuBar().addMenu("View")
+        self._theme_actions = {}
+        theme_group = QActionGroup(self)
+        labels = {"system": "System", "light": "Light", "dark": "Dark"}
+        for key in THEMES:
+            action = view_menu.addAction(labels[key])
+            action.setCheckable(True)
+            theme_group.addAction(action)
+            action.triggered.connect(lambda checked=False, name=key: apply_theme(name))
+            self._theme_actions[key] = action
+        self._sync_theme_menu()
 
         self._apply_state(load_settings())
 
@@ -118,11 +131,19 @@ class MainWindow(QMainWindow):
 
     def _collect_state(self) -> dict[str, Any]:
         return {
+            "theme": current_theme(),
             "tabs": [self._tabs.widget(i).state() for i in range(self._tabs.count())],
             "active_tab": self._tabs.currentIndex(),
         }
 
+    def _sync_theme_menu(self) -> None:
+        self._theme_actions[current_theme()].setChecked(True)
+
     def _apply_state(self, state: dict[str, Any]) -> None:
+        theme = state.get("theme") if isinstance(state, dict) else None
+        if isinstance(theme, str):
+            apply_theme(theme)
+        self._sync_theme_menu()
         tabs = state.get("tabs") if isinstance(state, dict) else None
         if isinstance(tabs, list):
             for entry in tabs:

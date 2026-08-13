@@ -217,10 +217,17 @@ src/modbus_connector/
                     # ("New connection" → описание соединения), last_stats()
   main_window.py  # главное окно: QTabWidget с SessionWidget'ами (кнопка "+"
                   # в углу, последнюю вкладку закрыть нельзя), меню File
-                  # (save/load всех вкладок), статус-бар следует активной
-                  # вкладке; настройки: {"tabs": [...], "active_tab": i},
+                  # (save/load всех вкладок), меню View — радио-переключатель
+                  # темы (System/Light/Dark, QActionGroup), статус-бар следует
+                  # активной вкладке; настройки: {"theme": str,
+                  # "tabs": [...], "active_tab": i} (theme отсутствует в старых
+                  # файлах → "system"),
                   # старый односессионный формат читается как одна вкладка
-  app.py          # QApplication, entry point main()
+  theme.py        # тема (pyqtdarktheme): THEMES, apply_theme(name) —
+                  # system→"auto" (вызывать после QApplication),
+                  # current_theme(), is_dark() (system → QStyleHints
+                  # .colorScheme, откат на яркость палитры)
+  app.py          # QApplication, apply_theme(из настроек), entry point main()
   __main__.py     # python -m modbus_connector
 tests/
   conftest.py     # фикстура modbus_server (порт): asyncio-ModbusTcpServer на
@@ -240,6 +247,8 @@ tests/
   test_scanner_panel.py    # probes-таблица (текстовые ячейки, пропуск
                            # невалидных), round-trip настроек сканера
   test_timeseries.py       # TimeSeries: буфер, вытеснение, stats
+  test_theme.py            # apply_theme (stylesheet меняется), round-trip
+                           # ключа "theme", меню View (эксклюзивность)
   test_graph_window.py     # чек-лист рядов, маркеры stats, Follow, zoom→Manual
 ```
 

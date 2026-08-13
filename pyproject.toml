@@ -11,6 +11,7 @@ dependencies = [
     "pymodbus[serial]==3.6.9",
     "PySide6",
     "pyqtgraph",
+    "pyqtdarktheme",
 ]
 
 [project.gui-scripts]
