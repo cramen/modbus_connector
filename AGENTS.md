@@ -156,7 +156,11 @@ src/modbus_connector/
   graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
                     # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
                     # rect, маркеры A/B с min/max/avg и Δt (размещение внутри
-                    # видимых данных), Clear — сброс истории и оси времени,
+                    # видимых данных), hover-кроссхейр (SignalProxy 60 Гц →
+                    # _update_crosshair(view_x): серая пунктирная вертикаль,
+                    # TextItem справа сверху со значениями видимых рядов —
+                    # ближайший отсчёт через np.searchsorted, «—» вне диапазона,
+                    # точки на кривых; скрывается вне области графика), Clear — сброс истории и оси времени,
                     # кнопка-дублёр "Start polling and record"/"Stop polling"
                     # (управляет панелью, следит за pollStateChanged),
                     # set_bus_enabled(ok) — гейтинг этой кнопки,

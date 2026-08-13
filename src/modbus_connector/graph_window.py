@@ -1,3 +1,6 @@
+import html
+
+import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QCloseEvent
@@ -76,6 +79,24 @@ class GraphWindow(QWidget):
         viewbox = self._plot.getPlotItem().getViewBox()
         viewbox.sigRangeChanged.connect(self._on_range_changed)
         self._viewbox = viewbox
+
+        # hover crosshair: vertical hair + per-series readout at the cursor
+        self._crosshair = pg.InfiniteLine(
+            angle=90, movable=False,
+            pen=pg.mkPen((170, 170, 170), width=1, style=Qt.PenStyle.DashLine),
+        )
+        self._crosshair.setVisible(False)
+        self._plot.addItem(self._crosshair, ignoreBounds=True)
+        self._readout = pg.TextItem(anchor=(1, 0))  # top-right: the legend owns top-left
+        self._readout.setVisible(False)
+        self._plot.addItem(self._readout, ignoreBounds=True)
+        self._crosshair_dots = pg.ScatterPlotItem(
+            size=9, symbol="o", pen=pg.mkPen(None)
+        )
+        self._plot.addItem(self._crosshair_dots, ignoreBounds=True)
+        self._mouse_proxy = pg.SignalProxy(
+            self._plot.scene().sigMouseMoved, rateLimit=60, slot=self._on_mouse_moved
+        )
 
         self._marker_lines: list[pg.InfiniteLine] = []
         self._delta_label = QLabel()
@@ -365,6 +386,50 @@ class GraphWindow(QWidget):
             cells += ["—"] * 3 if stats is None else [f"{v:.4g}" for v in stats]
             for col, text in enumerate(cells):
                 self._stats_table.setItem(row, col, QTableWidgetItem(text))
+
+    # --- hover crosshair ----------------------------------------------------
+
+    def _on_mouse_moved(self, pos: object) -> None:
+        if self._viewbox.sceneBoundingRect().contains(pos):  # type: ignore[arg-type]
+            self._update_crosshair(self._viewbox.mapSceneToView(pos).x())  # type: ignore[arg-type]
+        else:
+            self._update_crosshair(None)  # left the plot area: hide
+
+    def _update_crosshair(self, view_x: float | None) -> None:
+        if view_x is None:
+            self._crosshair.setVisible(False)
+            self._readout.setVisible(False)
+            self._crosshair_dots.setData([], [])
+            return
+        self._crosshair.setValue(view_x)
+        self._crosshair.setVisible(True)
+        lines = [f'<div style="color: #DDD">t = {view_x:.4g} s</div>']
+        dot_xs, dot_ys, dot_brushes = [], [], []
+        for token, curve in self._curves.items():
+            color = curve.opts["pen"].color().name()
+            name = html.escape(self._panel.row_label(token))
+            text = "—"
+            xdata, ydata = curve.getData()
+            if xdata is not None and len(xdata) and xdata[0] <= view_x <= xdata[-1]:
+                index = self._nearest_index(xdata, view_x)
+                text = f"{ydata[index]:.4g}"
+                dot_xs.append(xdata[index])
+                dot_ys.append(ydata[index])
+                dot_brushes.append(pg.mkBrush(color))
+            lines.append(f'<span style="color: {color}">{name}: {text}</span>')
+        self._readout.setHtml("<br>".join(lines))
+        (vx0, vx1), (vy0, vy1) = self._viewbox.viewRange()  # top-right corner
+        self._readout.setPos(vx1 - (vx1 - vx0) * 0.02, vy1 - (vy1 - vy0) * 0.03)
+        self._readout.setVisible(True)
+        self._crosshair_dots.setData(dot_xs, dot_ys, brush=dot_brushes)
+
+    @staticmethod
+    def _nearest_index(xdata: np.ndarray, view_x: float) -> int:
+        """Индекс ближайшего отсчёта (данные с поллинга — без интерполяции)."""
+        index = min(int(np.searchsorted(xdata, view_x)), len(xdata) - 1)
+        if index > 0 and abs(xdata[index - 1] - view_x) <= abs(xdata[index] - view_x):
+            index -= 1
+        return index
 
     # --- window lifecycle -------------------------------------------------
 

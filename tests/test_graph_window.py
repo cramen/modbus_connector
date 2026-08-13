@@ -182,3 +182,39 @@ def test_poll_button_drives_panel_and_follows_state(qapp: QApplication) -> None:
     assert not panel.is_polling() and not panel.is_recording()
     assert window._poll_button.text() == "Start polling and record"
     assert panel._poll_button.text() == "Start polling and record"
+
+
+def test_crosshair_readout_snaps_to_nearest_sample(qapp: QApplication) -> None:
+    panel = _panel()
+    window = GraphWindow(panel)
+    temp = panel.series(panel._token_at(0))
+    pressure = panel.series(panel._token_at(1))
+    assert temp is not None and pressure is not None
+    for i in range(50):
+        temp.append(1000.0 + i, float(i))
+        pressure.append(1000.0 + i, 2.0 * i)
+    window._refresh()  # curves now hold relative x 0..49
+
+    window._update_crosshair(10.4)  # the nearest sample is index 10
+    assert window._crosshair.isVisible()
+    assert window._crosshair.value() == 10.4
+    text = window._readout.textItem.toPlainText()
+    assert "t = 10.4 s" in text
+    assert "temp: 10" in text
+    assert "pressure: 20" in text
+    dot_xs, dot_ys = window._crosshair_dots.getData()
+    assert list(dot_xs) == [10.0, 10.0]
+    assert list(dot_ys) == [10.0, 20.0]
+
+    window._update_crosshair(10.6)  # the nearest sample is index 11
+    text = window._readout.textItem.toPlainText()
+    assert "temp: 11" in text and "pressure: 22" in text
+
+    window._update_crosshair(500.0)  # beyond every series' extent
+    text = window._readout.textItem.toPlainText()
+    assert "temp: —" in text and "pressure: —" in text
+    assert window._crosshair_dots.getData()[0].size == 0
+
+    window._update_crosshair(None)  # the cursor left the plot area
+    assert not window._crosshair.isVisible()
+    assert not window._readout.isVisible()

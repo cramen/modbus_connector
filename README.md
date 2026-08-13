@@ -268,6 +268,9 @@ opens the full plot window:
   Follow;
 - **Markers** shows two draggable vertical lines (green A, red B) and a stats
   table with per-series min/max/avg between them plus Δt, updated live;
+- hovering the plot shows a crosshair: a dashed vertical line at the cursor's
+  time and a top-right readout with every series' value at that moment
+  (nearest recorded sample, marked with a dot on each curve);
 - **Clear** empties the recorded history and restarts the relative time
   axis (markers are re-placed once new data arrives); right-clicking a Trend
   cell in the table offers the same "Clear history";
