@@ -77,6 +77,11 @@ CSV import — map file columns to register fields before loading the table:
 
 ![CSV import](docs/screenshots/import_dialog.png)
 
+Logging to a file — write polled values to CSV or JSON Lines: file, format,
+field selection and a per-row checklist (the "⚙" button above the table):
+
+![Logging settings](docs/screenshots/logging_dialog.png)
+
 Address scanner — unit sweep with probes and the register address scan:
 
 ![Scanner](docs/screenshots/scanner.png)

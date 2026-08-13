@@ -77,6 +77,11 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 
 ![Импорт CSV](docs/screenshots/import_dialog.png)
 
+Логирование в файл — запись опрашиваемых значений в CSV или JSON Lines:
+файл, формат, выбор полей и чек-лист строк (кнопка «⚙» над таблицей):
+
+![Настройки логирования](docs/screenshots/logging_dialog.png)
+
 Сканер адресов — обход unit-адресов с пробами и скан адресов регистров:
 
 ![Сканер](docs/screenshots/scanner.png)
