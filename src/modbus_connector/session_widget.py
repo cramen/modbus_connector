@@ -1,6 +1,6 @@
 import itertools
 from collections.abc import Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QMetaObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
@@ -11,6 +11,9 @@ from modbus_connector.models import ConnectionParams, StatsSnapshot, describe_co
 from modbus_connector.registers_panel import RegistersPanel
 from modbus_connector.scanner_panel import ScannerPanel
 from modbus_connector.worker import ModbusWorker
+
+if TYPE_CHECKING:
+    from modbus_connector.graph_window import GraphWindow
 
 
 class SessionWidget(QWidget):
@@ -39,11 +42,15 @@ class SessionWidget(QWidget):
 
         self._scanner_button = QPushButton("Scanner…")
         self._scanner_button.clicked.connect(self._show_scanner)
+        self._graph_button = QPushButton("Graph…")
+        self._graph_button.clicked.connect(self._show_graph)
+        self._graph_window: GraphWindow | None = None
         self._log_button = QPushButton("Log")
         self._log_button.setCheckable(True)
         self._log_button.setChecked(True)
         self._log_button.toggled.connect(self.log_panel.setVisible)
         self.connection_panel.add_control(self._scanner_button)
+        self.connection_panel.add_control(self._graph_button)
         self.connection_panel.add_control(self._log_button)
 
         layout = QVBoxLayout(self)
@@ -146,6 +153,16 @@ class SessionWidget(QWidget):
         self.scanner_panel.show()
         self.scanner_panel.raise_()
         self.scanner_panel.activateWindow()
+
+    def _show_graph(self) -> None:
+        if self._graph_window is None:
+            # lazy import: pyqtgraph/numpy load only when the window opens
+            from modbus_connector.graph_window import GraphWindow
+
+            self._graph_window = GraphWindow(self.registers_panel, self)
+        self._graph_window.show()
+        self._graph_window.raise_()
+        self._graph_window.activateWindow()
 
     def _on_connect_requested(self, params: ConnectionParams, unit_id: int) -> None:
         self._params = params

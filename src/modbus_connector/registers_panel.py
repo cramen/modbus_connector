@@ -145,6 +145,7 @@ class RegistersPanel(QWidget):
     writeRequested = Signal(int, int, object, list)
     maskWriteRequested = Signal(int, int, int, int, int)
     readwriteRequested = Signal(int, int, int, int, int, list)
+    rowsChanged = Signal()  # a row was added or removed
     logLine = Signal(str)
 
     def __init__(
@@ -417,6 +418,7 @@ class RegistersPanel(QWidget):
 
         self._apply_filter_to_row(index)
         self._sync_row_timer(index)  # no-op unless polling is active
+        self.rowsChanged.emit()
 
     @Slot()
     def _apply_filter(self) -> None:
@@ -794,6 +796,22 @@ class RegistersPanel(QWidget):
                 return index
         return None
 
+    def row_tokens(self) -> list[int]:
+        return [self._token_at(index) for index in range(self._table.rowCount())]
+
+    def row_label(self, token: int) -> str:
+        index = self._find_row_by_token(token)
+        if index is None:
+            return "?"
+        name = self._text_at(index, COL_NAME)
+        if name:
+            return name
+        kind = self._table.cellWidget(index, COL_TYPE).currentText()
+        return f"{kind}@{self._text_at(index, COL_ADDRESS)}"
+
+    def series(self, token: int) -> TimeSeries | None:
+        return self._series.get(token)
+
     def _text_at(self, index: int, col: int) -> str:
         item = self._table.item(index, col)
         return item.text().strip() if item else ""
@@ -850,6 +868,7 @@ class RegistersPanel(QWidget):
                 timer.stop()
                 timer.deleteLater()
             self._table.removeRow(index)
+            self.rowsChanged.emit()
 
     @Slot(QTableWidgetItem)
     def _on_item_changed(self, item: QTableWidgetItem) -> None:

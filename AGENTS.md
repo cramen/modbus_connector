@@ -77,7 +77,7 @@ src/modbus_connector/
                        # RTU over UDP — страницы network/serial),
                        # state()/set_state(); две строки: настройки сверху,
                        # кнопки (Connect/Device ID…/Diagnostics… +
-                       # Scanner…/Log от SessionWidget через add_control)
+                       # Scanner…/Graph…/Log от SessionWidget через add_control)
                        # и статус снизу; статус — sizePolicy Ignored, длинный
                        # текст не расширяет окно;
                        # статус трёх цветов: серый (отключён), зелёный (alive),
@@ -110,6 +110,10 @@ src/modbus_connector/
                     # колонок файла полям, валидация обязательных)
   timeseries.py     # TimeSeries — кольцевой буфер (t, value) для графиков:
                     # append/clear/len/points/stats(t0, t1), без Qt
+  graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
+                    # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
+                    # rect, маркеры A/B с min/max/avg и Δt, QTimer 500 мс
+                    # читает панель (row_tokens/row_label/series, rowsChanged)
                        # колонки таблицы ресайзятся (Interactive),
                        # колонка Trend — SparklineWidget (QPainter) по ряду
                        # _series[token] (TimeSeries; пишется primary-значение
@@ -170,6 +174,7 @@ tests/
   test_scanner_panel.py    # probes-таблица (текстовые ячейки, пропуск
                            # невалидных), round-trip настроек сканера
   test_timeseries.py       # TimeSeries: буфер, вытеснение, stats
+  test_graph_window.py     # чек-лист рядов, маркеры stats, Follow, zoom→Manual
 ```
 
 ## Команды

@@ -27,6 +27,9 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   couple of seconds.
 - Per-row Unit ID (rows can address different devices on the same bus) and
   per-row polling interval (slow and fast registers in one table).
+- Live graphs ("Graph…" button, separate window): a trend sparkline per table
+  row and a full plot window with multiple series, sliding-window/follow or
+  manual zoom, and draggable markers with per-series min/max/avg.
 - Filter box and one-click "Sort by address" for large tables.
 - Advanced protocol functions: Mask Write Register (0x16), Read/Write Multiple
   Registers (0x17), Read Device Identification (0x2B) and serial-line
@@ -225,8 +228,26 @@ register space of an unfamiliar device.
 The scanner's range, probe list and address-scan parameters persist in the
 settings along with everything else.
 
-### Log panel
+### Graphs
 
+Every register row captures its value history while reads run (scaled
+engineering value; hex/ascii rows are skipped) and shows it as a small trend
+sparkline in the **Trend** column. **Graph…** (connection panel) opens the
+full plot window:
+
+- the **Series** checklist on the left picks which table rows are plotted
+  (new rows join checked by default);
+- **X scale: Follow** slides a window of the given width along the latest
+  data, **Full** fits everything, **Manual** freezes the view — zooming or
+  panning (wheel at cursor, left-drag, or the **Zoom rect** toggle) switches
+  the mode to Manual so the change is visible; **Reset view** returns to
+  Follow;
+- **Markers** shows two draggable vertical lines (green A, red B) and a stats
+  table with per-series min/max/avg between them plus Δt, updated live.
+
+Closing the graph window only hides it; the data stays.
+
+### Log panel
 The log panel at the bottom of the main window (toggled with the **Log**
 button) shows every request and response with timestamps. The **Raw**
 checkbox additionally displays raw bus frames in hex (`→ tx …` / `← rx …`) —
