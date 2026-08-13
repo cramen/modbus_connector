@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 from serial.tools import list_ports
 
+from modbus_connector import theme
 from modbus_connector.models import (
     ConnectionParams,
     RtuOverTcpParams,
@@ -295,16 +296,20 @@ class ConnectionPanel(QWidget):
         self._render_status()
 
     def _render_status(self) -> None:
+        colors = theme.status_colors()
         if not self._connected:
-            text, color = self._status_message, "gray"
+            text, color = self._status_message, colors["off"]
         elif self._alive:
-            text, color = self._status_message, "green"
+            text, color = self._status_message, colors["ok"]
         else:
             # pymodbus drops `connected` after a timeout but silently reconnects
             # on the next transaction — the link is idle/degraded, not dead
-            text, color = f"{self._status_message} (idle)", "orange"
+            text, color = f"{self._status_message} (idle)", colors["idle"]
         self._status.setText(text)
         self._status.setStyleSheet(f"color: {color}")
+
+    def refresh_theme(self) -> None:
+        self._render_status()
 
     @Slot()
     def _on_device_id_clicked(self) -> None:

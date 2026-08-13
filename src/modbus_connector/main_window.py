@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
             action = view_menu.addAction(labels[key])
             action.setCheckable(True)
             theme_group.addAction(action)
-            action.triggered.connect(lambda checked=False, name=key: apply_theme(name))
+            action.triggered.connect(lambda checked=False, name=key: self._on_theme_selected(name))
             self._theme_actions[key] = action
         self._sync_theme_menu()
 
@@ -139,10 +139,20 @@ class MainWindow(QMainWindow):
     def _sync_theme_menu(self) -> None:
         self._theme_actions[current_theme()].setChecked(True)
 
+    def _on_theme_selected(self, name: str) -> None:
+        apply_theme(name)
+        # re-tint what stylesheets don't reach: status label colors and
+        # already-open graph windows (sparklines read the palette at paint time)
+        for index in range(self._tabs.count()):
+            session = self._tabs.widget(index)
+            session.connection_panel.refresh_theme()
+            if session._graph_window is not None:
+                session._graph_window.update_theme()
+
     def _apply_state(self, state: dict[str, Any]) -> None:
         theme = state.get("theme") if isinstance(state, dict) else None
         if isinstance(theme, str):
-            apply_theme(theme)
+            self._on_theme_selected(theme)  # also re-tints open sessions
         self._sync_theme_menu()
         tabs = state.get("tabs") if isinstance(state, dict) else None
         if isinstance(tabs, list):

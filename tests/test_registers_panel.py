@@ -20,6 +20,7 @@ except ImportError as exc:
 
 from PySide6.QtGui import QColor, QKeyEvent  # noqa: E402
 
+from modbus_connector import theme  # noqa: E402
 from modbus_connector.csv_dialogs import (  # noqa: E402
     ExportColumnsDialog,
     ImportMappingDialog,
@@ -76,6 +77,7 @@ def _read_row(panel: RegistersPanel, index: int) -> int:
 
 
 def test_changed_value_flashes_background(qapp: QApplication) -> None:
+    theme.apply_theme("light")  # the flash color is theme-dependent: pin it
     panel = RegistersPanel(itertools.count(1).__next__)
     token = panel._token_at(0)
 
@@ -90,6 +92,23 @@ def test_changed_value_flashes_background(qapp: QApplication) -> None:
     request_id = _read_row(panel, 0)
     panel.handle_read_finished(request_id, True, [1], "")
     assert panel._flash_generations[token] == generation  # same value: no new flash
+    theme.apply_theme("system")  # restore the app-global theme
+
+
+def test_flash_color_follows_theme(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    try:
+        for step, (name, expected) in enumerate(
+            (("light", QColor(144, 238, 144)), ("dark", QColor(45, 95, 50))),
+            start=1,
+        ):
+            theme.apply_theme(name)
+            panel.handle_read_finished(_read_row(panel, 0), True, [step], "")
+            item = panel._table.item(0, COL_VALUE)
+            assert item is not None
+            assert item.background().color() == expected
+    finally:
+        theme.apply_theme("system")
 
 
 def test_reads_append_to_row_series(qapp: QApplication) -> None:

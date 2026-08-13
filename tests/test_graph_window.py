@@ -277,3 +277,22 @@ def test_crosshair_readout_stays_put_when_panning(qapp: QApplication) -> None:
     hair_scene_x_after = window._viewbox.mapViewToScene(pg.Point(20.0, 0.0)).x()
     assert abs(hair_scene_x_after - hair_scene_x_before) > 100  # moved with data
     window.hide()
+
+
+def test_graph_follows_theme(qapp: QApplication) -> None:
+    from modbus_connector import theme
+
+    panel = _panel()
+    window = GraphWindow(panel)
+    try:
+        theme.apply_theme("light")
+        window.update_theme()
+        assert pg.getConfigOption("background") == "w"
+        assert window._crosshair.pen.color() == theme.crosshair_color()
+
+        theme.apply_theme("dark")
+        window.update_theme()
+        assert pg.getConfigOption("background") == "k"
+        assert window._crosshair.pen.color() == theme.crosshair_color()
+    finally:
+        theme.apply_theme("system")  # theme and pg config are app-global

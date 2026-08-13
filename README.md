@@ -34,6 +34,8 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   manual zoom, and draggable markers with per-series min/max/avg.
 - Background logging of polled values to a CSV or JSON Lines file ("Log to
   file" button), with a configurable set of fields.
+- System/Light/Dark theme (pyqtdarktheme) from the View menu — graphs,
+  sparklines, status colors and highlights all follow the theme.
 - Filter box and one-click "Sort by address" for large tables.
 - Advanced protocol functions: Mask Write Register (0x16), Read/Write Multiple
   Registers (0x17), Read Device Identification (0x2B) and serial-line
@@ -138,7 +140,9 @@ corner opens another independent session — its own connection, register table,
 log and scanner window. The tab title follows the connection (e.g. `tcp
 192.168.1.10:502`); the last remaining tab cannot be closed. The status bar
 statistics follow the active tab. All tabs are saved to the settings on exit
-and restored on the next launch — including each table's column widths.
+and restored on the next launch — including each table's column widths. The
+**View** menu switches the theme (System/Light/Dark); the choice is app-wide
+and is saved with the settings.
 
 ### Adding registers
 

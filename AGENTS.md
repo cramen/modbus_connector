@@ -83,6 +83,8 @@ src/modbus_connector/
                        # статус трёх цветов: серый (отключён), зелёный (alive),
                        # оранжевый "(idle)" — connected, но backend.connected
                        # упал после таймаута (pymodbus переподключится сам);
+                       # цвета — theme.status_colors(), refresh_theme()
+                       # перерисовывает при смене темы;
                        # set_connected(ok, message) + слот set_alive(bool);
                        # кнопка "Device ID…" (активна при подключении) — диалог
                        # идентификации устройства (0x2B/0x0E);
@@ -170,6 +172,9 @@ src/modbus_connector/
                     # кнопка-дублёр "Start polling and record"/"Stop polling"
                     # (управляет панелью, следит за pollStateChanged),
                     # set_bus_enabled(ok) — гейтинг этой кнопки,
+                    # update_theme() — перекраска фона/осей/кроссхейра под
+                    # тему (pg.setConfigOptions + setBackground; вызывается
+                    # из __init__ и MainWindow при переключении темы),
                     # QTimer 500 мс
                     # читает панель (row_tokens/row_label/series, rowsChanged)
                        # колонки таблицы ресайзятся (Interactive),
@@ -178,7 +183,8 @@ src/modbus_connector/
                        # при чтении, hex/ascii не захватываются), clear_series()
                        # и контекстное меню "Clear history" на колонке Trend,
                        # изменившееся при чтении значение подсвечивается
-                       # зелёным на ~2 с (по токену строки, с генерацией),
+                       # зелёным на ~2 с (theme.flash_color(), по токену строки,
+                       # с генерацией),
                        # фильтр по имени/типу/адресу (QLineEdit) и кнопка
                        # "Sort by address" — физическая перестановка строк,
                        # токены и pending-запросы сохраняются,
@@ -226,7 +232,11 @@ src/modbus_connector/
   theme.py        # тема (pyqtdarktheme): THEMES, apply_theme(name) —
                   # system→"auto" (вызывать после QApplication),
                   # current_theme(), is_dark() (system → QStyleHints
-                  # .colorScheme, откат на яркость палитры)
+                  # .colorScheme, откат на яркость палитры);
+                  # темо-зависимые цвета: graph_colors() (bg/fg для
+                  # pyqtgraph), crosshair_color(), flash_color(),
+                  # status_colors(); pyqtgraph НЕ импортируется (ленивая
+                  # загрузка numpy сохранена)
   app.py          # QApplication, apply_theme(из настроек), entry point main()
   __main__.py     # python -m modbus_connector
 tests/

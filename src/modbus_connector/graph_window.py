@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector import theme
 from modbus_connector.registers_panel import RegistersPanel
 
 MODES = ("Follow", "Full", "Manual")
@@ -73,6 +74,9 @@ class GraphWindow(QWidget):
         self._poll_button.clicked.connect(self._on_poll_toggle)
 
         self._plot = pg.PlotWidget()
+        background, foreground = theme.graph_colors()
+        pg.setConfigOptions(background=background, foreground=foreground)
+        self._plot.setBackground(background)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
         self._plot.setLabel("bottom", "time, s (relative)")
         self._plot.addLegend(offset=(4, 4))
@@ -87,7 +91,7 @@ class GraphWindow(QWidget):
         self._plot.viewport().setMouseTracking(True)
         self._crosshair = pg.InfiniteLine(
             angle=90, movable=False,
-            pen=pg.mkPen((170, 170, 170), width=2, style=Qt.PenStyle.DashLine),
+            pen=pg.mkPen(theme.crosshair_color(), width=2, style=Qt.PenStyle.DashLine),
         )
         self._crosshair.setVisible(False)
         self._plot.addItem(self._crosshair, ignoreBounds=True)
@@ -101,6 +105,7 @@ class GraphWindow(QWidget):
         self._mouse_proxy = pg.SignalProxy(
             self._plot.scene().sigMouseMoved, rateLimit=60, slot=self._on_mouse_moved
         )
+        self.update_theme()  # axis/crosshair pens follow the current theme
 
         self._marker_lines: list[pg.InfiniteLine] = []
         self._delta_label = QLabel()
@@ -293,6 +298,20 @@ class GraphWindow(QWidget):
     def set_bus_enabled(self, ok: bool) -> None:
         self._poll_button.setEnabled(ok)
 
+    def update_theme(self) -> None:
+        """Перекрасить открытый график под текущую тему (вызывает MainWindow)."""
+        background, foreground = theme.graph_colors()
+        pg.setConfigOptions(background=background, foreground=foreground)
+        self._plot.setBackground(background)
+        plot_item = self._plot.getPlotItem()
+        for name in ("left", "bottom"):
+            axis = plot_item.getAxis(name)
+            axis.setPen(pg.mkPen(foreground))
+            axis.setTextPen(pg.mkPen(foreground))
+        self._crosshair.setPen(
+            pg.mkPen(theme.crosshair_color(), width=2, style=Qt.PenStyle.DashLine)
+        )
+
     @Slot()
     def _on_poll_toggle(self) -> None:
         if self._panel.is_polling() and self._panel.is_recording():
@@ -409,7 +428,8 @@ class GraphWindow(QWidget):
             return
         self._crosshair.setValue(view_x)
         self._crosshair.setVisible(True)
-        lines = [f'<div style="color: #DDD">t = {view_x:.4g} s</div>']
+        header = "#DDDDDD" if theme.is_dark() else "#333333"
+        lines = [f'<div style="color: {header}">t = {view_x:.4g} s</div>']
         dot_xs, dot_ys, dot_brushes = [], [], []
         for token, curve in self._curves.items():
             color = curve.opts["pen"].color().name()

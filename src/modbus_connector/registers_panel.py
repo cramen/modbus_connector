@@ -9,11 +9,11 @@ from typing import get_args
 from PySide6.QtCore import QPoint, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import (
     QBrush,
-    QColor,
     QKeySequence,
     QPainter,
     QPainterPath,
     QPaintEvent,
+    QPalette,
     QPen,
     QShortcut,
 )
@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector import theme
 from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
 from modbus_connector.datalogger import (
     LOG_FIELDS,
@@ -122,7 +123,8 @@ class SparklineWidget(QWidget):
                 path.lineTo(x, y)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(QPen(QColor(30, 120, 200), 1))
+        # palette-derived: follows a theme switch without extra wiring
+        painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Highlight), 1))
         painter.drawPath(path)
         painter.end()
 
@@ -1166,7 +1168,7 @@ class RegistersPanel(QWidget):
             item.setText(text)
 
     def _flash_value_cell(self, token: int, item: QTableWidgetItem) -> None:
-        item.setBackground(QColor(144, 238, 144))  # light green
+        item.setBackground(theme.flash_color())
         generation = self._flash_generations.get(token, 0) + 1
         self._flash_generations[token] = generation
         QTimer.singleShot(2000, lambda: self._clear_flash(token, generation))
