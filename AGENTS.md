@@ -174,8 +174,9 @@ src/modbus_connector/
                     # кнопка-дублёр "Start polling and record"/"Stop polling"
                     # (управляет панелью, следит за pollStateChanged),
                     # set_bus_enabled(ok) — гейтинг этой кнопки,
-                    # update_theme() — перекраска фона/осей/кроссхейра под
-                    # тему (pg.setConfigOptions + setBackground; вызывается
+                    # update_theme() — перекраска фона/осей/кроссхейра/легенды
+                    # под тему (pg.setConfigOptions + setBackground; у легенды
+                    # label.setText(label.text) — цвет запечён в HTML; вызывается
                     # из __init__ и MainWindow при переключении темы),
                     # QTimer 500 мс
                     # читает панель (row_tokens/row_label/series, rowsChanged)

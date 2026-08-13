@@ -285,16 +285,20 @@ def test_graph_follows_theme(qapp: QApplication) -> None:
 
     panel = _panel()
     window = GraphWindow(panel)
+    legend = window._plot.getPlotItem().legend
+    assert legend is not None
     try:
         theme.apply_theme("light")
         window.update_theme()
         assert pg.getConfigOption("background") == "w"
         assert window._crosshair.pen.color() == theme.crosshair_color()
+        assert legend.labelTextColor().lightness() < 128  # dark text on white
 
         theme.apply_theme("dark")
         window.update_theme()
         assert pg.getConfigOption("background") == "k"
         assert window._crosshair.pen.color() == theme.crosshair_color()
+        assert legend.labelTextColor().lightness() > 128  # light text on black
     finally:
         theme.apply_theme("system")  # theme and pg config are app-global
 
