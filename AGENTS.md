@@ -124,6 +124,10 @@ src/modbus_connector/
                        # чтения тоже), flush по QTimer 1 с; _log_value(index,
                        # values) — числа со scale/offset без единиц, биты 0/1,
                        # multi-value через ";", hex/ascii как есть;
+                       # флаг log на строку (RowDisplaySettings.log, ключ "log"
+                       # в state строки, default True) — чек-лист строк в
+                       # диалоге настроек, выключенные строки пропускаются
+                       # в _log_read;
                        # logging_state()/set_logging_state() — настройки в
                        # session state (как registers_options), без on/off
   datalogger.py     # без Qt: LogSettings (path/format csv|jsonl/fields —
@@ -133,7 +137,9 @@ src/modbus_connector/
                     # файл; JSONL — объект на строку только с включёнными ключами
   datalogger_dialog.py  # LoggingSettingsDialog — файл (+Browse…, подсказка
                         # ~/modbus_log_YYYYMMDD_HHMMSS), формат (синхронизация
-                        # расширения), чекбоксы полей, append/overwrite
+                        # расширения), чекбоксы полей, append/overwrite,
+                        # чек-лист логируемых строк (group box "Rows to log",
+                        # Select all/none, Space/Enter)
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)

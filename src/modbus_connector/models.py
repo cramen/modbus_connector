@@ -76,6 +76,7 @@ class RowDisplaySettings:
     offset: float = 0.0
     unit: str = ""
     order: ByteOrder | None = None  # None = inherit the panel's global order
+    log: bool = True  # include the row when logging values to a file
 
 
 CSV_COLUMNS = [

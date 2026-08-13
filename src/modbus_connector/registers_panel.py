@@ -357,6 +357,7 @@ class RegistersPanel(QWidget):
                     "scale": settings.scale,
                     "offset": settings.offset,
                     "unit": settings.unit,
+                    "log": settings.log,
                 }
             )
         return rows
@@ -417,6 +418,10 @@ class RegistersPanel(QWidget):
             except (AttributeError, KeyError, TypeError, ValueError):
                 continue
             self._add_row(row)
+            # the log flag lives outside RegisterRow: apply it to the new token
+            self._row_display[self._row_token_counter].log = bool(
+                entry.get("log", True)
+            )
         if self._table.rowCount() == 0:
             self._add_row()
 
@@ -1088,6 +1093,9 @@ class RegistersPanel(QWidget):
         )
 
     def _log_read(self, index: int, values: list) -> None:
+        token = self._token_at(index)
+        if not self._row_display.get(token, RowDisplaySettings()).log:
+            return  # the row is excluded in the logging settings
         try:
             address = int(self._text_at(index, COL_ADDRESS), 0)
         except ValueError:
@@ -1238,11 +1246,33 @@ class RegistersPanel(QWidget):
             self.start_logging()
 
     def _edit_logging_settings(self) -> bool:
-        dialog = LoggingSettingsDialog(self._log_settings, self)
+        dialog = LoggingSettingsDialog(self._log_settings, self._log_row_entries(), self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return False
         self._log_settings = dialog.settings()
+        self._apply_log_row_flags(dialog.row_flags())
         return True
+
+    def _log_row_entries(self) -> list[tuple[int, str, bool]]:
+        """(token, label, log) per table row for the logging settings dialog."""
+        entries = []
+        for index in range(self._table.rowCount()):
+            token = self._token_at(index)
+            name = self._text_at(index, COL_NAME)
+            kind = self._table.cellWidget(index, COL_TYPE).currentText()
+            address = self._text_at(index, COL_ADDRESS)
+            label = f"{name} @ {address}" if name else f"{kind}@{address}"
+            unit = self._text_at(index, COL_UNIT_ID)
+            if unit:
+                label += f" (unit {unit})"
+            entries.append(
+                (token, label, self._row_display.get(token, RowDisplaySettings()).log)
+            )
+        return entries
+
+    def _apply_log_row_flags(self, flags: dict[int, bool]) -> None:
+        for token, log in flags.items():
+            self._row_display.setdefault(token, RowDisplaySettings()).log = log
 
     @Slot()
     def _on_logging_settings(self) -> None:

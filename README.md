@@ -275,11 +275,14 @@ The **Log to file** button above the table writes every read value to a file
 while it is on; starting it also starts polling if it wasn't running (with
 history recording if the split button's mode is "and record"). The **⚙**
 button next to it opens the settings: the file (a timestamped name in the
-home directory is suggested), the format and which optional fields —
+home directory is suggested), the format, which optional fields —
 timestamp (wall clock, ISO 8601 with milliseconds), row name, register
-address and register type — accompany the value. Values are machine-friendly:
-decoded numbers with scale/offset but without the unit, multi-value rows
-joined with ";", coils/discrete inputs as 0/1, hex/ascii rows as displayed.
+address and register type — accompany the value, and which table rows get
+logged at all (the "Rows to log" checklist; new rows join logged by default,
+and the per-row choice persists with the session). Values are
+machine-friendly: decoded numbers with scale/offset but without the unit,
+multi-value rows joined with ";", coils/discrete inputs as 0/1, hex/ascii
+rows as displayed.
 
 Formats: **CSV** (one row per read, a header row in new files) and **JSON
 Lines** — one JSON object per line, which streams and appends cleanly.

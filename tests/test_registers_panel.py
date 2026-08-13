@@ -13,17 +13,19 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # A plain try/except is needed: pytest.importorskip re-raises ImportErrors coming
 # from a missing shared library inside an otherwise installed package.
 try:
-    from PySide6.QtCore import Qt  # noqa: E402
+    from PySide6.QtCore import QEvent, Qt  # noqa: E402
     from PySide6.QtWidgets import QApplication, QTableWidget  # noqa: E402
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
-from PySide6.QtGui import QColor  # noqa: E402
+from PySide6.QtGui import QColor, QKeyEvent  # noqa: E402
 
 from modbus_connector.csv_dialogs import (  # noqa: E402
     ExportColumnsDialog,
     ImportMappingDialog,
 )
+from modbus_connector.datalogger import LogSettings  # noqa: E402
+from modbus_connector.datalogger_dialog import LoggingSettingsDialog  # noqa: E402
 from modbus_connector.models import RegisterRow, csv_header  # noqa: E402
 from modbus_connector.registers_panel import (  # noqa: E402
     COL_ADDRESS,
@@ -658,3 +660,94 @@ def test_logging_state_roundtrip(qapp: QApplication, tmp_path: Path) -> None:
     assert fresh.logging_state() == state
     fresh.set_logging_state({"format": "junk", "fields": "oops"})  # tolerated
     assert fresh.logging_state() == state
+
+
+def test_log_flag_state_roundtrip(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 1,
+             "log": False},
+            {"name": "b", "kind": "holding_registers", "address": 1, "count": 1},
+        ]
+    )
+    assert panel._row_display[panel._token_at(0)].log is False
+    assert panel._row_display[panel._token_at(1)].log is True  # missing key → True
+
+    state = panel.state()
+    assert [entry["log"] for entry in state] == [False, True]
+
+    fresh = RegistersPanel(itertools.count(100).__next__)
+    fresh.set_state(state)
+    assert fresh._row_display[fresh._token_at(0)].log is False
+    assert fresh._row_display[fresh._token_at(1)].log is True
+
+
+def test_logging_dialog_row_checklist(qapp: QApplication) -> None:
+    rows = [(1, "temp @ 0", True), (2, "coils@3 (unit 5)", False)]
+    dialog = LoggingSettingsDialog(LogSettings(), rows)
+    list_widget = dialog._rows_list
+    assert list_widget.count() == 2
+    assert list_widget.item(0).text() == "temp @ 0"
+    assert list_widget.item(0).checkState() == Qt.CheckState.Checked
+    assert list_widget.item(1).checkState() == Qt.CheckState.Unchecked
+    assert dialog.row_flags() == {1: True, 2: False}
+
+    dialog._set_all_rows(Qt.CheckState.Unchecked)
+    assert dialog.row_flags() == {1: False, 2: False}
+    dialog._set_all_rows(Qt.CheckState.Checked)
+    assert dialog.row_flags() == {1: True, 2: True}
+
+    list_widget.setCurrentRow(0)  # Space toggles the current item natively
+    event = QKeyEvent(
+        QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier
+    )
+    QApplication.sendEvent(list_widget.viewport(), event)
+    assert dialog.row_flags() == {1: False, 2: True}
+
+
+def test_logging_skips_unchecked_rows(qapp: QApplication, tmp_path: Path) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 1},
+            {"name": "b", "kind": "holding_registers", "address": 1, "count": 1},
+        ]
+    )
+
+    # the dialog reflects the current flags; uncheck row "b" through its API
+    dialog = LoggingSettingsDialog(LogSettings(), panel._log_row_entries(), panel)
+    entries = panel._log_row_entries()
+    assert [label for _, label, _ in entries] == ["a @ 0", "b @ 1"]
+    assert all(checked for _, _, checked in entries)
+    assert dialog._rows_list.count() == 2
+    dialog._rows_list.item(1).setCheckState(Qt.CheckState.Unchecked)
+    panel._apply_log_row_flags(dialog.row_flags())
+
+    path = tmp_path / "values.csv"
+    panel.set_logging_state({"path": str(path), "fields": ["name"]})
+    panel.start_logging()
+    panel.handle_read_finished(_read_row(panel, 0), True, [10], "")
+    panel.handle_read_finished(_read_row(panel, 1), True, [20], "")
+    panel.stop_logging()
+    panel.stop_polling()
+
+    rows = list(csv.reader(path.read_text(encoding="utf-8").splitlines()))
+    assert rows == [["name", "value"], ["a", "10"]]  # "b" excluded
+
+    # "select none" → only the header lands in a fresh file
+    dialog = LoggingSettingsDialog(LogSettings(), panel._log_row_entries(), panel)
+    dialog._set_all_rows(Qt.CheckState.Unchecked)
+    panel._apply_log_row_flags(dialog.row_flags())
+    none_path = tmp_path / "none.csv"
+    panel.set_logging_state({"path": str(none_path), "fields": ["name"]})
+    panel.start_logging()
+    panel.handle_read_finished(_read_row(panel, 0), True, [11], "")
+    panel.stop_logging()
+    panel.stop_polling()
+    assert none_path.read_text(encoding="utf-8").splitlines() == ["name,value"]
+
+    # a row added after the selection defaults to logged
+    panel._add_row(RegisterRow(name="c", kind="holding_registers", address=2))
+    new_token = panel._token_at(panel._table.rowCount() - 1)
+    assert panel._row_display[new_token].log is True
