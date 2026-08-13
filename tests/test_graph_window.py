@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     import pyqtgraph as pg  # noqa: E402
     from PySide6.QtCore import QPoint, Qt  # noqa: E402
+    from PySide6.QtGui import QColor  # noqa: E402
     from PySide6.QtTest import QTest  # noqa: E402
     from PySide6.QtWidgets import QApplication  # noqa: E402
 except ImportError as exc:
@@ -294,5 +295,30 @@ def test_graph_follows_theme(qapp: QApplication) -> None:
         window.update_theme()
         assert pg.getConfigOption("background") == "k"
         assert window._crosshair.pen.color() == theme.crosshair_color()
+    finally:
+        theme.apply_theme("system")  # theme and pg config are app-global
+
+
+def test_curve_colors_follow_theme(qapp: QApplication) -> None:
+    from modbus_connector import theme
+    from modbus_connector.graph_window import LIGHT_CURVE_COLORS, _curve_color
+
+    panel = _panel()
+    window = GraphWindow(panel)
+    curve = window._curves[panel._token_at(0)]
+    try:
+        theme.apply_theme("dark")
+        window.update_theme()
+        dark_color = curve.opts["pen"].color()
+        assert dark_color == _curve_color(0) == pg.intColor(0, hues=9)
+
+        theme.apply_theme("light")
+        window.update_theme()
+        light_color = curve.opts["pen"].color()  # an existing curve is re-colored
+        assert light_color != dark_color
+        assert light_color == _curve_color(0) == QColor(*LIGHT_CURVE_COLORS[0])
+        # tab10-like light palette: no washed-out lime among the hues
+        for rgb in LIGHT_CURVE_COLORS:
+            assert min(rgb) < 150 and sum(rgb) < 600
     finally:
         theme.apply_theme("system")  # theme and pg config are app-global

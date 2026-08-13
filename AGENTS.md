@@ -157,7 +157,9 @@ src/modbus_connector/
                     # MAX_SAMPLES=10000 (~2.7 ч при поллинге 1 Гц)
   graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
                     # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
-                    # rect, маркеры A/B с min/max/avg и Δt (размещение внутри
+                    # rect, цвета кривых по теме (_curve_color: intColor на
+                    # тёмной, tab10-подобный LIGHT_CURVE_COLORS на светлой;
+                    # update_theme перекрашивает существующие кривые), маркеры A/B с min/max/avg и Δt (размещение внутри
                     # видимых данных), hover-кроссхейр (SignalProxy 60 Гц —
                     # отдаёт КОРТЕЖ аргументов сигнала; hover-move без кнопки
                     # требует mouse tracking на view и viewport, оба включены

@@ -3,7 +3,7 @@ import html
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -24,6 +24,26 @@ from modbus_connector.registers_panel import RegistersPanel
 
 MODES = ("Follow", "Full", "Manual")
 MARKER_PENS = (pg.mkPen((60, 180, 75), width=2), pg.mkPen((200, 60, 60), width=2))
+# matplotlib tab10-like hues, darkened where tab10 is too pale on white;
+# the dark theme keeps pyqtgraph's intColor palette (made for dark backgrounds)
+LIGHT_CURVE_COLORS = (
+    (31, 119, 180),
+    (214, 116, 10),
+    (44, 140, 44),
+    (200, 30, 30),
+    (128, 90, 175),
+    (140, 86, 75),
+    (200, 90, 165),
+    (110, 110, 110),
+    (130, 122, 15),
+)
+
+
+def _curve_color(index: int) -> QColor:
+    """Цвет кривой по теме: intColor на тёмной, контрастный набор на светлой."""
+    if theme.is_dark():
+        return pg.intColor(index, hues=len(LIGHT_CURVE_COLORS))
+    return QColor(*LIGHT_CURVE_COLORS[index % len(LIGHT_CURVE_COLORS)])
 
 
 class GraphWindow(QWidget):
@@ -195,7 +215,7 @@ class GraphWindow(QWidget):
             self._remove_curve(token)
 
     def _add_curve(self, token: int) -> None:
-        pen = pg.mkPen(pg.intColor(len(self._curves), hues=9), width=2)
+        pen = pg.mkPen(_curve_color(len(self._curves)), width=2)
         self._curves[token] = self._plot.plot(
             [], [], pen=pen, name=self._panel.row_label(token)
         )
@@ -308,6 +328,10 @@ class GraphWindow(QWidget):
             axis = plot_item.getAxis(name)
             axis.setPen(pg.mkPen(foreground))
             axis.setTextPen(pg.mkPen(foreground))
+        # the legend samples and the crosshair readout follow the pens
+        # (both are read at paint/update time), so no extra work for them
+        for index, curve in enumerate(self._curves.values()):
+            curve.setPen(pg.mkPen(_curve_color(index), width=2))
         self._crosshair.setPen(
             pg.mkPen(theme.crosshair_color(), width=2, style=Qt.PenStyle.DashLine)
         )
