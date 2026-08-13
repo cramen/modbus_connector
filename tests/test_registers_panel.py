@@ -1,4 +1,6 @@
+import csv
 import itertools
+import json
 import os
 from pathlib import Path
 
@@ -554,3 +556,105 @@ def test_poll_ms_state_roundtrip(qapp: QApplication) -> None:
     panel.set_state(state)
     cells = [panel._table.item(i, COL_POLL).text() for i in range(4)]
     assert cells == ["5000", "", "", ""]
+
+
+# --- logging to file ---------------------------------------------------------
+
+
+def test_logging_starts_polling_and_writes_csv(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [{"name": "temp", "kind": "holding_registers", "address": 5, "count": 2,
+          "format": "f32", "scale": 0.1}]
+    )
+    path = tmp_path / "values.csv"
+    panel.set_logging_state({"path": str(path), "format": "csv"})
+
+    panel.start_logging()  # polling was off: logging starts it
+    assert panel.is_logging()
+    assert panel.is_polling() and panel.is_recording()  # default split mode is record
+    assert panel._log_button.isChecked()
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [17163, 52429], "")
+    panel.stop_logging()
+    assert not panel.is_logging()
+    assert panel.is_polling()  # polling keeps running after logging stops
+    panel.stop_polling()
+
+    rows = list(csv.reader(path.read_text(encoding="utf-8").splitlines()))
+    assert rows[0] == ["timestamp", "name", "address", "kind", "value"]
+    timestamp, name, address, kind, value = rows[1]
+    assert "T" in timestamp  # ISO 8601
+    assert (name, address, kind) == ("temp", "5", "holding_registers")
+    assert value == "13.98"  # f32-decoded (139.8), scaled by 0.1, no unit suffix
+
+
+def test_logging_poll_only_mode_starts_without_recording(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.start_polling(False)  # remember the poll-only split mode
+    panel.stop_polling()
+
+    panel.set_logging_state({"path": str(tmp_path / "values.csv")})
+    panel.start_logging()
+    assert panel.is_polling() and not panel.is_recording()
+    panel.stop_logging()
+    panel.stop_polling()
+
+
+def test_logging_jsonl_logs_bits_and_multi_values(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "valve", "kind": "coils", "address": 0, "count": 4},
+            {"name": "pair", "kind": "holding_registers", "address": 10, "count": 2},
+        ]
+    )
+    path = tmp_path / "values.jsonl"
+    panel.set_logging_state(
+        {"path": str(path), "format": "jsonl", "fields": ["name", "address"]}
+    )
+    panel.start_logging()
+    panel.handle_read_finished(_read_row(panel, 0), True, [True, False, True], "")
+    panel.handle_read_finished(_read_row(panel, 1), True, [3, 4], "")
+    panel.stop_logging()
+    panel.stop_polling()
+
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    assert records[0] == {"name": "valve", "address": 0, "value": "1;0;1"}
+    assert records[1] == {"name": "pair", "address": 10, "value": "3;4"}
+
+
+def test_logging_open_error_stays_off(qapp: QApplication, tmp_path: Path) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    lines: list[str] = []
+    panel.logLine.connect(lines.append)
+    panel.set_logging_state({"path": str(tmp_path / "no_such_dir" / "values.csv")})
+
+    panel.start_logging()
+    assert not panel.is_logging()
+    assert not panel.is_polling()  # no reads are needed when there is no file
+    assert not panel._log_button.isChecked()
+    assert any("cannot open" in line for line in lines)
+
+
+def test_logging_state_roundtrip(qapp: QApplication, tmp_path: Path) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_logging_state(
+        {"path": str(tmp_path / "x.jsonl"), "format": "jsonl",
+         "fields": ["kind", "name"], "append": False}
+    )
+    state = panel.logging_state()
+    assert state == {"path": str(tmp_path / "x.jsonl"), "format": "jsonl",
+                     "fields": ["name", "kind"], "append": False}  # canonical order
+
+    fresh = RegistersPanel(itertools.count(100).__next__)
+    fresh.set_logging_state(state)
+    assert fresh.logging_state() == state
+    fresh.set_logging_state({"format": "junk", "fields": "oops"})  # tolerated
+    assert fresh.logging_state() == state

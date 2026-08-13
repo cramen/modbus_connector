@@ -115,6 +115,25 @@ src/modbus_connector/
                        # диалог сопоставления колонок) / export (диалог выбора
                        # и порядка колонок, +колонка value при экспорте,
                        # при импорте пропускается),
+                       # логирование значений в файл: checkable-кнопка
+                       # "Log to file" + кнопка "⚙" (диалог настроек);
+                       # start_logging при выключенном поллинге запускает его
+                       # (start_polling(_record_mode)); старт без пути открывает
+                       # диалог; stop_logging не останавливает поллинг;
+                       # запись — в handle_read_finished при is_open (и ручные
+                       # чтения тоже), flush по QTimer 1 с; _log_value(index,
+                       # values) — числа со scale/offset без единиц, биты 0/1,
+                       # multi-value через ";", hex/ascii как есть;
+                       # logging_state()/set_logging_state() — настройки в
+                       # session state (как registers_options), без on/off
+  datalogger.py     # без Qt: LogSettings (path/format csv|jsonl/fields —
+                    # subset timestamp/name/address/kind, value всегда/
+                    # append), LogSample, DataLogger — open/write/flush/close/
+                    # is_open/rows_written; CSV: заголовок только в новый/пустой
+                    # файл; JSONL — объект на строку только с включёнными ключами
+  datalogger_dialog.py  # LoggingSettingsDialog — файл (+Browse…, подсказка
+                        # ~/modbus_log_YYYYMMDD_HHMMSS), формат (синхронизация
+                        # расширения), чекбоксы полей, append/overwrite
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)
@@ -161,9 +180,11 @@ src/modbus_connector/
   session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
                     # RegistersPanel + LogPanel + ScannerPanel (окно) +
                     # ModbusWorker в QThread, вся проводка сигналов внутри;
-                    # state()/set_state() (connection+registers+scanner,
+                    # state()/set_state() (connection+registers+
+                    # registers_options+logging+scanner,
                     # backward compat со старым плоским форматом),
-                    # shutdown() — корректная остановка worker/потока;
+                    # shutdown() — stop_logging + корректная остановка
+                    # worker/потока;
                     # сигналы statsUpdated(object) и titleChanged(str)
                     # ("New connection" → описание соединения), last_stats()
   main_window.py  # главное окно: QTabWidget с SessionWidget'ами (кнопка "+"
@@ -183,6 +204,7 @@ tests/
                   # фикстура modbus_rtu_server — то же с framer=RTU
   test_models.py  # parse_values/format_values
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
+  test_datalogger.py  # DataLogger: csv/jsonl, subset полей, append/overwrite
   test_registers_panel.py  # offscreen Qt тесты таблицы регистров
   test_session_widget.py   # smoke: state round-trip + shutdown сессии
   test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
@@ -213,7 +235,8 @@ macOS/Windows/Linux: pytest, затем сборка через build.sh/build.b
 ## Соглашения
 
 - Python 3.11+ синтаксис, полная типизация, минимум комментариев, ruff line-length 100.
-- models.py и backend.py — чистый Python без Qt, покрываются тестами без GUI.
+- models.py, backend.py и datalogger.py — чистый Python без Qt, покрываются
+  тестами без GUI.
 - Вся работа с pymodbus — только в backend.py; Qt-код общается с ним через
   сигналы/слоты ModbusWorker.
 - `stop_scan` подключён с `Qt.DirectConnection`: слот должен исполниться в

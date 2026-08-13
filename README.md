@@ -32,6 +32,8 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Live graphs ("Graph…" button, separate window): a trend sparkline per table
   row and a full plot window with multiple series, sliding-window/follow or
   manual zoom, and draggable markers with per-series min/max/avg.
+- Background logging of polled values to a CSV or JSON Lines file ("Log to
+  file" button), with a configurable set of fields.
 - Filter box and one-click "Sort by address" for large tables.
 - Advanced protocol functions: Mask Write Register (0x16), Read/Write Multiple
   Registers (0x17), Read Device Identification (0x2B) and serial-line
@@ -266,6 +268,23 @@ opens the full plot window:
   turns into **Stop polling** while recording is active.
 
 Closing the graph window only hides it; the data stays.
+
+### Logging values to a file
+
+The **Log to file** button above the table writes every read value to a file
+while it is on; starting it also starts polling if it wasn't running (with
+history recording if the split button's mode is "and record"). The **⚙**
+button next to it opens the settings: the file (a timestamped name in the
+home directory is suggested), the format and which optional fields —
+timestamp (wall clock, ISO 8601 with milliseconds), row name, register
+address and register type — accompany the value. Values are machine-friendly:
+decoded numbers with scale/offset but without the unit, multi-value rows
+joined with ";", coils/discrete inputs as 0/1, hex/ascii rows as displayed.
+
+Formats: **CSV** (one row per read, a header row in new files) and **JSON
+Lines** — one JSON object per line, which streams and appends cleanly.
+Appending to an existing file is the default; the settings (not the on/off
+state) persist with the session. Stopping logging leaves polling running.
 
 ### Log panel
 The log panel at the bottom of the main window (toggled with the **Log**

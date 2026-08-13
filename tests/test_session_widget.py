@@ -58,6 +58,19 @@ def test_registers_options_roundtrip(qapp: QApplication) -> None:
     session.shutdown()
 
 
+def test_logging_settings_roundtrip(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state(
+        {"logging": {"path": "/tmp/x.jsonl", "format": "jsonl",
+                     "fields": ["name"], "append": False}}
+    )
+    assert session.state()["logging"] == {"path": "/tmp/x.jsonl", "format": "jsonl",
+                                          "fields": ["name"], "append": False}
+    session.set_state({"registers": []})  # missing key: keep current value
+    assert session.state()["logging"]["format"] == "jsonl"
+    session.shutdown()
+
+
 def test_status_label_never_widens_the_window(qapp: QApplication) -> None:
     session = SessionWidget()
     policy = session.connection_panel._status.sizePolicy()

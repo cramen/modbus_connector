@@ -130,6 +130,7 @@ class SessionWidget(QWidget):
             "connection": self.connection_panel.state(),
             "registers": self.registers_panel.state(),
             "registers_options": self.registers_panel.options_state(),
+            "logging": self.registers_panel.logging_state(),
             "scanner": self.scanner_panel.state(),
         }
 
@@ -145,6 +146,9 @@ class SessionWidget(QWidget):
         options = state.get("registers_options")
         if isinstance(options, dict):
             self.registers_panel.set_options(options)
+        logging = state.get("logging")
+        if isinstance(logging, dict):
+            self.registers_panel.set_logging_state(logging)
         scanner = state.get("scanner")
         if isinstance(scanner, dict):
             self.scanner_panel.set_state(scanner)
@@ -189,6 +193,7 @@ class SessionWidget(QWidget):
         return self._last_stats
 
     def shutdown(self) -> None:
+        self.registers_panel.stop_logging()  # the logger must not outlive the session
         self.registers_panel.stop_polling()
         self._worker.stop_scan()
         QMetaObject.invokeMethod(

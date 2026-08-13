@@ -2,6 +2,7 @@ import csv
 import io
 import time
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import get_args
 
@@ -38,6 +39,14 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
+from modbus_connector.datalogger import (
+    LOG_FIELDS,
+    DataLogger,
+    LogFormat,
+    LogSample,
+    LogSettings,
+)
+from modbus_connector.datalogger_dialog import LoggingSettingsDialog
 from modbus_connector.models import (
     CSV_COLUMNS,
     ByteOrder,
@@ -248,6 +257,22 @@ class RegistersPanel(QWidget):
         csv_menu.addAction("Import table…", self._on_csv_import)
         csv_menu.addAction("Export…", self._on_csv_export)
         csv_button.setMenu(csv_menu)
+
+        self._log_settings = LogSettings()
+        self._logger = DataLogger()
+        self._log_flush_timer = QTimer(self)
+        self._log_flush_timer.setInterval(1000)
+        self._log_flush_timer.timeout.connect(self._logger.flush)
+        self._log_button = QPushButton("Log to file")
+        self._log_button.setCheckable(True)
+        self._log_button.clicked.connect(self._toggle_logging)
+        self._log_settings_button = QToolButton()
+        self._log_settings_button.setText("⚙")
+        self._log_settings_button.setFixedSize(28, 28)
+        self._log_settings_button.setToolTip("Logging settings…")
+        self._log_settings_button.clicked.connect(self._on_logging_settings)
+        self._sync_logging_ui()
+
         self._global_order_combo = QComboBox()
         self._global_order_combo.addItems(ORDERS)
         self._global_order_combo.setToolTip(
@@ -287,6 +312,8 @@ class RegistersPanel(QWidget):
         top.addWidget(self._filter_edit)
         top.addWidget(display_button)
         top.addWidget(csv_button)
+        top.addWidget(self._log_button)
+        top.addWidget(self._log_settings_button)
         top.addStretch(1)
         top.addWidget(QLabel("Order:"))
         top.addWidget(self._global_order_combo)
@@ -340,6 +367,30 @@ class RegistersPanel(QWidget):
     def set_options(self, options: dict) -> None:
         if isinstance(options, dict) and options.get("order") in ORDERS:
             self._global_order_combo.setCurrentText(str(options["order"]))
+
+    def logging_state(self) -> dict:
+        # settings persist; the on/off state is runtime-only
+        return {
+            "path": self._log_settings.path,
+            "format": self._log_settings.format,
+            "fields": [f for f in LOG_FIELDS if f in self._log_settings.fields],
+            "append": self._log_settings.append,
+        }
+
+    def set_logging_state(self, state: dict) -> None:
+        if not isinstance(state, dict):
+            return
+        settings = self._log_settings
+        if state.get("format") in get_args(LogFormat):
+            settings.format = state["format"]
+        if "path" in state:
+            settings.path = str(state["path"])
+        if isinstance(state.get("fields"), list):
+            settings.fields = frozenset(
+                f for f in state["fields"] if f in LOG_FIELDS
+            )
+        if isinstance(state.get("append"), bool):
+            settings.append = state["append"]
 
     def set_state(self, rows: list) -> None:
         while self._table.rowCount():
@@ -1020,6 +1071,37 @@ class RegistersPanel(QWidget):
             return None
         return decoded[0] * settings.scale + settings.offset
 
+    def _log_value(self, index: int, values: list) -> str:
+        """Машиночитаемое значение строки для лога: числа со scale/offset, но
+        без единиц измерения; несколько значений — через «;» в одной ячейке."""
+        kind = self._table.cellWidget(index, COL_TYPE).currentText()
+        if kind not in REGISTER_KINDS:
+            return ";".join("1" if value else "0" for value in values)  # bits
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt in ("hex", "ascii"):
+            return format_register_values(values, fmt)  # raw string as-is
+        settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
+        order = settings.order or self._global_order_combo.currentText()
+        decoded = decode_register_values(values, fmt, order)
+        return ";".join(
+            f"{value * settings.scale + settings.offset:g}" for value in decoded
+        )
+
+    def _log_read(self, index: int, values: list) -> None:
+        try:
+            address = int(self._text_at(index, COL_ADDRESS), 0)
+        except ValueError:
+            address = -1
+        self._logger.write(
+            LogSample(
+                timestamp=datetime.now().isoformat(timespec="milliseconds"),
+                name=self._text_at(index, COL_NAME),
+                address=address,
+                kind=self._table.cellWidget(index, COL_TYPE).currentText(),
+                value=self._log_value(index, values),
+            )
+        )
+
     @Slot(int, bool, list, str)
     def handle_read_finished(self, request_id: int, ok: bool, values: list, error: str) -> None:
         token = self._pending_reads.pop(request_id, None)
@@ -1028,6 +1110,8 @@ class RegistersPanel(QWidget):
         index = self._find_row_by_token(token)
         if index is None:
             return
+        if ok and self._logger.is_open:
+            self._log_read(index, values)
         if ok and self._recording:
             primary = self._primary_value(index, values)
             if primary is not None:
@@ -1110,3 +1194,66 @@ class RegistersPanel(QWidget):
             self._poll_button.setText(
                 "Start polling and record" if self._record_mode else "Start polling"
             )
+
+    # --- logging to file --------------------------------------------------
+
+    def is_logging(self) -> bool:
+        return self._logger.is_open
+
+    def start_logging(self) -> None:
+        if self._logger.is_open:
+            return
+        if not self._log_settings.path and not self._edit_logging_settings():
+            self._sync_logging_ui()  # a cancelled dialog must not leave the button on
+            return
+        try:
+            self._logger.open(self._log_settings)
+        except OSError as exc:
+            self.logLine.emit(f"✗ logging: cannot open {self._log_settings.path}: {exc}")
+            self._sync_logging_ui()
+            return
+        self._log_flush_timer.start()
+        if not self.is_polling():  # logging needs reads: start polling
+            self.start_polling(self._record_mode)  # records per the split mode
+        self.logLine.emit(
+            f"→ logging values to {self._log_settings.path} "
+            f"({self._log_settings.format})"
+        )
+        self._sync_logging_ui()
+
+    def stop_logging(self) -> None:
+        if not self._logger.is_open:
+            return
+        self._log_flush_timer.stop()
+        rows, path = self._logger.rows_written, self._log_settings.path
+        self._logger.close()
+        self.logLine.emit(f"← logging stopped: {rows} rows written to {path}")
+        self._sync_logging_ui()  # polling keeps running on purpose
+
+    @Slot()
+    def _toggle_logging(self) -> None:
+        if self._logger.is_open:
+            self.stop_logging()
+        else:
+            self.start_logging()
+
+    def _edit_logging_settings(self) -> bool:
+        dialog = LoggingSettingsDialog(self._log_settings, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+        self._log_settings = dialog.settings()
+        return True
+
+    @Slot()
+    def _on_logging_settings(self) -> None:
+        self._edit_logging_settings()  # applies to the next logging run
+
+    def _sync_logging_ui(self) -> None:
+        is_open = self._logger.is_open
+        self._log_button.setChecked(is_open)
+        self._log_button.setToolTip(
+            f"Logging to {self._log_settings.path} — click to stop"
+            if is_open
+            else "Log read values to a file (CSV or JSON Lines)"
+        )
+        self._log_settings_button.setEnabled(not is_open)
