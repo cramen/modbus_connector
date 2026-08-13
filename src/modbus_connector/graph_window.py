@@ -37,6 +37,8 @@ class GraphWindow(QWidget):
         self._curves: dict[int, pg.PlotDataItem] = {}
         self._origin: float | None = None
         self._updating_range = False
+        self._markers_need_placement = False
+        self._view_ranged = False  # a refresh has ranged the view to the data
 
         self._rows_list = QListWidget()
         self._rows_list.itemChanged.connect(self._on_row_toggled)
@@ -186,13 +188,17 @@ class GraphWindow(QWidget):
             now = latest - self._origin
             if mode == "Follow":
                 self._set_range(now - self._window_spin.value(), now)
+                self._view_ranged = True
             elif mode == "Full":
                 self._updating_range = True
                 try:
                     self._plot.autoRange()
                 finally:
                     self._updating_range = False
+                self._view_ranged = True
         if self._marker_lines:
+            if self._markers_need_placement:
+                self._place_markers()
             self._update_stats()
 
     def _set_range(self, t0: float, t1: float) -> None:
@@ -236,19 +242,41 @@ class GraphWindow(QWidget):
 
     # --- markers ----------------------------------------------------------
 
+    def _data_extent(self) -> tuple[float, float] | None:
+        """Относительный диапазон данных по всем кривым; None — данных нет."""
+        extents = []
+        for token in self._curves:
+            series = self._panel.series(token)
+            if series is None:
+                continue
+            times, _ = series.points()
+            if times:
+                extents.append((times[0], times[-1]))
+        if not extents:
+            return None
+        if self._origin is None:
+            self._origin = min(start for start, _ in extents)
+        return (
+            min(start for start, _ in extents) - self._origin,
+            max(end for _, end in extents) - self._origin,
+        )
+
     @Slot(bool)
     def _toggle_markers(self, on: bool) -> None:
         if on and not self._marker_lines:
-            (x0, x1), _ = self._viewbox.viewRange()
-            span = x1 - x0 or 1.0
-            for i, pen in enumerate(MARKER_PENS):
+            for pen in MARKER_PENS:
                 line = pg.InfiniteLine(
-                    pos=x0 + span * (i + 1) / 3, angle=90, movable=True, pen=pen
+                    pos=0, angle=90, movable=True, pen=pen,
+                    hoverPen=pg.mkPen(pen.color(), width=3),
                 )
                 line.setZValue(10)
                 line.sigPositionChangeFinished.connect(self._update_stats)
                 self._plot.addItem(line)
                 self._marker_lines.append(line)
+            # place inside the actual data range, not the default 0..1 view;
+            # with no data yet the first refresh that sees data places them
+            self._markers_need_placement = True
+            self._place_markers()
             self._stats_box.show()
             self._update_stats()
         elif not on and self._marker_lines:
@@ -257,6 +285,26 @@ class GraphWindow(QWidget):
             self._marker_lines.clear()
             self._stats_box.hide()
 
+    def _place_markers(self) -> None:
+        extent = self._data_extent()
+        if extent is None:
+            return
+        lo, hi = extent
+        if self._view_ranged:
+            # the view has been data-ranged: land inside what the user sees
+            (vx0, vx1), _ = self._viewbox.viewRange()
+            lo, hi = max(lo, vx0), min(hi, vx1)
+            if lo >= hi:
+                return  # view is off the data; retry on the next refresh
+        span = hi - lo or 1.0
+        self._marker_lines[0].setValue(lo + span / 3)
+        self._marker_lines[1].setValue(lo + 2 * span / 3)
+        # provisional extent placement in Follow/Full is refined to the visible
+        # range on the next refresh; in Manual the extent placement is final
+        self._markers_need_placement = (
+            not self._view_ranged and self._mode_combo.currentText() != "Manual"
+        )
+
     @Slot()
     def _update_stats(self) -> None:
         if not self._marker_lines or self._origin is None:
@@ -264,7 +312,7 @@ class GraphWindow(QWidget):
         a = self._marker_lines[0].value() + self._origin
         b = self._marker_lines[1].value() + self._origin
         t0, t1 = min(a, b), max(a, b)
-        self._delta_label.setText(f"Δt = {t1 - t0:g} s")
+        self._delta_label.setText(f"Δt = {t1 - t0:.4g} s")
         rows = [
             (token, series.stats(t0, t1))
             for token in self._curves

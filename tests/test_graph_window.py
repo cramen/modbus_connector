@@ -104,3 +104,30 @@ def test_user_zoom_switches_to_manual(qapp: QApplication) -> None:
     assert window._mode_combo.currentText() == "Follow"
     window._viewbox.setXRange(0, 5, padding=0)  # user zoom: no guard
     assert window._mode_combo.currentText() == "Manual"
+
+
+def test_markers_land_on_data_when_toggled_before_first_refresh(
+    qapp: QApplication,
+) -> None:
+    panel = _panel()
+    window = GraphWindow(panel)
+    for index in range(2):
+        series = panel.series(panel._token_at(index))
+        assert series is not None
+        for i in range(240):
+            series.append(float(i), float(index * 10 + i % 5))
+
+    window._toggle_markers(True)  # the bug order: before any refresh
+    window._refresh()
+
+    a, b = [line.value() for line in window._marker_lines]
+    assert 0 < a < b <= 239  # inside the data range, not the default 0..1 view
+    (vx0, vx1), _ = window._viewbox.viewRange()
+    assert vx0 <= a < b <= vx1  # and visible in the Follow window
+    assert window._stats_table.item(0, 1).text() != "—"
+    assert window._stats_table.item(1, 1).text() != "—"
+
+    # a second refresh must not override user placement
+    window._marker_lines[0].setValue(vx0 + 5)
+    window._refresh()
+    assert window._marker_lines[0].value() == vx0 + 5
