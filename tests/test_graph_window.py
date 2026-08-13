@@ -9,7 +9,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # skip the whole module there — it still runs on macOS/Windows CI and dev machines.
 try:
     import pyqtgraph  # noqa: E402,F401
-    from PySide6.QtCore import Qt  # noqa: E402
+    from PySide6.QtCore import QPoint, Qt  # noqa: E402
+    from PySide6.QtTest import QTest  # noqa: E402
     from PySide6.QtWidgets import QApplication  # noqa: E402
 except ImportError as exc:
     pytest.skip(f"Qt/pyqtgraph not available: {exc}", allow_module_level=True)
@@ -218,3 +219,31 @@ def test_crosshair_readout_snaps_to_nearest_sample(qapp: QApplication) -> None:
     window._update_crosshair(None)  # the cursor left the plot area
     assert not window._crosshair.isVisible()
     assert not window._readout.isVisible()
+
+
+def test_crosshair_follows_real_mouse_moves(qapp: QApplication) -> None:
+    # regression for the macOS hover bug: hover moves without a pressed button
+    # only reach the handler with mouse tracking enabled, and SignalProxy
+    # delivers the signal's arguments as a TUPLE the handler must unpack —
+    # both broke the event path while _update_crosshair itself worked
+    panel = _panel()
+    window = GraphWindow(panel)
+    series = panel.series(panel._token_at(0))
+    assert series is not None
+    for i in range(50):
+        series.append(1000.0 + i, float(i))
+    window.show()
+    window._refresh()
+    assert window._plot.hasMouseTracking()
+    assert window._plot.viewport().hasMouseTracking()
+
+    viewport = window._plot.viewport()
+    center = QPoint(viewport.width() // 2, viewport.height() // 2)
+    QTest.mouseMove(viewport, center)
+    QTest.mouseMove(viewport, QPoint(center.x() + 3, center.y()))
+    qapp.processEvents()  # SignalProxy rate-limits through a QTimer flush
+    assert window._crosshair.isVisible()  # the event → proxy → handler chain works
+    assert "temp:" in window._readout.textItem.toPlainText()
+    (vx0, vx1), _ = window._viewbox.viewRange()
+    assert vx0 <= window._crosshair.value() <= vx1
+    window.hide()

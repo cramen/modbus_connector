@@ -81,9 +81,13 @@ class GraphWindow(QWidget):
         self._viewbox = viewbox
 
         # hover crosshair: vertical hair + per-series readout at the cursor
+        # (hover moves without a pressed button need mouse tracking on the
+        # view and its viewport — GraphicsView enables it, we make it explicit)
+        self._plot.setMouseTracking(True)
+        self._plot.viewport().setMouseTracking(True)
         self._crosshair = pg.InfiniteLine(
             angle=90, movable=False,
-            pen=pg.mkPen((170, 170, 170), width=1, style=Qt.PenStyle.DashLine),
+            pen=pg.mkPen((170, 170, 170), width=2, style=Qt.PenStyle.DashLine),
         )
         self._crosshair.setVisible(False)
         self._plot.addItem(self._crosshair, ignoreBounds=True)
@@ -389,9 +393,10 @@ class GraphWindow(QWidget):
 
     # --- hover crosshair ----------------------------------------------------
 
-    def _on_mouse_moved(self, pos: object) -> None:
-        if self._viewbox.sceneBoundingRect().contains(pos):  # type: ignore[arg-type]
-            self._update_crosshair(self._viewbox.mapSceneToView(pos).x())  # type: ignore[arg-type]
+    def _on_mouse_moved(self, args: tuple) -> None:
+        pos = args[0]  # SignalProxy delivers the signal's arguments as a tuple
+        if self._viewbox.sceneBoundingRect().contains(pos):
+            self._update_crosshair(self._viewbox.mapSceneToView(pos).x())
         else:
             self._update_crosshair(None)  # left the plot area: hide
 

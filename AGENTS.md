@@ -156,8 +156,11 @@ src/modbus_connector/
   graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
                     # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
                     # rect, маркеры A/B с min/max/avg и Δt (размещение внутри
-                    # видимых данных), hover-кроссхейр (SignalProxy 60 Гц →
-                    # _update_crosshair(view_x): серая пунктирная вертикаль,
+                    # видимых данных), hover-кроссхейр (SignalProxy 60 Гц —
+                    # отдаёт КОРТЕЖ аргументов сигнала; hover-move без кнопки
+                    # требует mouse tracking на view и viewport, оба включены
+                    # явно → _update_crosshair(view_x): серая пунктирная
+                    # вертикаль 2 px,
                     # TextItem справа сверху со значениями видимых рядов —
                     # ближайший отсчёт через np.searchsorted, «—» вне диапазона,
                     # точки на кривых; скрывается вне области графика), Clear — сброс истории и оси времени,
