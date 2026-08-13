@@ -49,9 +49,15 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 
 ## Screenshots
 
-Main window — two connection tabs, register table with read values, log:
+Main window — two connection tabs, register table with read values and
+per-row trend sparklines, log:
 
 ![Main window](docs/screenshots/main_window.png)
+
+Live graph — multiple series in a follow window, zoom and draggable markers
+with per-series min/max/avg (the "Graph…" button in the connection panel):
+
+![Live graph](docs/screenshots/graph_window.png)
 
 Per-row display settings — Scale/Offset/Unit and a byte-order override per
 register row (the "Display…" button above the table):
