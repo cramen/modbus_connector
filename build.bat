@@ -17,6 +17,7 @@ if errorlevel 1 exit /b 1
     --noconfirm --clean ^
     --windowed ^
     --name ModbusConnector ^
+    --icon assets\icon.ico ^
     --paths src ^
     src\modbus_connector\__main__.py
 if errorlevel 1 exit /b 1

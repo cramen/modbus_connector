@@ -1,5 +1,7 @@
 # modbus_connector
 
+<img src="assets/icon.png" width="96" align="right" alt="Иконка Modbus Connector">
+
 [English version: README.md](README.md)
 
 **[Скачать готовые сборки для macOS / Windows / Linux → Releases](https://github.com/cramen/modbus_connector/releases)**

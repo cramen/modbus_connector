@@ -275,6 +275,8 @@ ruff check .              # линт
 modbus-connector          # запуск GUI (или python -m modbus_connector)
 ./build.sh                # сборка standalone-приложения PyInstaller'ом в dist/
                           # (macOS: ModbusConnector.app + .dmg; extra `build` в pyproject)
+                          # иконка: assets/icon.icns (macOS) / icon.ico (Windows) / icon.png (Linux),
+                          # источник — assets/icon.png (генерируется скриптом, см. git history)
 build.bat                 # то же под Windows (cmd): dist\ModbusConnector\ModbusConnector.exe
 ```
 

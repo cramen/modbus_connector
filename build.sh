@@ -12,11 +12,17 @@ if [ ! -x "$PY" ]; then
 fi
 
 "$PY" -m pip install -q -e ".[build]"
+ICON=assets/icon.png
+if [ "$(uname)" = "Darwin" ]; then
+    ICON=assets/icon.icns
+fi
+
 "$PY" -m PyInstaller \
     --noconfirm --clean \
     --windowed \
     --name ModbusConnector \
     --osx-bundle-identifier com.cramen.modbusconnector \
+    --icon "$ICON" \
     --paths src \
     src/modbus_connector/__main__.py
 
