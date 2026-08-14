@@ -123,3 +123,7 @@ def test_bus_controls_follow_connection(qapp: QApplication, tmp_path) -> None:
     assert not scanner._start_button.isEnabled()
     assert not graph._poll_button.isEnabled()
     session.shutdown()
+    # destroy the widget tree (it holds a GraphWindow) so no dangling wrapper
+    # survives into later palette/layout passes — see tests/test_graph_window
+    session.deleteLater()
+    qapp.processEvents()

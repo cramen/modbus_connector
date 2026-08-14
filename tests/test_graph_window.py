@@ -1,5 +1,6 @@
 import itertools
 import os
+from collections.abc import Iterator
 
 import pytest
 
@@ -24,6 +25,19 @@ from modbus_connector.registers_panel import RegistersPanel  # noqa: E402
 @pytest.fixture(scope="module")
 def qapp() -> QApplication:
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def _destroy_graph_windows(qapp: QApplication) -> Iterator[None]:
+    yield
+    # tests never close their windows; a GraphWindow whose Python wrapper and
+    # C++ object die in the wrong order leaves a dangling LabelItem that
+    # crashes later palette/layout passes (surfaced on Windows CI)
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, GraphWindow):
+            widget.close()
+            widget.deleteLater()
+    qapp.processEvents()
 
 
 def _panel() -> RegistersPanel:
@@ -242,7 +256,10 @@ def test_crosshair_follows_real_mouse_moves(qapp: QApplication) -> None:
     center = QPoint(viewport.width() // 2, viewport.height() // 2)
     QTest.mouseMove(viewport, center)
     QTest.mouseMove(viewport, QPoint(center.x() + 3, center.y()))
-    qapp.processEvents()  # SignalProxy rate-limits through a QTimer flush
+    # SignalProxy rate-limits through a QTimer: real time must pass for the
+    # flush to be due (a bare processEvents may run too early, e.g. Windows)
+    QTest.qWait(200)
+    qapp.processEvents()
     assert window._crosshair.isVisible()  # the event → proxy → handler chain works
     assert "temp:" in window._readout.textItem.toPlainText()
     (vx0, vx1), _ = window._viewbox.viewRange()
