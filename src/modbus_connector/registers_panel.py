@@ -225,15 +225,18 @@ class RegistersPanel(QWidget):
         read_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         read_shortcut.activated.connect(self._read_current_row)
         # quick value actions on the current row (same table context menu)
-        for key, slot in (
-            ("Ctrl+C", self._copy_current_value),
-            ("Ctrl+0", lambda: self._write_constant_to_current_row(0)),
-            ("Ctrl+1", lambda: self._write_constant_to_current_row(1)),
-            ("Ctrl++", lambda: self._step_current_row(1)),
-            ("Ctrl+-", lambda: self._step_current_row(-1)),
-            ("Ctrl+T", self._toggle_current_row),
+        for keys, slot in (
+            (("Ctrl+C",), self._copy_current_value),
+            (("Ctrl+0",), lambda: self._write_constant_to_current_row(0)),
+            (("Ctrl+1",), lambda: self._write_constant_to_current_row(1)),
+            # "+" needs Shift on the main keyboard, where "Ctrl++" never
+            # matches; "Ctrl+=" is what people press, "Ctrl++" is the numpad
+            (("Ctrl+=", "Ctrl++"), lambda: self._step_current_row(1)),
+            (("Ctrl+-",), lambda: self._step_current_row(-1)),
+            (("Ctrl+T",), self._toggle_current_row),
         ):
-            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut = QShortcut(self)
+            shortcut.setKeys([QKeySequence(key) for key in keys])
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(slot)
 
@@ -950,7 +953,7 @@ class RegistersPanel(QWidget):
             ("Copy value", "Ctrl+C", self._copy_current_value),
             ("Write 0", "Ctrl+0", lambda: self._write_constant_to_current_row(0)),
             ("Write 1", "Ctrl+1", lambda: self._write_constant_to_current_row(1)),
-            ("Increment", "Ctrl++", lambda: self._step_current_row(1)),
+            ("Increment", "Ctrl+=", lambda: self._step_current_row(1)),
             ("Decrement", "Ctrl+-", lambda: self._step_current_row(-1)),
             ("Toggle", "Ctrl+T", self._toggle_current_row),
         ):

@@ -952,10 +952,14 @@ def test_shortcuts_fire_and_arrows_still_navigate(qapp: QApplication) -> None:
     panel._table.setCurrentCell(0, COL_NAME)
     qapp.processEvents()  # let the focus settle or the shortcut map sees nothing
 
+    panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
+    QTest.keyClick(panel._table, Qt.Key.Key_Equal, Qt.KeyboardModifier.ControlModifier)
+    assert writes[-1][3] == [6]  # Ctrl+= increments ("Ctrl++" never matches =)
+
     QTest.keyClick(panel._table, Qt.Key.Key_0, Qt.KeyboardModifier.ControlModifier)
     assert writes[-1][3] == [0]  # Ctrl+0 wrote to the current row
 
     QTest.keyClick(panel._table, Qt.Key.Key_Down)  # plain arrows: navigation
     assert panel._table.currentRow() == 1
-    assert len(writes) == 1  # no stray action fired
+    assert len(writes) == 2  # no stray action fired
     panel.hide()

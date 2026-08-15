@@ -197,7 +197,8 @@ src/modbus_connector/
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
                        # текущей строки, удаление строки — иконка-крестик,
                        # быстрые действия над текущей строкой (Ctrl+C копия
-                       # значения, Ctrl+0/1 запись 0/1, Ctrl+± шаг по
+                       # значения, Ctrl+0/1 запись 0/1, Ctrl+= (и Ctrl++ на
+                       # нампаде) / Ctrl+- шаг по
                        # последнему RAW-значению (_last_values по токену,
                        # clamp 0..0xFFFF / 0..1 для coils, молча), Ctrl+T
                        # toggle; coils пишутся bool, input/discrete —
