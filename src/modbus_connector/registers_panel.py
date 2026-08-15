@@ -478,7 +478,8 @@ class RegistersPanel(QWidget):
     def add_rows(self, rows: list) -> None:
         """Добавить строки из сканера адресов (сигнал rowsAddRequested).
 
-        Дубли (тот же kind+address+unit_id) пропускаются со строкой в лог."""
+        Дубли (тот же kind+address, независимо от unit id) пропускаются
+        со строкой в лог."""
         existing = set()
         for index in range(self._table.rowCount()):
             try:
@@ -486,11 +487,7 @@ class RegistersPanel(QWidget):
             except ValueError:
                 continue
             existing.add(
-                (
-                    self._table.cellWidget(index, COL_TYPE).currentText(),
-                    address,
-                    _parse_unit_id(self._text_at(index, COL_UNIT_ID)),
-                )
+                (self._table.cellWidget(index, COL_TYPE).currentText(), address)
             )
         added = skipped = 0
         for entry in rows:
@@ -508,7 +505,7 @@ class RegistersPanel(QWidget):
                 or (unit_id is not None and not 1 <= unit_id <= 247)
             ):
                 continue
-            key = (kind, address, unit_id)
+            key = (kind, address)
             if key in existing:
                 skipped += 1
                 continue

@@ -216,7 +216,7 @@ src/modbus_connector/
                        # кнопка "Add selected to table" — найденные адреса
                        # строками в таблицу (чек-лист, по умолчанию все
                        # отмечены, All/None; rowsAddRequested(list[dict]),
-                       # дубли kind+address+unit_id пропускает add_rows);
+                       # дубли kind+address пропускает add_rows);
                        # кнопка "Device ID…" — идентификация выбранного unit
                        # (deviceIdRequested(id, unit), немодальный диалог);
                        # state()/set_state() — диапазон, probes и параметры

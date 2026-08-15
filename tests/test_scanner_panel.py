@@ -109,7 +109,7 @@ def test_add_rows_skips_duplicates(qapp: QApplication) -> None:
     registers = RegistersPanel(itertools.count(1).__next__)
     registers.set_state(
         [{"name": "x", "kind": "holding_registers", "address": 5, "count": 1,
-          "unit_id": "3"}]
+          "unit_id": "9"}]  # a different unit id: still a duplicate (kind+address)
     )
     lines: list[str] = []
     registers.logLine.connect(lines.append)
@@ -117,13 +117,13 @@ def test_add_rows_skips_duplicates(qapp: QApplication) -> None:
     scanner = ScannerPanel()
     scanner.rowsAddRequested.connect(registers.add_rows)
     scanner.set_bus_enabled(True)
-    _scan_addresses(scanner, [5, 6, 7])  # 5 is already in the table
+    _scan_addresses(scanner, [5, 6, 7])  # 5 is already in the table (unit 9)
     scanner._add_rows_button.click()
 
     assert registers._table.rowCount() == 3  # 6 and 7 added, 5 skipped
     state = registers.state()
     assert [entry["address"] for entry in state] == [5, 6, 7]
-    assert [entry["unit_id"] for entry in state] == ["3", "3", "3"]
+    assert [entry["unit_id"] for entry in state] == ["9", "3", "3"]
     assert [entry["kind"] for entry in state] == ["holding_registers"] * 3
     assert any("skipped 1 duplicates" in line for line in lines)
 
