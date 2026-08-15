@@ -2,7 +2,7 @@
 
 import qdarktheme
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QGuiApplication
+from PySide6.QtGui import QColor, QGuiApplication, QPalette
 
 THEMES = ("system", "light", "dark")
 _QDARKTHEME = {"system": "auto", "light": "light", "dark": "dark"}
@@ -46,6 +46,14 @@ def crosshair_color() -> QColor:
 def flash_color() -> QColor:
     """Подсветка изменившейся при чтении ячейки Value."""
     return QColor(45, 95, 50) if is_dark() else QColor(144, 238, 144)
+
+
+def sparkline_color() -> QColor:
+    """Линия спарклайна в колонке Trend: Highlight qdarktheme (#308cc6) на
+    тёмном фоне ячейки почти не виден — на тёмной теме светлый синий."""
+    if is_dark():
+        return QColor(0x7A, 0xA2, 0xF7)
+    return QGuiApplication.palette().color(QPalette.ColorRole.Highlight)
 
 
 def status_colors() -> dict[str, str]:

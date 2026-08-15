@@ -78,11 +78,14 @@ def test_view_menu_actions_apply_theme(qapp: QApplication) -> None:
 
 
 def test_theme_aware_colors(qapp: QApplication) -> None:
+    from PySide6.QtGui import QPalette
+
     theme.apply_theme("dark")
     assert theme.graph_colors() == ("k", "d")
     dark_flash = theme.flash_color()
     dark_status = theme.status_colors()
     dark_hair = theme.crosshair_color()
+    assert theme.sparkline_color().lightness() > 150  # visible on dark cells
 
     theme.apply_theme("light")
     assert theme.graph_colors() == ("w", "k")
@@ -90,6 +93,8 @@ def test_theme_aware_colors(qapp: QApplication) -> None:
     assert theme.status_colors() != dark_status
     assert theme.status_colors()["ok"] == "green"
     assert theme.crosshair_color() != dark_hair  # gray hair: darker on light
+    # the light sparkline keeps the palette Highlight it always used
+    assert theme.sparkline_color() == qapp.palette().color(QPalette.ColorRole.Highlight)
 
 
 def test_sparkline_paints_in_both_themes(qapp: QApplication) -> None:
@@ -106,4 +111,4 @@ def test_sparkline_paints_in_both_themes(qapp: QApplication) -> None:
     for name in ("dark", "light"):
         theme.apply_theme(name)
         panel._sparklines[token].refresh()
-        panel._sparklines[token].grab()  # palette-derived pen: must not crash
+        panel._sparklines[token].grab()  # theme.sparkline_color(): must not crash

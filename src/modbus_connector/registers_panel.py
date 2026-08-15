@@ -14,7 +14,6 @@ from PySide6.QtGui import (
     QPainter,
     QPainterPath,
     QPaintEvent,
-    QPalette,
     QPen,
     QShortcut,
 )
@@ -124,8 +123,7 @@ class SparklineWidget(QWidget):
                 path.lineTo(x, y)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        # palette-derived: follows a theme switch without extra wiring
-        painter.setPen(QPen(self.palette().color(QPalette.ColorRole.Highlight), 1))
+        painter.setPen(QPen(theme.sparkline_color(), 1))
         painter.drawPath(path)
         painter.end()
 

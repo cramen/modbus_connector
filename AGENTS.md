@@ -247,6 +247,8 @@ src/modbus_connector/
                   # .colorScheme, откат на яркость палитры);
                   # темо-зависимые цвета: graph_colors() (bg/fg для
                   # pyqtgraph), crosshair_color(), flash_color(),
+                  # sparkline_color() (тёмная — светло-синяя #7aa2f7, светлая —
+                  # palette Highlight),
                   # status_colors(); pyqtgraph НЕ импортируется (ленивая
                   # загрузка numpy сохранена)
   app.py          # QApplication, apply_theme(из настроек), entry point main()
