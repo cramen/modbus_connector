@@ -1000,3 +1000,12 @@ def test_context_menu_shortcut_hints_enabled(qapp: QApplication) -> None:
     assert not QApplication.testAttribute(
         Qt.ApplicationAttribute.AA_DontShowShortcutsInContextMenus
     )
+
+
+def test_combo_popups_fit_their_items(qapp: QApplication) -> None:
+    # stylesheet themes size the popup to the closed combo, clipping long
+    # items; fit_combo_popup stretches it to the widest item instead
+    panel = RegistersPanel(itertools.count(1).__next__)
+    combo = panel._table.cellWidget(0, COL_TYPE)
+    view = combo.view()
+    assert view.minimumWidth() >= view.sizeHintForColumn(0) > 0

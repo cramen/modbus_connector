@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.models import DEFAULT_SCAN_PROBES, RegisterKind, ScanProbe
+from modbus_connector.theme import fit_combo_popup
 
 KINDS = list(get_args(RegisterKind))
 
@@ -62,6 +63,7 @@ class ScannerPanel(QWidget):
         self._addr_unit = QSpinBox(minimum=1, maximum=247, value=1)
         self._addr_kind = QComboBox()
         self._addr_kind.addItems(KINDS)
+        fit_combo_popup(self._addr_kind)
         self._addr_from = QSpinBox(minimum=0, maximum=65535, value=0)
         self._addr_to = QSpinBox(minimum=0, maximum=65535, value=99)
         self._addr_start_button = QPushButton("Start")
@@ -119,6 +121,7 @@ class ScannerPanel(QWidget):
 
         type_combo = QComboBox()
         type_combo.addItems(KINDS)
+        fit_combo_popup(type_combo)
         type_combo.setCurrentText(probe.kind)
         self._probes_table.setCellWidget(index, COL_TYPE, type_combo)
         # plain text items (dec or 0x-hex), keyboard-friendly like the main table

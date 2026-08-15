@@ -3,6 +3,7 @@
 import qdarktheme
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
+from PySide6.QtWidgets import QComboBox
 
 THEMES = ("system", "light", "dark")
 _QDARKTHEME = {"system": "auto", "light": "light", "dark": "dark"}
@@ -61,3 +62,11 @@ def status_colors() -> dict[str, str]:
     if is_dark():
         return {"off": "#8a8a8a", "ok": "#6fcf6f", "idle": "#e0a050"}
     return {"off": "gray", "ok": "green", "idle": "orange"}
+
+
+def fit_combo_popup(combo: QComboBox) -> None:
+    """Растянуть попап комбобокса по содержимому: со stylesheet-темой попап
+    наследует ширину закрытого комбо и длинные пункты обрезаются справа
+    (нативный стиль macOS растягивал попап сам). Вызывать после addItems."""
+    view = combo.view()
+    view.setMinimumWidth(view.sizeHintForColumn(0))

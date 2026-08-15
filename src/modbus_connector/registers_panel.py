@@ -297,6 +297,7 @@ class RegistersPanel(QWidget):
 
         self._global_order_combo = QComboBox()
         self._global_order_combo.addItems(ORDERS)
+        theme.fit_combo_popup(self._global_order_combo)
         self._global_order_combo.setToolTip(
             "Default byte order for 32/64-bit formats "
             "(rows without an explicit order inherit it)"
@@ -488,6 +489,7 @@ class RegistersPanel(QWidget):
 
         type_combo = QComboBox()
         type_combo.addItems(KINDS)
+        theme.fit_combo_popup(type_combo)
         type_combo.setCurrentText(row.kind)
         type_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self._table.setCellWidget(index, COL_TYPE, type_combo)
@@ -508,6 +510,7 @@ class RegistersPanel(QWidget):
 
         format_combo = QComboBox()
         format_combo.addItems(FORMATS)
+        theme.fit_combo_popup(format_combo)
         format_combo.setCurrentText(row.format)
         format_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         format_combo.setToolTip("Display format (registers only; coils/discrete show 0/1)")
@@ -725,6 +728,7 @@ class RegistersPanel(QWidget):
             table.setItem(row_index, 4, QTableWidgetItem(settings.unit))
             order_combo = QComboBox()
             order_combo.addItems(["default", *ORDERS])
+            theme.fit_combo_popup(order_combo)
             order_combo.setCurrentText(settings.order or "default")
             order_combo.currentTextChanged.connect(
                 lambda text, t=token: self._set_row_order(t, text)

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.datalogger import LOG_FIELDS, LogFormat, LogSettings
+from modbus_connector.theme import fit_combo_popup
 
 FORMAT_LABELS: dict[LogFormat, str] = {"csv": "CSV", "jsonl": "JSON Lines"}
 FORMAT_EXTENSIONS: dict[LogFormat, str] = {"csv": ".csv", "jsonl": ".jsonl"}
@@ -62,6 +63,7 @@ class LoggingSettingsDialog(QDialog):
 
         self._format_combo = QComboBox()
         self._format_combo.addItems(list(FORMAT_LABELS.values()))
+        fit_combo_popup(self._format_combo)
         self._format_combo.setCurrentText(FORMAT_LABELS[settings.format])
         self._format_combo.currentTextChanged.connect(self._on_format_changed)
 

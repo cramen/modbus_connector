@@ -249,7 +249,10 @@ src/modbus_connector/
                   # pyqtgraph), crosshair_color(), flash_color(),
                   # sparkline_color() (тёмная — светло-синяя #7aa2f7, светлая —
                   # palette Highlight),
-                  # status_colors(); pyqtgraph НЕ импортируется (ленивая
+                  # status_colors(); fit_combo_popup(combo) — попап комбобокса
+                  # по ширине содержимого (stylesheet-тема иначе обрезает
+                  # длинные пункты), вызывается после addItems на всех комбо;
+                  # pyqtgraph НЕ импортируется (ленивая
                   # загрузка numpy сохранена)
   app.py          # QApplication, configure_qt() (контекстные меню показывают
                   # хоткеи и на macOS — AA_DontShowShortcutsInContextMenus

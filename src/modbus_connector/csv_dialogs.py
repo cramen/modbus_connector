@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.models import CSV_COLUMNS, guess_column_mapping
+from modbus_connector.theme import fit_combo_popup
 
 EXPORTABLE_COLUMNS = [*CSV_COLUMNS, "value"]
 ESSENTIAL_FIELDS = ("name", "kind", "address")
@@ -129,6 +130,7 @@ class ImportMappingDialog(QDialog):
             self._table.setItem(row, 0, item)
             combo = QComboBox()
             combo.addItems([SKIP, *CSV_COLUMNS])
+            fit_combo_popup(combo)
             combo.setCurrentText(guessed.get(column, SKIP))
             self._table.setCellWidget(row, 1, combo)
         self._table.resizeColumnsToContents()

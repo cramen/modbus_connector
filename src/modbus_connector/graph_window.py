@@ -71,6 +71,7 @@ class GraphWindow(QWidget):
 
         self._mode_combo = QComboBox()
         self._mode_combo.addItems(MODES)
+        theme.fit_combo_popup(self._mode_combo)
         self._window_spin = QDoubleSpinBox(minimum=1, maximum=86_400, value=60)
         self._window_spin.setSuffix(" s")
         zoom_rect_button = QToolButton()
