@@ -195,7 +195,7 @@ src/modbus_connector/
                        # "Read/Write (0x17)…" — диалог read/write registers,
                        # прочитанные значения пишутся в лог,
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
-                       # текущей строки, удаление строки — иконка-крестик,
+                       # текущей строки, Ctrl/Cmd+Shift+R = Read all, удаление строки — иконка-крестик,
                        # быстрые действия над текущей строкой (Ctrl+C копия
                        # значения, Ctrl+0/1 запись 0/1, Ctrl+= (и Ctrl++ на
                        # нампаде) / Ctrl+- шаг по
@@ -251,7 +251,10 @@ src/modbus_connector/
                   # palette Highlight),
                   # status_colors(); pyqtgraph НЕ импортируется (ленивая
                   # загрузка numpy сохранена)
-  app.py          # QApplication, apply_theme(из настроек), entry point main()
+  app.py          # QApplication, configure_qt() (контекстные меню показывают
+                  # хоткеи и на macOS — AA_DontShowShortcutsInContextMenus
+                  # =False до создания app), apply_theme(из настроек),
+                  # entry point main()
   __main__.py     # python -m modbus_connector
 tests/
   conftest.py     # фикстура modbus_server (порт): asyncio-ModbusTcpServer на

@@ -213,7 +213,7 @@ class RegistersPanel(QWidget):
         self._table.verticalHeader().setVisible(False)
         self._table.setToolTip(
             "Enter in 'New value' = write raw values (no scale/offset applied), "
-            "Ctrl/Cmd+R = read current row"
+            "Ctrl/Cmd+R = read current row, Ctrl/Cmd+Shift+R = read all rows"
         )
         self._table.itemChanged.connect(self._on_item_changed)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -222,6 +222,9 @@ class RegistersPanel(QWidget):
         read_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         read_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         read_shortcut.activated.connect(self._read_current_row)
+        read_all_shortcut = QShortcut(QKeySequence("Ctrl+Shift+R"), self)
+        read_all_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        read_all_shortcut.activated.connect(self.read_all)
         # quick value actions on the current row (same table context menu)
         for keys, slot in (
             (("Ctrl+C",), self._copy_current_value),
@@ -241,6 +244,7 @@ class RegistersPanel(QWidget):
         add_button = QPushButton("Add register")
         add_button.clicked.connect(lambda: self._add_row())
         self._read_all_button = QPushButton("Read all")
+        self._read_all_button.setToolTip("Read every row once (Ctrl/Cmd+Shift+R)")
         self._read_all_button.clicked.connect(self.read_all)
         sort_button = QPushButton("Sort by address")
         sort_button.clicked.connect(self._sort_by_address)

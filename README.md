@@ -164,7 +164,8 @@ the table is fully navigable with the keyboard. The ✕ button deletes a row.
 
 ### Reading values
 
-- **Ctrl+R** (**Cmd+R** on macOS) — reads the row that has the keyboard focus.
+- **Ctrl+R** (**Cmd+R** on macOS) — reads the row that has the keyboard focus;
+  **Ctrl+Shift+R** reads every row (the "Read all" button).
 - Quick actions on the focused row (also in the table's right-click menu):
   **Ctrl+C** copies the value, **Ctrl+0**/**Ctrl+1** write 0/1,
   **Ctrl+=** (or numpad **Ctrl++**)/**Ctrl+-** step the last read value,

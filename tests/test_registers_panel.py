@@ -963,3 +963,40 @@ def test_shortcuts_fire_and_arrows_still_navigate(qapp: QApplication) -> None:
     assert panel._table.currentRow() == 1
     assert len(writes) == 2  # no stray action fired
     panel.hide()
+
+
+def test_ctrl_shift_r_reads_all(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "h", "kind": "holding_registers", "address": 0, "count": 1},
+         {"name": "j", "kind": "holding_registers", "address": 1, "count": 1}]
+    )
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel.show()
+    panel._table.setFocus()
+    panel._table.setCurrentCell(0, COL_NAME)
+    qapp.processEvents()  # let the focus settle or the shortcut map sees nothing
+
+    QTest.keyClick(panel._table, Qt.Key.Key_R, Qt.KeyboardModifier.ControlModifier)
+    assert len(reads) == 1  # Ctrl+R: only the current row
+    # answer it: an unanswered read blocks re-reading that row
+    panel.handle_read_finished(reads[0][0], True, [1], "")
+
+    modifiers = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+    QTest.keyClick(panel._table, Qt.Key.Key_R, modifiers)
+    assert len(reads) == 3  # Ctrl+Shift+R: every row once
+    panel.hide()
+
+
+def test_context_menu_shortcut_hints_enabled(qapp: QApplication) -> None:
+    # macOS defaults AA_DontShowShortcutsInContextMenus to true (Apple HIG);
+    # the app turns it off at startup. Menu rendering itself can't be
+    # asserted offscreen — the attribute is what gates the hints.
+    from modbus_connector.app import configure_qt
+
+    configure_qt()
+    assert not QApplication.testAttribute(
+        Qt.ApplicationAttribute.AA_DontShowShortcutsInContextMenus
+    )
