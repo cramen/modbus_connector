@@ -343,3 +343,24 @@ def test_curve_colors_follow_theme(qapp: QApplication) -> None:
             assert min(rgb) < 150 and sum(rgb) < 600
     finally:
         theme.apply_theme("system")  # theme and pg config are app-global
+
+
+def test_help_button_opens_dialog(qapp: QApplication) -> None:
+    from PySide6.QtWidgets import QDialog, QTextBrowser
+
+    window = GraphWindow(_panel())
+    window._help_button.click()
+    dialog = next(
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if isinstance(widget, QDialog) and widget.windowTitle() == "Graph — Help"
+    )
+    text = dialog.findChild(QTextBrowser).toPlainText()
+    assert "Follow" in text
+    assert "Markers" in text
+    dialog.close()
+    qapp.processEvents()  # WA_DeleteOnClose
+    assert all(
+        not (isinstance(widget, QDialog) and widget.windowTitle() == "Graph — Help")
+        for widget in QApplication.topLevelWidgets()
+    )

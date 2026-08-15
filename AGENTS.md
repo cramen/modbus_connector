@@ -149,6 +149,11 @@ src/modbus_connector/
                         # расширения), чекбоксы полей, append/overwrite,
                         # чек-лист логируемых строк (group box "Rows to log",
                         # Select all/none, Space/Enter)
+  help_dialog.py    # справка по окнам: make_help_button (кнопка "?") +
+                    # show_help — немодальный диалог с QTextBrowser
+                    # (WA_DeleteOnClose); тексты REGISTERS_HELP/GRAPH_HELP/
+                    # SCANNER_HELP — HTML со списком хоткеев; кнопки стоят в
+                    # панели регистров, окне графика и сканере
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)

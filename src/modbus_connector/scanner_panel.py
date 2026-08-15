@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.connection_panel import DEVICE_ID_NAMES
+from modbus_connector.help_dialog import SCANNER_HELP, make_help_button
 from modbus_connector.models import DEFAULT_SCAN_PROBES, RegisterKind, ScanProbe
 from modbus_connector.theme import FitComboBox
 
@@ -123,6 +124,8 @@ class ScannerPanel(QWidget):
         range_layout.addWidget(add_probe_button)
         range_layout.addWidget(self._start_button)
         range_layout.addWidget(self._stop_button)
+        self._help_button = make_help_button(self, "Scanner — Help", SCANNER_HELP)
+        range_layout.addWidget(self._help_button)
 
         addr_layout = QHBoxLayout()
         addr_layout.addWidget(QLabel("Unit:"))

@@ -1136,3 +1136,24 @@ def test_sort_still_works_after_moves(qapp: QApplication) -> None:
     assert _names(panel) == list("EABCD")
     panel._sort_by_address()
     assert _names(panel) == list("ABCDE")
+
+
+def test_help_button_opens_dialog(qapp: QApplication) -> None:
+    from PySide6.QtWidgets import QDialog, QTextBrowser
+
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel._help_button.click()
+    dialog = next(
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if isinstance(widget, QDialog) and widget.windowTitle() == "Registers — Help"
+    )
+    text = dialog.findChild(QTextBrowser).toPlainText()
+    assert "Ctrl+Shift+R" in text
+    assert "Ctrl+Up" in text
+    dialog.close()
+    qapp.processEvents()  # WA_DeleteOnClose
+    assert all(
+        not (isinstance(widget, QDialog) and widget.windowTitle() == "Registers — Help")
+        for widget in QApplication.topLevelWidgets()
+    )

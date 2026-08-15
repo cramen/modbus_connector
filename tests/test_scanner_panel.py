@@ -226,3 +226,23 @@ def test_space_toggles_hit_checkbox(qapp: QApplication) -> None:
     )
     QApplication.sendEvent(results.viewport(), event)
     assert results.item(0).checkState() == Qt.CheckState.Unchecked
+
+
+def test_help_button_opens_dialog(qapp: QApplication) -> None:
+    from PySide6.QtWidgets import QDialog, QTextBrowser
+
+    panel = ScannerPanel()
+    panel._help_button.click()
+    dialog = next(
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if isinstance(widget, QDialog) and widget.windowTitle() == "Scanner — Help"
+    )
+    text = dialog.findChild(QTextBrowser).toPlainText()
+    assert "Add selected to table" in text
+    dialog.close()
+    qapp.processEvents()  # WA_DeleteOnClose
+    assert all(
+        not (isinstance(widget, QDialog) and widget.windowTitle() == "Scanner — Help")
+        for widget in QApplication.topLevelWidgets()
+    )

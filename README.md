@@ -56,6 +56,8 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Log panel at the bottom of the window, toggled with the "Log" button:
   human-readable requests/responses, optional raw bus traffic in hex
   ("Raw" checkbox) and export of the whole log to a file ("Save…").
+- A "?" button in each window (table toolbar, graph, scanner) opens a short
+  help sheet with that window's controls and hotkeys.
 
 ## Screenshots
 

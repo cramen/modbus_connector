@@ -48,6 +48,7 @@ from modbus_connector.datalogger import (
     LogSettings,
 )
 from modbus_connector.datalogger_dialog import LoggingSettingsDialog
+from modbus_connector.help_dialog import REGISTERS_HELP, make_help_button
 from modbus_connector.models import (
     CSV_COLUMNS,
     ByteOrder,
@@ -354,6 +355,10 @@ class RegistersPanel(QWidget):
         top.addWidget(QLabel("Interval:"))
         top.addWidget(self._poll_interval)
         top.addWidget(self._poll_button)
+        self._help_button = make_help_button(
+            self, "Registers — Help", REGISTERS_HELP
+        )
+        top.addWidget(self._help_button)
 
         layout = QVBoxLayout(self)
         layout.addLayout(top)

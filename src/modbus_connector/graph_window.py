@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector import theme
+from modbus_connector.help_dialog import GRAPH_HELP, make_help_button
 from modbus_connector.registers_panel import RegistersPanel
 
 MODES = ("Follow", "Full", "Manual")
@@ -149,6 +150,8 @@ class GraphWindow(QWidget):
         controls.addWidget(self._clear_button)
         controls.addWidget(self._poll_button)
         controls.addStretch(1)
+        self._help_button = make_help_button(self, "Graph — Help", GRAPH_HELP)
+        controls.addWidget(self._help_button)
 
         right = QVBoxLayout()
         right.addLayout(controls)
