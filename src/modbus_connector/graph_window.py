@@ -5,7 +5,6 @@ import pyqtgraph as pg
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QCloseEvent, QColor
 from PySide6.QtWidgets import (
-    QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
@@ -69,9 +68,8 @@ class GraphWindow(QWidget):
         refresh_button = QPushButton("Refresh rows")
         refresh_button.clicked.connect(self._rebuild_rows)
 
-        self._mode_combo = QComboBox()
+        self._mode_combo = theme.FitComboBox()
         self._mode_combo.addItems(MODES)
-        theme.fit_combo_popup(self._mode_combo)
         self._window_spin = QDoubleSpinBox(minimum=1, maximum=86_400, value=60)
         self._window_spin.setSuffix(" s")
         zoom_rect_button = QToolButton()

@@ -7,7 +7,6 @@ from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -24,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.datalogger import LOG_FIELDS, LogFormat, LogSettings
-from modbus_connector.theme import fit_combo_popup
+from modbus_connector.theme import FitComboBox
 
 FORMAT_LABELS: dict[LogFormat, str] = {"csv": "CSV", "jsonl": "JSON Lines"}
 FORMAT_EXTENSIONS: dict[LogFormat, str] = {"csv": ".csv", "jsonl": ".jsonl"}
@@ -61,9 +60,8 @@ class LoggingSettingsDialog(QDialog):
         path_row.addWidget(self._path_edit, 1)
         path_row.addWidget(browse_button)
 
-        self._format_combo = QComboBox()
+        self._format_combo = FitComboBox()
         self._format_combo.addItems(list(FORMAT_LABELS.values()))
-        fit_combo_popup(self._format_combo)
         self._format_combo.setCurrentText(FORMAT_LABELS[settings.format])
         self._format_combo.currentTextChanged.connect(self._on_format_changed)
 

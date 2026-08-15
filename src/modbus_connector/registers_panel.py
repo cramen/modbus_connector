@@ -295,9 +295,8 @@ class RegistersPanel(QWidget):
         self._log_settings_button.clicked.connect(self._on_logging_settings)
         self._sync_logging_ui()
 
-        self._global_order_combo = QComboBox()
+        self._global_order_combo = theme.FitComboBox()
         self._global_order_combo.addItems(ORDERS)
-        theme.fit_combo_popup(self._global_order_combo)
         self._global_order_combo.setToolTip(
             "Default byte order for 32/64-bit formats "
             "(rows without an explicit order inherit it)"
@@ -487,9 +486,8 @@ class RegistersPanel(QWidget):
         name_item.setData(Qt.ItemDataRole.UserRole, self._row_token_counter)
         self._table.setItem(index, COL_NAME, name_item)
 
-        type_combo = QComboBox()
+        type_combo = theme.FitComboBox()
         type_combo.addItems(KINDS)
-        theme.fit_combo_popup(type_combo)
         type_combo.setCurrentText(row.kind)
         type_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self._table.setCellWidget(index, COL_TYPE, type_combo)
@@ -508,9 +506,8 @@ class RegistersPanel(QWidget):
         )
         self._table.setItem(index, COL_POLL, poll_item)
 
-        format_combo = QComboBox()
+        format_combo = theme.FitComboBox()
         format_combo.addItems(FORMATS)
-        theme.fit_combo_popup(format_combo)
         format_combo.setCurrentText(row.format)
         format_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         format_combo.setToolTip("Display format (registers only; coils/discrete show 0/1)")
@@ -726,9 +723,8 @@ class RegistersPanel(QWidget):
             table.setItem(row_index, 2, QTableWidgetItem(f"{settings.scale:g}"))
             table.setItem(row_index, 3, QTableWidgetItem(f"{settings.offset:g}"))
             table.setItem(row_index, 4, QTableWidgetItem(settings.unit))
-            order_combo = QComboBox()
+            order_combo = theme.FitComboBox()
             order_combo.addItems(["default", *ORDERS])
-            theme.fit_combo_popup(order_combo)
             order_combo.setCurrentText(settings.order or "default")
             order_combo.currentTextChanged.connect(
                 lambda text, t=token: self._set_row_order(t, text)

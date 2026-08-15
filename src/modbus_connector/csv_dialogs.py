@@ -1,7 +1,6 @@
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -16,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.models import CSV_COLUMNS, guess_column_mapping
-from modbus_connector.theme import fit_combo_popup
+from modbus_connector.theme import FitComboBox
 
 EXPORTABLE_COLUMNS = [*CSV_COLUMNS, "value"]
 ESSENTIAL_FIELDS = ("name", "kind", "address")
@@ -128,9 +127,8 @@ class ImportMappingDialog(QDialog):
             item = QTableWidgetItem(column)
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(row, 0, item)
-            combo = QComboBox()
+            combo = FitComboBox()
             combo.addItems([SKIP, *CSV_COLUMNS])
-            fit_combo_popup(combo)
             combo.setCurrentText(guessed.get(column, SKIP))
             self._table.setCellWidget(row, 1, combo)
         self._table.resizeColumnsToContents()

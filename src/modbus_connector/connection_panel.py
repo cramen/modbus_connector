@@ -2,7 +2,6 @@ from collections.abc import Callable
 
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -58,9 +57,8 @@ class ConnectionPanel(QWidget):
         self._alive = False
         self._status_message = "Disconnected"
 
-        self._type_combo = QComboBox()
+        self._type_combo = theme.FitComboBox()
         self._type_combo.addItems(["TCP", "RTU", "RTU over TCP", "RTU over UDP"])
-        theme.fit_combo_popup(self._type_combo)
 
         self._tcp_host = QLineEdit("127.0.0.1")
         self._tcp_host.setMaximumWidth(140)
@@ -74,22 +72,18 @@ class ConnectionPanel(QWidget):
         network_layout.addWidget(self._tcp_port)
         network_layout.addStretch(1)
 
-        self._rtu_port = QComboBox()
+        self._rtu_port = theme.FitComboBox()
         self._rtu_port.setMinimumWidth(140)
         self._rtu_port.setMaximumWidth(220)  # long device paths must not widen the window
         self._rtu_refresh = QPushButton("Refresh")
-        self._rtu_baud = QComboBox(editable=True)
+        self._rtu_baud = theme.FitComboBox(editable=True)
         self._rtu_baud.addItems(BAUDRATES)
-        theme.fit_combo_popup(self._rtu_baud)
-        self._rtu_bytesize = QComboBox()
+        self._rtu_bytesize = theme.FitComboBox()
         self._rtu_bytesize.addItems(["8", "7"])
-        theme.fit_combo_popup(self._rtu_bytesize)
-        self._rtu_parity = QComboBox()
+        self._rtu_parity = theme.FitComboBox()
         self._rtu_parity.addItems(["N", "E", "O"])
-        theme.fit_combo_popup(self._rtu_parity)
-        self._rtu_stopbits = QComboBox()
+        self._rtu_stopbits = theme.FitComboBox()
         self._rtu_stopbits.addItems(["1", "2"])
-        theme.fit_combo_popup(self._rtu_stopbits)
         rtu_page = QWidget()
         rtu_layout = QHBoxLayout(rtu_page)
         rtu_layout.setContentsMargins(0, 0, 0, 0)
@@ -196,8 +190,7 @@ class ConnectionPanel(QWidget):
         rtu_port = str(state.get("rtu_port", ""))
         if rtu_port:
             if self._rtu_port.findText(rtu_port) < 0:
-                self._rtu_port.addItem(rtu_port)
-                theme.fit_combo_popup(self._rtu_port)
+                self._rtu_port.addItem(rtu_port)  # the popup fits itself on show
             self._rtu_port.setCurrentText(rtu_port)
         self._rtu_baud.setCurrentText(str(state.get("rtu_baud", self._rtu_baud.currentText())))
         for combo, key in (
@@ -264,8 +257,7 @@ class ConnectionPanel(QWidget):
         previous = {self._rtu_port.itemText(i) for i in range(self._rtu_port.count())}
         ports = [p.device for p in list_ports.comports()]
         self._rtu_port.clear()
-        self._rtu_port.addItems(ports)
-        theme.fit_combo_popup(self._rtu_port)  # paths can outgrow the combo
+        self._rtu_port.addItems(ports)  # the popup fits itself on show
         new_ports = [p for p in ports if p not in previous]
         if new_ports:
             self._rtu_port.setCurrentText(new_ports[0])

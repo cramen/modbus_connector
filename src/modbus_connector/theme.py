@@ -64,9 +64,24 @@ def status_colors() -> dict[str, str]:
     return {"off": "gray", "ok": "green", "idle": "orange"}
 
 
-def fit_combo_popup(combo: QComboBox) -> None:
-    """Растянуть попап комбобокса по содержимому: со stylesheet-темой попап
-    наследует ширину закрытого комбо и длинные пункты обрезаются справа
-    (нативный стиль macOS растягивал попап сам). Вызывать после addItems."""
-    view = combo.view()
-    view.setMinimumWidth(view.sizeHintForColumn(0))
+class FitComboBox(QComboBox):
+    """QComboBox с попапом по ширине самого длинного пункта.
+
+    Stylesheet-тема прижимает ширину попапа к закрытому комбо (нативный стиль
+    macOS мерил по содержимому), а size-hints делегата под stylesheet на cocoa
+    занижены, поэтому ширина считается по fontMetrics в момент показа —
+    перезаполнение пунктов (список портов RTU и т.п.) учитывается само.
+    """
+
+    _PAD = 34  # delegate padding + container frame; a slight overhang is harmless
+
+    def showPopup(self) -> None:
+        super().showPopup()
+        view = self.view()
+        fm = view.fontMetrics()
+        needed = max(
+            (fm.horizontalAdvance(self.itemText(i)) for i in range(self.count())),
+            default=0,
+        ) + self._PAD
+        container = view.window()
+        container.setFixedWidth(max(needed, container.width()))

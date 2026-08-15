@@ -1004,8 +1004,15 @@ def test_context_menu_shortcut_hints_enabled(qapp: QApplication) -> None:
 
 def test_combo_popups_fit_their_items(qapp: QApplication) -> None:
     # stylesheet themes size the popup to the closed combo, clipping long
-    # items; fit_combo_popup stretches it to the widest item instead
+    # items; FitComboBox.resize the popup container to the longest item
+    # (measured by font metrics — delegate size hints lie under stylesheets)
     panel = RegistersPanel(itertools.count(1).__next__)
     combo = panel._table.cellWidget(0, COL_TYPE)
-    view = combo.view()
-    assert view.minimumWidth() >= view.sizeHintForColumn(0) > 0
+    combo.showPopup()
+    try:
+        container = combo.view().window()
+        fm = combo.view().fontMetrics()
+        longest = max(fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count()))
+        assert container.width() >= longest + 20  # the longest item fits
+    finally:
+        combo.hidePopup()
