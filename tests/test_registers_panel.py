@@ -2,6 +2,7 @@ import csv
 import itertools
 import json
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -13,9 +14,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # A plain try/except is needed: pytest.importorskip re-raises ImportErrors coming
 # from a missing shared library inside an otherwise installed package.
 try:
-    from PySide6.QtCore import QEvent, Qt  # noqa: E402
+    from PySide6.QtCore import QEvent, QItemSelection, QItemSelectionModel, Qt  # noqa: E402
     from PySide6.QtTest import QTest  # noqa: E402
-    from PySide6.QtWidgets import QApplication, QTableWidget  # noqa: E402
+    from PySide6.QtWidgets import (  # noqa: E402
+        QAbstractItemView,
+        QApplication,
+        QTableWidget,
+    )
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
@@ -45,6 +50,18 @@ from modbus_connector.registers_panel import (  # noqa: E402
 @pytest.fixture(scope="module")
 def qapp() -> QApplication:
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def _destroy_panels(qapp: QApplication) -> Iterator[None]:
+    yield
+    # leaked panels with torn-down/reinserted rows crash a later app-wide
+    # stylesheet switch (QTableView.updateEditorGeometries); destroy them
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, RegistersPanel):
+            widget.close()
+            widget.deleteLater()
+    qapp.processEvents()
 
 
 def test_same_value_written_twice(qapp: QApplication) -> None:
@@ -1016,3 +1033,106 @@ def test_combo_popups_fit_their_items(qapp: QApplication) -> None:
         assert container.width() >= longest + 20  # the longest item fits
     finally:
         combo.hidePopup()
+
+
+# --- manual row reordering -----------------------------------------------------
+
+
+def _five_row_panel() -> RegistersPanel:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [{"name": name, "kind": "holding_registers", "address": address, "count": 1}
+         for address, name in enumerate("ABCDE")]
+    )
+    return panel
+
+
+def _names(panel: RegistersPanel) -> list[str]:
+    return [panel._table.item(i, COL_NAME).text() for i in range(panel._table.rowCount())]
+
+
+def _select_rows(panel: RegistersPanel, rows: list[int]) -> None:
+    model = panel._table.model()
+    selection = QItemSelection()
+    last_col = panel._table.columnCount() - 1
+    for row in rows:
+        selection.select(model.index(row, 0), model.index(row, last_col))
+    panel._table.selectionModel().select(
+        selection,
+        QItemSelectionModel.SelectionFlag.ClearAndSelect
+        | QItemSelectionModel.SelectionFlag.Rows,
+    )
+
+
+def _selected_rows(panel: RegistersPanel) -> list[int]:
+    return sorted({index.row() for index in panel._table.selectedIndexes()})
+
+
+def test_move_single_row_and_boundary(qapp: QApplication) -> None:
+    panel = _five_row_panel()
+    assert (
+        panel._table.selectionMode()
+        == QAbstractItemView.SelectionMode.ExtendedSelection
+    )
+    tokens_before = [panel._token_at(i) for i in range(5)]
+
+    _select_rows(panel, [0])
+    panel._move_selected_rows(-1)  # already at the top: no-op
+    assert _names(panel) == list("ABCDE")
+
+    panel._move_selected_rows(1)
+    assert _names(panel) == list("BACDE")
+    assert panel._token_at(1) == tokens_before[0]  # the row kept its token
+    assert _selected_rows(panel) == [1]  # the selection follows the row
+
+    panel._move_selected_rows(-1)
+    assert _names(panel) == list("ABCDE")
+    assert _selected_rows(panel) == [0]
+
+
+def test_move_batch_preserves_relative_order(qapp: QApplication) -> None:
+    panel = _five_row_panel()
+    _select_rows(panel, [1, 3])  # B and D
+    panel._move_selected_rows(1)
+    assert _names(panel) == list("ACBED")
+    assert _selected_rows(panel) == [2, 4]  # B and D, still selected
+
+    panel._move_selected_rows(-1)  # back
+    assert _names(panel) == list("ABCDE")
+    assert _selected_rows(panel) == [1, 3]
+
+
+def test_move_batch_of_adjacent_rows(qapp: QApplication) -> None:
+    panel = _five_row_panel()
+    _select_rows(panel, [1, 2])  # B and C as one block
+    panel._move_selected_rows(1)
+    assert _names(panel) == list("ADBCE")
+    panel._move_selected_rows(-1)
+    assert _names(panel) == list("ABCDE")
+
+
+def test_move_hotkey_and_plain_arrows(qapp: QApplication) -> None:
+    panel = _five_row_panel()
+    panel.show()
+    panel._table.setFocus()
+    _select_rows(panel, [0])
+    qapp.processEvents()  # let the focus settle or the shortcut map sees nothing
+
+    modifiers = Qt.KeyboardModifier.ControlModifier
+    QTest.keyClick(panel._table, Qt.Key.Key_Down, modifiers)
+    qapp.processEvents()  # the move is deferred out of the key event
+    assert _names(panel) == list("BACDE")  # Ctrl+Down moved the row
+
+    QTest.keyClick(panel._table, Qt.Key.Key_Down)  # plain arrow: cursor only
+    assert _names(panel) == list("BACDE")
+    panel.hide()
+
+
+def test_sort_still_works_after_moves(qapp: QApplication) -> None:
+    panel = _five_row_panel()
+    _select_rows(panel, [4])  # E (address 4) to the top
+    for _ in range(4):
+        panel._move_selected_rows(-1)
+    assert _names(panel) == list("EABCD")
+    panel._sort_by_address()
+    assert _names(panel) == list("ABCDE")

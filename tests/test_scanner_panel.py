@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterator
 
 import pytest
 
@@ -20,6 +21,18 @@ from modbus_connector.scanner_panel import COL_ADDRESS, COL_COUNT, ScannerPanel 
 @pytest.fixture(scope="module")
 def qapp() -> QApplication:
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def _destroy_panels(qapp: QApplication) -> Iterator[None]:
+    yield
+    # a leaked panel can crash a later layout pass in another widget
+    # (QTableView.updateEditorGeometries); destroy panels after each test
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, ScannerPanel):
+            widget.close()
+            widget.deleteLater()
+    qapp.processEvents()
 
 
 def test_address_scan_section_is_called_registers_scan(qapp: QApplication) -> None:

@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterator
 
 import pytest
 
@@ -17,6 +18,20 @@ from modbus_connector.session_widget import SessionWidget  # noqa: E402
 @pytest.fixture(scope="module")
 def qapp() -> QApplication:
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def _destroy_sessions(qapp: QApplication) -> Iterator[None]:
+    yield
+    # a leaked session's table can crash a later app-wide stylesheet switch
+    # (QTableView.updateEditorGeometries); destroy sessions after each test
+    # (shutdown() is idempotent)
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, SessionWidget):
+            widget.shutdown()
+            widget.close()
+            widget.deleteLater()
+    qapp.processEvents()
 
 
 def test_state_roundtrip_and_shutdown(qapp: QApplication) -> None:

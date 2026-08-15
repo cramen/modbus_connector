@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import get_args
 
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QItemSelection, QItemSelectionModel, QPoint, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import (
     QBrush,
     QGuiApplication,
@@ -104,6 +104,12 @@ class SparklineWidget(QWidget):
             else ""
         )
         self.update()  # Qt coalesces repaints per event-loop pass
+
+    def swap_series(self, other: "SparklineWidget") -> None:
+        """Обменять ряды данных с соседним спарклайном (перестановка строк)."""
+        self._series, other._series = other._series, self._series
+        self.refresh()
+        other.refresh()
 
     def paintEvent(self, event: QPaintEvent) -> None:
         del event
@@ -225,6 +231,12 @@ class RegistersPanel(QWidget):
         read_all_shortcut = QShortcut(QKeySequence("Ctrl+Shift+R"), self)
         read_all_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         read_all_shortcut.activated.connect(self.read_all)
+        move_up_shortcut = QShortcut(QKeySequence("Ctrl+Up"), self)
+        move_up_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        move_up_shortcut.activated.connect(lambda: self._defer_move(-1))
+        move_down_shortcut = QShortcut(QKeySequence("Ctrl+Down"), self)
+        move_down_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        move_down_shortcut.activated.connect(lambda: self._defer_move(1))
         # quick value actions on the current row (same table context menu)
         for keys, slot in (
             (("Ctrl+C",), self._copy_current_value),
@@ -615,39 +627,87 @@ class RegistersPanel(QWidget):
 
     @Slot()
     def _sort_by_address(self) -> None:
-        def address_of(index: int) -> int:
+        def address_key(index: int) -> tuple[int, int]:
             try:
-                return int(self._text_at(index, COL_ADDRESS), 0)
+                address = int(self._text_at(index, COL_ADDRESS), 0)
             except ValueError:
-                return -1  # unparseable addresses sort first but still move
+                address = -1  # unparseable addresses sort first but still move
+            return (address, index)
 
-        order = sorted(
-            range(self._table.rowCount()), key=lambda i: (address_of(i), i)
-        )
-        self._table.blockSignals(True)
-        snapshot = []
         for index in range(self._table.rowCount()):
-            items = [
-                self._table.takeItem(index, col) for col in range(self._table.columnCount())
-            ]
-            widgets = {}
-            for col in (COL_TYPE, COL_FORMAT, COL_TREND, COL_ACTIONS):
-                widgets[col] = self._table.cellWidget(index, col)
-                self._table.removeCellWidget(index, col)  # detach, not delete
-            snapshot.append((items, widgets))
-        while self._table.rowCount():
-            self._table.removeRow(0)
-        for new_index, old_index in enumerate(order):
-            items, widgets = snapshot[old_index]
-            self._table.insertRow(new_index)
-            for col, item in enumerate(items):
-                if item is not None:
-                    self._table.setItem(new_index, col, item)
-            for col, widget in widgets.items():
-                if widget is not None:
-                    self._table.setCellWidget(new_index, col, widget)
-        self._table.blockSignals(False)
+            best = min(range(index, self._table.rowCount()), key=address_key)
+            for row in range(best, index, -1):  # bubble up: stable
+                self._swap_rows(row - 1, row)
         self._apply_filter()
+
+    def _swap_rows(self, a: int, b: int) -> None:
+        """Поменять строки местами. Виджеты (комбо/спарклайн/кнопка) НЕ
+        отсоединяются от ячеек: removeCellWidget при перестройке строк
+        оставляет в представлении битые ссылки, и следующая смена stylesheet
+        падает в QTableView.updateEditorGeometries — поэтому пункты таблицы
+        клонируются, а виджеты меняются только состоянием."""
+        table = self._table
+        table.blockSignals(True)
+        for col in range(table.columnCount()):
+            item_a = table.item(a, col)
+            item_b = table.item(b, col)
+            if item_a is None or item_b is None:
+                continue  # widget-only columns are identical on every row
+            # clone BEFORE setItem: setItem deletes the item it replaces
+            clone_a, clone_b = item_a.clone(), item_b.clone()
+            table.setItem(a, col, clone_b)
+            table.setItem(b, col, clone_a)
+        for col in (COL_TYPE, COL_FORMAT):
+            combo_a = table.cellWidget(a, col)
+            combo_b = table.cellWidget(b, col)
+            text_a, text_b = combo_a.currentText(), combo_b.currentText()
+            combo_a.setCurrentText(text_b)
+            combo_b.setCurrentText(text_a)
+        sparkline_a = table.cellWidget(a, COL_TREND)
+        sparkline_b = table.cellWidget(b, COL_TREND)
+        sparkline_a.swap_series(sparkline_b)
+        # the ✕ button finds its row dynamically — nothing to swap
+        table.blockSignals(False)
+
+    def _defer_move(self, delta: int) -> None:
+        # the hotkey fires mid key-event; rebuilding rows synchronously inside
+        # the event corrupts the view — move after the event returns
+        QTimer.singleShot(0, lambda: self._move_selected_rows(delta))
+
+    def _move_selected_rows(self, delta: int) -> None:
+        """Сдвинуть выбранные строки блоком на одну позицию (Ctrl+Up/Down)."""
+        count = self._table.rowCount()
+        marked = [False] * count
+        for index in self._table.selectedIndexes():
+            marked[index.row()] = True
+        if not any(marked):
+            return
+        if delta < 0:  # up: ascending, swap with the row above when it's free
+            for i in range(1, count):
+                if marked[i] and not marked[i - 1]:
+                    self._swap_rows(i - 1, i)
+                    marked[i - 1], marked[i] = True, False
+        else:  # down: descending mirror
+            for i in range(count - 2, -1, -1):
+                if marked[i] and not marked[i + 1]:
+                    self._swap_rows(i, i + 1)
+                    marked[i], marked[i + 1] = False, True
+        # keep the selection (and the cursor) on the moved rows
+        model = self._table.model()
+        last_col = self._table.columnCount() - 1
+        selection = QItemSelection()
+        for row, mark in enumerate(marked):
+            if mark:
+                selection.select(model.index(row, 0), model.index(row, last_col))
+        self._table.selectionModel().select(
+            selection,
+            QItemSelectionModel.SelectionFlag.ClearAndSelect
+            | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        self._table.selectionModel().setCurrentIndex(
+            model.index(marked.index(True), COL_NAME),
+            QItemSelectionModel.SelectionFlag.NoUpdate,  # don't collapse the selection
+        )
 
     @Slot()
     def _on_csv_import(self) -> None:
@@ -994,10 +1054,14 @@ class RegistersPanel(QWidget):
         row = self._table.rowAt(pos.y())
         if row < 0:
             return
-        # act on the clicked row, not on wherever the cursor was before
-        self._table.setCurrentCell(row, max(self._table.columnAt(pos.x()), 0))
+        # act on the clicked row — but a right-click on an already-selected
+        # row keeps a multi-selection so batch actions apply to it
+        if row not in {index.row() for index in self._table.selectedIndexes()}:
+            self._table.setCurrentCell(row, max(self._table.columnAt(pos.x()), 0))
         menu = QMenu(self)
         for text, key, slot in (
+            ("Move up", "Ctrl+Up", lambda: self._move_selected_rows(-1)),
+            ("Move down", "Ctrl+Down", lambda: self._move_selected_rows(1)),
             ("Copy value", "Ctrl+C", self._copy_current_value),
             ("Write 0", "Ctrl+0", lambda: self._write_constant_to_current_row(0)),
             ("Write 1", "Ctrl+1", lambda: self._write_constant_to_current_row(1)),

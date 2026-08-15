@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterator
 
 import pytest
 
@@ -17,6 +18,19 @@ from modbus_connector.main_window import MainWindow  # noqa: E402
 @pytest.fixture(scope="module")
 def qapp() -> QApplication:
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def _destroy_windows(qapp: QApplication) -> Iterator[None]:
+    yield
+    # a leaked window's table can crash a later layout pass in another widget
+    # (QTableView.updateEditorGeometries); destroy windows after each test
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, MainWindow):
+            widget._shutdown_sessions()
+            widget.close()
+            widget.deleteLater()
+    qapp.processEvents()
 
 
 def _fresh_window() -> MainWindow:

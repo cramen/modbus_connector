@@ -174,6 +174,8 @@ the table is fully navigable with the keyboard. The ✕ button deletes a row.
   **Ctrl+T** toggles it
   (coils flip the bit; a register goes 0↔1). Writes use raw values, so
   scaled/hex displays stay safe; input/discrete areas report "read-only".
+- **Ctrl+Up**/**Ctrl+Down** move the selected rows as a block (multi-selection
+  works); the row order persists with the session.
 - **Read all** — reads every row once.
 - **Start polling and record** — a split button: the main action reads all
   rows repeatedly with the interval set in the "Interval" field

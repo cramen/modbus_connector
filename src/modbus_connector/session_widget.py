@@ -208,6 +208,8 @@ class SessionWidget(QWidget):
         return self._last_stats
 
     def shutdown(self) -> None:
+        if not self._thread.isRunning():
+            return  # already shut down; a blocking invoke would deadlock
         self.registers_panel.stop_logging()  # the logger must not outlive the session
         self.registers_panel.stop_polling()
         self._worker.stop_scan()
