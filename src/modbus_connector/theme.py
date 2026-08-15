@@ -3,7 +3,7 @@
 import qdarktheme
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
-from PySide6.QtWidgets import QComboBox
+from PySide6.QtWidgets import QComboBox, QStyle
 
 THEMES = ("system", "light", "dark")
 _QDARKTHEME = {"system": "auto", "light": "light", "dark": "dark"}
@@ -73,15 +73,18 @@ class FitComboBox(QComboBox):
     перезаполнение пунктов (список портов RTU и т.п.) учитывается само.
     """
 
-    _PAD = 34  # delegate padding + container frame; a slight overhang is harmless
-
     def showPopup(self) -> None:
         super().showPopup()
         view = self.view()
         fm = view.fontMetrics()
-        needed = max(
+        longest = max(
             (fm.horizontalAdvance(self.itemText(i)) for i in range(self.count())),
             default=0,
-        ) + self._PAD
+        )
+        pad = (
+            2 * view.frameWidth()
+            + view.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+            + 24  # delegate side margins, measured on cocoa
+        )
         container = view.window()
-        container.setFixedWidth(max(needed, container.width()))
+        container.setFixedWidth(max(longest + pad, container.width()))
