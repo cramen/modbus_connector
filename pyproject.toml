@@ -6,7 +6,24 @@ build-backend = "setuptools.build_meta"
 name = "modbus-connector"
 version = "0.8.1"
 description = "PySide6 GUI for debugging Modbus buses and developing Modbus devices"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "cramen"}]
+keywords = ["modbus", "modbus-tcp", "modbus-rtu", "rs485", "plc", "scada", "gui"]
 requires-python = ">=3.11"
+classifiers = [
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: X11 Applications",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Hardware",
+    "Topic :: Utilities",
+]
 dependencies = [
     "pymodbus[serial]==3.6.9",
     "PySide6",
@@ -16,6 +33,11 @@ dependencies = [
 
 [project.gui-scripts]
 modbus-connector = "modbus_connector.app:main"
+
+[project.urls]
+Homepage = "https://github.com/cramen/modbus_connector"
+Repository = "https://github.com/cramen/modbus_connector"
+Issues = "https://github.com/cramen/modbus_connector/issues"
 
 [project.optional-dependencies]
 dev = [
