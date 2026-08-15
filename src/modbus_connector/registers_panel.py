@@ -9,6 +9,7 @@ from typing import get_args
 from PySide6.QtCore import QPoint, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import (
     QBrush,
+    QGuiApplication,
     QKeySequence,
     QPainter,
     QPainterPath,
@@ -180,6 +181,7 @@ class RegistersPanel(QWidget):
         self._display_dialog: QDialog | None = None
         self._series: dict[int, TimeSeries] = {}  # token -> value history (runtime only)
         self._sparklines: dict[int, SparklineWidget] = {}
+        self._last_values: dict[int, list] = {}  # token -> last raw read values
         self._bus_enabled = False  # no bus access until a connection is up
 
         self._table = QTableWidget(0, 11)
@@ -222,6 +224,18 @@ class RegistersPanel(QWidget):
         read_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
         read_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         read_shortcut.activated.connect(self._read_current_row)
+        # quick value actions on the current row (same table context menu)
+        for key, slot in (
+            ("Ctrl+C", self._copy_current_value),
+            ("Ctrl+0", lambda: self._write_constant_to_current_row(0)),
+            ("Ctrl+1", lambda: self._write_constant_to_current_row(1)),
+            ("Ctrl++", lambda: self._step_current_row(1)),
+            ("Ctrl+-", lambda: self._step_current_row(-1)),
+            ("Ctrl+T", self._toggle_current_row),
+        ):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(slot)
 
         add_button = QPushButton("Add register")
         add_button.clicked.connect(lambda: self._add_row())
@@ -926,10 +940,25 @@ class RegistersPanel(QWidget):
             sparkline.refresh()
 
     def _on_table_context_menu(self, pos: QPoint) -> None:
-        if self._table.columnAt(pos.x()) != COL_TREND:
+        row = self._table.rowAt(pos.y())
+        if row < 0:
             return
+        # act on the clicked row, not on wherever the cursor was before
+        self._table.setCurrentCell(row, max(self._table.columnAt(pos.x()), 0))
         menu = QMenu(self)
-        menu.addAction("Clear history", self.clear_series)
+        for text, key, slot in (
+            ("Copy value", "Ctrl+C", self._copy_current_value),
+            ("Write 0", "Ctrl+0", lambda: self._write_constant_to_current_row(0)),
+            ("Write 1", "Ctrl+1", lambda: self._write_constant_to_current_row(1)),
+            ("Increment", "Ctrl++", lambda: self._step_current_row(1)),
+            ("Decrement", "Ctrl+-", lambda: self._step_current_row(-1)),
+            ("Toggle", "Ctrl+T", self._toggle_current_row),
+        ):
+            action = menu.addAction(text, slot)
+            action.setShortcut(QKeySequence(key))  # shown next to the item
+        if self._table.columnAt(pos.x()) == COL_TREND:
+            menu.addSeparator()
+            menu.addAction("Clear history", self.clear_series)
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
     def _text_at(self, index: int, col: int) -> str:
@@ -982,6 +1011,7 @@ class RegistersPanel(QWidget):
             self._flash_generations.pop(token, None)
             self._row_display.pop(token, None)
             self._series.pop(token, None)
+            self._last_values.pop(token, None)
             self._sparklines.pop(token, None)
             timer = self._row_timers.pop(token, None)
             if timer is not None:
@@ -1030,14 +1060,76 @@ class RegistersPanel(QWidget):
         except ValueError as exc:
             self.logLine.emit(f"✗ parse error: {exc}")
             return
-        request_id = self._next_request_id()
-        self._pending_writes[request_id] = self._token_at(index)
-        unit = row.unit_id if row.unit_id is not None else self._unit_id
-        self.writeRequested.emit(request_id, unit, row, values)
+        self._emit_write(index, row, values)
         if new_value_item is not None:
             # clear so re-entering the same value fires itemChanged again;
             # the resulting empty-text itemChanged is ignored by _on_item_changed
             new_value_item.setText("")
+
+    def _emit_write(self, index: int, row: RegisterRow, values: list) -> None:
+        request_id = self._next_request_id()
+        self._pending_writes[request_id] = self._token_at(index)
+        unit = row.unit_id if row.unit_id is not None else self._unit_id
+        self.writeRequested.emit(request_id, unit, row, values)
+
+    # --- quick value actions (hotkeys + context menu) ----------------------
+
+    def _action_row(self) -> tuple[int, RegisterRow] | None:
+        """Текущая строка для быстрой записи; None — действие не выполняется."""
+        if not self._bus_enabled:
+            return None  # silent, consistent with the bus gate
+        index = self._table.currentRow()
+        if index < 0:
+            return None
+        row = self._row_data(index)
+        if row is None:
+            return None
+        if row.kind not in ("coils", "holding_registers"):
+            self.logLine.emit(f"✗ row {index + 1}: {row.kind} is a read-only area")
+            return None
+        return index, row
+
+    def _copy_current_value(self) -> None:
+        index = self._table.currentRow()
+        if index < 0:
+            return
+        text = self._text_at(index, COL_VALUE)
+        if text:
+            QGuiApplication.clipboard().setText(text)
+
+    def _write_constant_to_current_row(self, value: int) -> None:
+        found = self._action_row()
+        if found is None:
+            return
+        index, row = found
+        self._emit_write(index, row, [bool(value)] if row.kind == "coils" else [value])
+
+    def _step_current_row(self, delta: int) -> None:
+        found = self._action_row()
+        if found is None:
+            return
+        index, row = found
+        last = self._last_values.get(self._token_at(index))
+        if not last:
+            self.logLine.emit(f"✗ row {index + 1}: read the row before +/-")
+            return
+        lo, hi = (0, 1) if row.kind == "coils" else (0, 0xFFFF)
+        value = min(hi, max(lo, int(last[0]) + delta))  # silent clamp
+        self._emit_write(index, row, [bool(value)] if row.kind == "coils" else [value])
+
+    def _toggle_current_row(self) -> None:
+        found = self._action_row()
+        if found is None:
+            return
+        index, row = found
+        last = self._last_values.get(self._token_at(index))
+        if not last:
+            self.logLine.emit(f"✗ row {index + 1}: read the row before toggling")
+            return
+        if row.kind == "coils":
+            self._emit_write(index, row, [not last[0]])
+        else:
+            self._emit_write(index, row, [1 if int(last[0]) == 0 else 0])
 
     @Slot()
     def read_all(self) -> None:
@@ -1153,6 +1245,8 @@ class RegistersPanel(QWidget):
         index = self._find_row_by_token(token)
         if index is None:
             return
+        if ok:
+            self._last_values[token] = list(values)  # raw, for +/-/toggle
         if ok and self._logger.is_open:
             self._log_read(index, values)
         if ok and self._recording:

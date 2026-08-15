@@ -165,6 +165,11 @@ the table is fully navigable with the keyboard. The ✕ button deletes a row.
 ### Reading values
 
 - **Ctrl+R** (**Cmd+R** on macOS) — reads the row that has the keyboard focus.
+- Quick actions on the focused row (also in the table's right-click menu):
+  **Ctrl+C** copies the value, **Ctrl+0**/**Ctrl+1** write 0/1,
+  **Ctrl++**/**Ctrl+-** step the last read value, **Ctrl+T** toggles it
+  (coils flip the bit; a register goes 0↔1). Writes use raw values, so
+  scaled/hex displays stay safe; input/discrete areas report "read-only".
 - **Read all** — reads every row once.
 - **Start polling and record** — a split button: the main action reads all
   rows repeatedly with the interval set in the "Interval" field

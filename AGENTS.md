@@ -183,8 +183,7 @@ src/modbus_connector/
                        # колонки таблицы ресайзятся (Interactive),
                        # колонка Trend — SparklineWidget (QPainter) по ряду
                        # _series[token] (TimeSeries; пишется primary-значение
-                       # при чтении, hex/ascii не захватываются), clear_series()
-                       # и контекстное меню "Clear history" на колонке Trend,
+                       # при чтении, hex/ascii не захватываются), clear_series(),
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (theme.flash_color(), по токену строки,
                        # с генерацией),
@@ -196,7 +195,16 @@ src/modbus_connector/
                        # "Read/Write (0x17)…" — диалог read/write registers,
                        # прочитанные значения пишутся в лог,
                        # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
-                       # текущей строки, удаление строки — иконка-крестик
+                       # текущей строки, удаление строки — иконка-крестик,
+                       # быстрые действия над текущей строкой (Ctrl+C копия
+                       # значения, Ctrl+0/1 запись 0/1, Ctrl+± шаг по
+                       # последнему RAW-значению (_last_values по токену,
+                       # clamp 0..0xFFFF / 0..1 для coils, молча), Ctrl+T
+                       # toggle; coils пишутся bool, input/discrete —
+                       # logLine "read-only area"; общий emit — _emit_write)
+                       # и контекстное меню таблицы с теми же действиями
+                       # (правый клик сначала выбирает строку; "Clear history"
+                       # — только на колонке Trend),
   scanner_panel.py     # сканер unit-адресов и адресов регистров (секция
                        # Registers scan); открывается отдельным окном;
                        # set_bus_enabled(ok) — гейтинг Start-кнопок (Stop

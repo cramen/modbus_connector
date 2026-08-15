@@ -14,11 +14,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # from a missing shared library inside an otherwise installed package.
 try:
     from PySide6.QtCore import QEvent, Qt  # noqa: E402
+    from PySide6.QtTest import QTest  # noqa: E402
     from PySide6.QtWidgets import QApplication, QTableWidget  # noqa: E402
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
-from PySide6.QtGui import QColor, QKeyEvent  # noqa: E402
+from PySide6.QtGui import QColor, QGuiApplication, QKeyEvent  # noqa: E402
 
 from modbus_connector import theme  # noqa: E402
 from modbus_connector.csv_dialogs import (  # noqa: E402
@@ -828,3 +829,133 @@ def test_column_widths_tolerate_garbage(qapp: QApplication) -> None:
 
     panel.set_options({"order": "ABCD"})  # missing key: widths untouched
     assert header.sectionSize(0) == 30
+
+
+# --- quick value actions (hotkeys + context menu) ----------------------------
+
+
+def test_quick_write_constants(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [
+            {"name": "c", "kind": "coils", "address": 0, "count": 4},
+            {"name": "h", "kind": "holding_registers", "address": 0, "count": 1},
+        ]
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+
+    panel._table.setCurrentCell(0, COL_NAME)
+    panel._write_constant_to_current_row(1)
+    panel._write_constant_to_current_row(0)
+    assert [args[3] for args in writes] == [[True], [False]]  # coil bits
+
+    panel._table.setCurrentCell(1, COL_NAME)
+    panel._write_constant_to_current_row(1)
+    panel._write_constant_to_current_row(0)
+    assert [args[3] for args in writes] == [[True], [False], [1], [0]]  # ints
+
+
+def test_step_uses_last_raw_value(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    writes: list[tuple] = []
+    lines: list[str] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel.logLine.connect(lines.append)
+    panel._table.setCurrentCell(0, COL_NAME)
+
+    panel._step_current_row(1)  # never read: hint, no write
+    assert writes == []
+    assert any("read the row" in line for line in lines)
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
+    panel._step_current_row(1)
+    assert writes[-1][3] == [6]
+    panel.handle_read_finished(_read_row(panel, 0), True, [6], "")
+    panel._step_current_row(-1)
+    assert writes[-1][3] == [5]
+    panel.handle_read_finished(_read_row(panel, 0), True, [0], "")
+    panel._step_current_row(-1)  # clamps at 0
+    assert writes[-1][3] == [0]
+
+
+def test_toggle_flips_bit_and_register(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [
+            {"name": "c", "kind": "coils", "address": 0, "count": 4},
+            {"name": "h", "kind": "holding_registers", "address": 0, "count": 1},
+        ]
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+
+    panel._table.setCurrentCell(0, COL_NAME)
+    panel.handle_read_finished(_read_row(panel, 0), True, [True], "")
+    panel._toggle_current_row()
+    assert writes[-1][3] == [False]
+    panel.handle_read_finished(_read_row(panel, 0), True, [False], "")
+    panel._toggle_current_row()
+    assert writes[-1][3] == [True]
+
+    panel._table.setCurrentCell(1, COL_NAME)
+    panel.handle_read_finished(_read_row(panel, 1), True, [0], "")
+    panel._toggle_current_row()
+    assert writes[-1][3] == [1]  # 0 → 1
+    panel.handle_read_finished(_read_row(panel, 1), True, [7], "")
+    panel._toggle_current_row()
+    assert writes[-1][3] == [0]  # nonzero → 0
+
+
+def test_copy_value_to_clipboard(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.handle_read_finished(_read_row(panel, 0), True, [5], "")
+    panel._table.setCurrentCell(0, COL_NAME)
+    panel._copy_current_value()
+    assert QGuiApplication.clipboard().text() == "5"
+
+
+def test_actions_on_read_only_area_log_instead(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "i", "kind": "input_registers", "address": 0, "count": 1}]
+    )
+    writes: list[tuple] = []
+    lines: list[str] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel.logLine.connect(lines.append)
+    panel._table.setCurrentCell(0, COL_NAME)
+
+    panel._write_constant_to_current_row(1)
+    panel._step_current_row(1)
+    panel._toggle_current_row()
+    assert writes == []
+    assert sum("read-only" in line for line in lines) == 3
+
+
+def test_shortcuts_fire_and_arrows_still_navigate(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "h", "kind": "holding_registers", "address": 0, "count": 1},
+         {"name": "j", "kind": "holding_registers", "address": 1, "count": 1}]
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel.show()
+    panel._table.setFocus()
+    panel._table.setCurrentCell(0, COL_NAME)
+    qapp.processEvents()  # let the focus settle or the shortcut map sees nothing
+
+    QTest.keyClick(panel._table, Qt.Key.Key_0, Qt.KeyboardModifier.ControlModifier)
+    assert writes[-1][3] == [0]  # Ctrl+0 wrote to the current row
+
+    QTest.keyClick(panel._table, Qt.Key.Key_Down)  # plain arrows: navigation
+    assert panel._table.currentRow() == 1
+    assert len(writes) == 1  # no stray action fired
+    panel.hide()
