@@ -1,12 +1,12 @@
 # modbus_connector
 
-<img src="assets/icon.png" width="96" align="right" alt="Иконка Modbus Connector">
+<img src="https://raw.githubusercontent.com/cramen/modbus_connector/main/assets/icon.png" width="96" align="right" alt="Иконка Modbus Connector">
 
-[English version: README.md](README.md)
+[English version: README.md](https://github.com/cramen/modbus_connector/blob/main/README.md)
 
 **[Скачать готовые сборки для macOS / Windows / Linux → Releases](https://github.com/cramen/modbus_connector/releases)**
 
-**[Смотреть видео-презентацию (1 минута, с озвучкой) → docs/presentation.mp4](docs/presentation.mp4)**
+**[Смотреть видео-презентацию (1 минута, с озвучкой) → docs/presentation.mp4](https://github.com/cramen/modbus_connector/blob/main/docs/presentation.mp4)**
 
 GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
 Работает с Modbus TCP и Modbus RTU через синхронные клиенты pymodbus;
@@ -63,39 +63,39 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 вкладки-подключения, таблица регистров с прочитанными значениями и
 спарклайнами трендов у строк, лог:
 
-![Главное окно, светлая тема](docs/screenshots/main_window.png)
+![Главное окно, светлая тема](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/main_window.png)
 
-![Главное окно, тёмная тема](docs/screenshots/main_window_dark.png)
+![Главное окно, тёмная тема](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/main_window_dark.png)
 
 Живой график — несколько рядов в следящем окне, зум и перетаскиваемые
 маркеры с min/max/avg по каждому ряду (кнопка «Graph…» в панели
 подключения); светлая и тёмная темы:
 
-![Живой график, светлая тема](docs/screenshots/graph_window.png)
+![Живой график, светлая тема](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/graph_window.png)
 
-![Живой график, тёмная тема](docs/screenshots/graph_window_dark.png)
+![Живой график, тёмная тема](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/graph_window_dark.png)
 
 Настройки отображения строк — Scale/Offset/Unit и переопределение порядка
 байт для каждой строки таблицы (кнопка «Display…» над таблицей):
 
-![Настройки отображения](docs/screenshots/display_dialog.png)
+![Настройки отображения](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/display_dialog.png)
 
 Экспорт CSV — выбор колонок и их порядка (кнопка «CSV» над таблицей):
 
-![Экспорт CSV](docs/screenshots/export_dialog.png)
+![Экспорт CSV](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/export_dialog.png)
 
 Импорт CSV — сопоставление колонок файла полям регистров перед загрузкой:
 
-![Импорт CSV](docs/screenshots/import_dialog.png)
+![Импорт CSV](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/import_dialog.png)
 
 Логирование в файл — запись опрашиваемых значений в CSV или JSON Lines:
 файл, формат, выбор полей и чек-лист строк (кнопка «⚙» над таблицей):
 
-![Настройки логирования](docs/screenshots/logging_dialog.png)
+![Настройки логирования](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/logging_dialog.png)
 
 Сканер адресов — обход unit-адресов с пробами и скан адресов регистров:
 
-![Сканер](docs/screenshots/scanner.png)
+![Сканер](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/scanner.png)
 
 ## Требования
 

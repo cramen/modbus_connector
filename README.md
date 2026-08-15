@@ -1,12 +1,12 @@
 # modbus_connector
 
-<img src="assets/icon.png" width="96" align="right" alt="Modbus Connector icon">
+<img src="https://raw.githubusercontent.com/cramen/modbus_connector/main/assets/icon.png" width="96" align="right" alt="Modbus Connector icon">
 
-[Russian version: README_ru.md](README_ru.md)
+[Russian version: README_ru.md](https://github.com/cramen/modbus_connector/blob/main/README_ru.md)
 
 **[Download ready-made builds for macOS / Windows / Linux → Releases](https://github.com/cramen/modbus_connector/releases)**
 
-**[Watch the video presentation (1 min, Russian voice-over) → docs/presentation.mp4](docs/presentation.mp4)**
+**[Watch the video presentation (1 min, Russian voice-over) → docs/presentation.mp4](https://github.com/cramen/modbus_connector/blob/main/docs/presentation.mp4)**
 
 A PySide6 GUI application for debugging Modbus buses and developing Modbus
 devices. Works with Modbus TCP and Modbus RTU via synchronous pymodbus clients;
@@ -63,40 +63,40 @@ Main window (light and dark themes — the View menu switches them) — two
 connection tabs, register table with read values and per-row trend
 sparklines, log:
 
-![Main window, light theme](docs/screenshots/main_window.png)
+![Main window, light theme](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/main_window.png)
 
-![Main window, dark theme](docs/screenshots/main_window_dark.png)
+![Main window, dark theme](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/main_window_dark.png)
 
 Live graph — multiple series in a follow window, zoom and draggable markers
 with per-series min/max/avg (the "Graph…" button in the connection panel);
 light and dark themes:
 
-![Live graph, light theme](docs/screenshots/graph_window.png)
+![Live graph, light theme](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/graph_window.png)
 
-![Live graph, dark theme](docs/screenshots/graph_window_dark.png)
+![Live graph, dark theme](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/graph_window_dark.png)
 
 Per-row display settings — Scale/Offset/Unit and a byte-order override per
 register row (the "Display…" button above the table):
 
-![Display settings](docs/screenshots/display_dialog.png)
+![Display settings](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/display_dialog.png)
 
 CSV export — choose which columns to write and their order (the "CSV" button
 above the table):
 
-![CSV export](docs/screenshots/export_dialog.png)
+![CSV export](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/export_dialog.png)
 
 CSV import — map file columns to register fields before loading the table:
 
-![CSV import](docs/screenshots/import_dialog.png)
+![CSV import](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/import_dialog.png)
 
 Logging to a file — write polled values to CSV or JSON Lines: file, format,
 field selection and a per-row checklist (the "⚙" button above the table):
 
-![Logging settings](docs/screenshots/logging_dialog.png)
+![Logging settings](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/logging_dialog.png)
 
 Address scanner — unit sweep with probes and the register address scan:
 
-![Scanner](docs/screenshots/scanner.png)
+![Scanner](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/scanner.png)
 
 ## Requirements
 
