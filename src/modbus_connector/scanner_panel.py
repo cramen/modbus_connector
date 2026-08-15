@@ -48,7 +48,6 @@ class ScannerPanel(QWidget):
         # SessionWidget passes the shared session counter
         self._next_request_id = request_id_provider or itertools.count(10_000).__next__
         self._bus_enabled = False  # no bus access until a connection is up
-        self._addr_hits: list[int] = []
         self._addr_scan_unit = 1
         self._addr_scan_kind = "holding_registers"
         self._device_id_request = -1
@@ -99,10 +98,19 @@ class ScannerPanel(QWidget):
         self._addr_progress = QProgressBar()
         self._addr_progress.setValue(0)
         self._addr_results = QListWidget()
-        self._add_rows_button = QPushButton("Add to table")
+        self._addr_results.itemChanged.connect(self._sync_add_rows_button)
+        self._addr_all_button = QPushButton("All")
+        self._addr_all_button.clicked.connect(
+            lambda: self._set_all_hits(Qt.CheckState.Checked)
+        )
+        self._addr_none_button = QPushButton("None")
+        self._addr_none_button.clicked.connect(
+            lambda: self._set_all_hits(Qt.CheckState.Unchecked)
+        )
+        self._add_rows_button = QPushButton("Add selected to table")
         self._add_rows_button.setEnabled(False)
         self._add_rows_button.setToolTip(
-            "Add one row per found address to the registers table"
+            "Add one row per checked address to the registers table"
         )
         self._add_rows_button.clicked.connect(self._on_add_rows_clicked)
 
@@ -145,6 +153,8 @@ class ScannerPanel(QWidget):
         layout.addWidget(self._addr_progress)
         layout.addWidget(self._addr_results)
         addr_buttons = QHBoxLayout()
+        addr_buttons.addWidget(self._addr_all_button)
+        addr_buttons.addWidget(self._addr_none_button)
         addr_buttons.addStretch(1)
         addr_buttons.addWidget(self._add_rows_button)
         layout.addLayout(addr_buttons)
@@ -315,7 +325,6 @@ class ScannerPanel(QWidget):
         if self._addr_from.value() > self._addr_to.value():
             self._addr_from.setValue(self._addr_to.value())  # clamp inverted range
         self._addr_results.clear()
-        self._addr_hits.clear()
         self._addr_scan_unit = self._addr_unit.value()  # "Add to table" uses these
         self._addr_scan_kind = self._addr_kind.currentText()
         self._sync_add_rows_button()
@@ -338,12 +347,29 @@ class ScannerPanel(QWidget):
 
     @Slot(int)
     def handle_addr_scan_hit(self, address: int) -> None:
-        self._addr_hits.append(address)
-        self._addr_results.addItem(f"0x{address:04X} ({address})")
-        self._sync_add_rows_button()
+        item = QListWidgetItem(f"0x{address:04X} ({address})")
+        item.setData(Qt.ItemDataRole.UserRole, address)
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        item.setCheckState(Qt.CheckState.Checked)  # new hits join selected
+        self._addr_results.addItem(item)
+        self._sync_add_rows_button()  # addItem does not emit itemChanged
+
+    def _checked_hits(self) -> list[int]:
+        hits = []
+        for row in range(self._addr_results.count()):
+            item = self._addr_results.item(row)
+            if item.checkState() == Qt.CheckState.Checked:
+                hits.append(int(item.data(Qt.ItemDataRole.UserRole)))
+        return hits
+
+    def _set_all_hits(self, state: Qt.CheckState) -> None:
+        for row in range(self._addr_results.count()):
+            self._addr_results.item(row).setCheckState(state)
 
     def _sync_add_rows_button(self) -> None:
-        self._add_rows_button.setEnabled(self._bus_enabled and bool(self._addr_hits))
+        self._add_rows_button.setEnabled(
+            self._bus_enabled and bool(self._checked_hits())
+        )
 
     @Slot()
     def _on_add_rows_clicked(self) -> None:
@@ -354,7 +380,7 @@ class ScannerPanel(QWidget):
                 "count": 1,
                 "unit_id": self._addr_scan_unit,
             }
-            for address in self._addr_hits
+            for address in self._checked_hits()
         ]
         self.rowsAddRequested.emit(rows)
 

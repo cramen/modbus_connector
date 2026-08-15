@@ -7,9 +7,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Qt needs system libraries (libEGL etc.) that headless Linux CI runners lack;
 # skip the whole module there — it still runs on macOS/Windows CI and dev machines.
 try:
+    from PySide6.QtCore import QEvent, Qt  # noqa: E402
     from PySide6.QtWidgets import QApplication  # noqa: E402
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
+
+from PySide6.QtGui import QKeyEvent  # noqa: E402
 
 from modbus_connector.scanner_panel import COL_ADDRESS, COL_COUNT, ScannerPanel  # noqa: E402
 
@@ -166,3 +169,47 @@ def test_device_id_flow(qapp: QApplication) -> None:
     assert panel._device_id_button.isEnabled()  # answered: re-armed
     panel._device_id_list.window().close()  # the non-modal dialog
     assert panel._device_id_request == -1
+
+
+def test_add_selected_only(qapp: QApplication) -> None:
+    import itertools
+
+    from modbus_connector.registers_panel import RegistersPanel
+
+    registers = RegistersPanel(itertools.count(1).__next__)
+    registers.set_state(
+        [{"name": "x", "kind": "holding_registers", "address": 5, "count": 1,
+          "unit_id": "3"}]
+    )
+    scanner = ScannerPanel()
+    scanner.rowsAddRequested.connect(registers.add_rows)
+    scanner.set_bus_enabled(True)
+    _scan_addresses(scanner, [5, 6, 7])
+    scanner._addr_results.item(1).setCheckState(Qt.CheckState.Unchecked)  # skip 6
+    scanner._add_rows_button.click()
+
+    assert [entry["address"] for entry in registers.state()] == [5, 7]
+
+
+def test_none_disables_the_button(qapp: QApplication) -> None:
+    panel = ScannerPanel()
+    panel.set_bus_enabled(True)
+    _scan_addresses(panel, [10, 11])
+    assert panel._add_rows_button.isEnabled()
+    panel._addr_none_button.click()
+    assert not panel._add_rows_button.isEnabled()  # zero checked
+    panel._addr_all_button.click()
+    assert panel._add_rows_button.isEnabled()
+    assert panel._checked_hits() == [10, 11]
+
+
+def test_space_toggles_hit_checkbox(qapp: QApplication) -> None:
+    panel = ScannerPanel()
+    _scan_addresses(panel, [10])
+    results = panel._addr_results
+    results.setCurrentRow(0)
+    event = QKeyEvent(
+        QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier
+    )
+    QApplication.sendEvent(results.viewport(), event)
+    assert results.item(0).checkState() == Qt.CheckState.Unchecked

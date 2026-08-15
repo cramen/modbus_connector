@@ -266,9 +266,10 @@ panel's Unit ID field. Scanning pauses polling in the main window.
 The **Registers scan** section below works the other way around: for a known
 unit it reads a range of addresses of a chosen register type one by one and
 lists every address that answered as `0xNNNN (dec)` — a quick way to map the
-register space of an unfamiliar device. **Add to table** turns the found
-addresses into register rows (duplicates are skipped), and **Device ID…**
-reads the selected unit's identification (0x2B/0x0E).
+register space of an unfamiliar device. **Add selected to table** turns the
+checked addresses into register rows (all hits are checked by default;
+duplicates are skipped), and **Device ID…** reads the selected unit's
+identification (0x2B/0x0E).
 
 The scanner's range, probe list and address-scan parameters persist in the
 settings along with everything else.

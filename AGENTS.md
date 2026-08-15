@@ -213,9 +213,10 @@ src/modbus_connector/
                        # клик по найденному unit выбирает его в панели
                        # подключения (unitSelected); probes-таблица — текстовые
                        # ячейки (dec/0x-hex), невалидные строки пропускаются;
-                       # кнопка "Add to table" — найденные адреса строками в
-                       # таблицу (rowsAddRequested(list[dict]), дубли
-                       # kind+address+unit_id пропускает add_rows в панели);
+                       # кнопка "Add selected to table" — найденные адреса
+                       # строками в таблицу (чек-лист, по умолчанию все
+                       # отмечены, All/None; rowsAddRequested(list[dict]),
+                       # дубли kind+address+unit_id пропускает add_rows);
                        # кнопка "Device ID…" — идентификация выбранного unit
                        # (deviceIdRequested(id, unit), немодальный диалог);
                        # state()/set_state() — диапазон, probes и параметры
