@@ -475,6 +475,55 @@ class RegistersPanel(QWidget):
         if self._table.rowCount() == 0:
             self._add_row()
 
+    def add_rows(self, rows: list) -> None:
+        """Добавить строки из сканера адресов (сигнал rowsAddRequested).
+
+        Дубли (тот же kind+address+unit_id) пропускаются со строкой в лог."""
+        existing = set()
+        for index in range(self._table.rowCount()):
+            try:
+                address = int(self._text_at(index, COL_ADDRESS), 0)
+            except ValueError:
+                continue
+            existing.add(
+                (
+                    self._table.cellWidget(index, COL_TYPE).currentText(),
+                    address,
+                    _parse_unit_id(self._text_at(index, COL_UNIT_ID)),
+                )
+            )
+        added = skipped = 0
+        for entry in rows:
+            try:
+                kind = entry["kind"] if entry["kind"] in KINDS else "holding_registers"
+                address = int(entry["address"])
+                count = int(entry.get("count", 1))
+                unit = entry.get("unit_id")
+                unit_id = int(unit) if unit is not None else None
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+            if (
+                not 0 <= address <= 0xFFFF
+                or not 1 <= count <= 125
+                or (unit_id is not None and not 1 <= unit_id <= 247)
+            ):
+                continue
+            key = (kind, address, unit_id)
+            if key in existing:
+                skipped += 1
+                continue
+            existing.add(key)
+            self._add_row(
+                RegisterRow(name="", kind=kind, address=address, count=count,
+                            unit_id=unit_id)
+            )
+            added += 1
+        if added or skipped:
+            self.logLine.emit(
+                f"← scanner: added {added} rows to the table"
+                + (f", skipped {skipped} duplicates" if skipped else "")
+            )
+
     def _add_row(self, row: RegisterRow | None = None) -> None:
         row = row or RegisterRow(name="", kind="holding_registers", address=0, count=1)
         index = self._table.rowCount()

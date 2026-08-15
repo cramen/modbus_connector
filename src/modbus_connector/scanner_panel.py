@@ -1,8 +1,12 @@
+import itertools
+from collections.abc import Callable
 from typing import get_args
 
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -16,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector.connection_panel import DEVICE_ID_NAMES
 from modbus_connector.models import DEFAULT_SCAN_PROBES, RegisterKind, ScanProbe
 from modbus_connector.theme import FitComboBox
 
@@ -30,10 +35,24 @@ class ScannerPanel(QWidget):
     scanStopRequested = Signal()
     addrScanRequested = Signal(int, object, int, int)
     unitSelected = Signal(int)
+    rowsAddRequested = Signal(list)  # registers-scan hits → the registers table
+    deviceIdRequested = Signal(int, int)  # request id, unit
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        request_id_provider: Callable[[], int] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
+        # tests construct the panel bare: a private counter is fine there;
+        # SessionWidget passes the shared session counter
+        self._next_request_id = request_id_provider or itertools.count(10_000).__next__
         self._bus_enabled = False  # no bus access until a connection is up
+        self._addr_hits: list[int] = []
+        self._addr_scan_unit = 1
+        self._addr_scan_kind = "holding_registers"
+        self._device_id_request = -1
+        self._device_id_list: QListWidget | None = None
 
         self._start = QSpinBox(minimum=1, maximum=247, value=1)
         self._end = QSpinBox(minimum=1, maximum=247, value=247)
@@ -58,6 +77,13 @@ class ScannerPanel(QWidget):
         self._results = QListWidget()
         self._results.setToolTip("Double-click a unit to select it for the connection")
         self._results.itemDoubleClicked.connect(self._on_unit_double_clicked)
+        self._results.itemSelectionChanged.connect(self._sync_device_id_button)
+        self._device_id_button = QPushButton("Device ID…")
+        self._device_id_button.setEnabled(False)
+        self._device_id_button.setToolTip(
+            "Read the selected unit's identification (function 0x2B/0x0E)"
+        )
+        self._device_id_button.clicked.connect(self._on_device_id_clicked)
 
         self._addr_unit = QSpinBox(minimum=1, maximum=247, value=1)
         self._addr_kind = FitComboBox()
@@ -73,6 +99,12 @@ class ScannerPanel(QWidget):
         self._addr_progress = QProgressBar()
         self._addr_progress.setValue(0)
         self._addr_results = QListWidget()
+        self._add_rows_button = QPushButton("Add to table")
+        self._add_rows_button.setEnabled(False)
+        self._add_rows_button.setToolTip(
+            "Add one row per found address to the registers table"
+        )
+        self._add_rows_button.clicked.connect(self._on_add_rows_clicked)
 
         range_layout = QHBoxLayout()
         range_layout.addWidget(QLabel("Unit range:"))
@@ -103,11 +135,19 @@ class ScannerPanel(QWidget):
         layout.addWidget(self._progress)
         layout.addWidget(QLabel("Results:"))
         layout.addWidget(self._results)
+        unit_buttons = QHBoxLayout()
+        unit_buttons.addStretch(1)
+        unit_buttons.addWidget(self._device_id_button)
+        layout.addLayout(unit_buttons)
         self._addr_section_label = QLabel("Registers scan:")
         layout.addWidget(self._addr_section_label)
         layout.addLayout(addr_layout)
         layout.addWidget(self._addr_progress)
         layout.addWidget(self._addr_results)
+        addr_buttons = QHBoxLayout()
+        addr_buttons.addStretch(1)
+        addr_buttons.addWidget(self._add_rows_button)
+        layout.addLayout(addr_buttons)
 
         for probe in DEFAULT_SCAN_PROBES:
             self._add_probe(probe)
@@ -262,6 +302,8 @@ class ScannerPanel(QWidget):
         self._addr_start_button.setEnabled(
             ok and not self._addr_stop_button.isEnabled()
         )
+        self._sync_add_rows_button()
+        self._sync_device_id_button()
 
     @Slot()
     def handle_scan_finished(self) -> None:
@@ -273,6 +315,10 @@ class ScannerPanel(QWidget):
         if self._addr_from.value() > self._addr_to.value():
             self._addr_from.setValue(self._addr_to.value())  # clamp inverted range
         self._addr_results.clear()
+        self._addr_hits.clear()
+        self._addr_scan_unit = self._addr_unit.value()  # "Add to table" uses these
+        self._addr_scan_kind = self._addr_kind.currentText()
+        self._sync_add_rows_button()
         self._addr_progress.setValue(0)
         self._addr_progress.setMaximum(1)
         self._addr_start_button.setEnabled(False)
@@ -292,7 +338,79 @@ class ScannerPanel(QWidget):
 
     @Slot(int)
     def handle_addr_scan_hit(self, address: int) -> None:
+        self._addr_hits.append(address)
         self._addr_results.addItem(f"0x{address:04X} ({address})")
+        self._sync_add_rows_button()
+
+    def _sync_add_rows_button(self) -> None:
+        self._add_rows_button.setEnabled(self._bus_enabled and bool(self._addr_hits))
+
+    @Slot()
+    def _on_add_rows_clicked(self) -> None:
+        rows = [
+            {
+                "kind": self._addr_scan_kind,
+                "address": address,
+                "count": 1,
+                "unit_id": self._addr_scan_unit,
+            }
+            for address in self._addr_hits
+        ]
+        self.rowsAddRequested.emit(rows)
+
+    def _sync_device_id_button(self) -> None:
+        self._device_id_button.setEnabled(
+            self._bus_enabled
+            and self._results.currentItem() is not None
+            and self._device_id_request < 0  # one query at a time
+        )
+
+    @Slot()
+    def _on_device_id_clicked(self) -> None:
+        item = self._results.currentItem()
+        unit = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if not isinstance(unit, int) or not self._bus_enabled:
+            return
+        dialog = QDialog(self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.setWindowTitle(f"Unit {unit} — device identification (0x2B/0x0E)")
+        list_widget = QListWidget()
+        list_widget.addItem("Reading…")
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(list_widget)
+        layout.addWidget(buttons)
+        dialog.finished.connect(self._on_device_id_dialog_closed)
+        self._device_id_list = list_widget
+        self._device_id_request = self._next_request_id()
+        self.deviceIdRequested.emit(self._device_id_request, unit)
+        self._sync_device_id_button()
+        dialog.show()  # non-modal: the scanner stays usable while reading
+
+    def _on_device_id_dialog_closed(self, _result: int) -> None:
+        self._device_id_list = None
+        self._device_id_request = -1
+        self._sync_device_id_button()
+
+    @Slot(int, bool, dict, str)
+    def handle_device_id_finished(
+        self, request_id: int, ok: bool, info: dict, error: str
+    ) -> None:
+        if request_id != self._device_id_request or self._device_id_list is None:
+            return
+        list_widget = self._device_id_list
+        list_widget.clear()
+        if not ok:
+            list_widget.addItem(f"✗ {error}")
+        elif not info:
+            list_widget.addItem("(device reported no objects)")
+        else:
+            for object_id, value in sorted(info.items()):
+                label = DEVICE_ID_NAMES.get(object_id, f"object 0x{object_id:02X}")
+                list_widget.addItem(f"{label}: {value}")
+        self._device_id_request = -1  # answered; the dialog stays open
+        self._sync_device_id_button()
 
     @Slot()
     def handle_addr_scan_finished(self) -> None:

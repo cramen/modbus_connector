@@ -36,7 +36,7 @@ class SessionWidget(QWidget):
         self.registers_panel = RegistersPanel(lambda: next(self._request_ids))
         self.log_panel = LogPanel()
 
-        self.scanner_panel = ScannerPanel(self)
+        self.scanner_panel = ScannerPanel(lambda: next(self._request_ids), self)
         self.scanner_panel.setWindowFlags(Qt.WindowType.Window)
         self.scanner_panel.setWindowTitle("Modbus Scanner")
         self.scanner_panel.resize(700, 500)
@@ -109,6 +109,11 @@ class SessionWidget(QWidget):
         self.scanner_panel.unitSelected.connect(self.connection_panel.set_unit_id)
         self.scanner_panel.unitSelected.connect(
             lambda unit: self.log_panel.append(f"→ unit {unit} selected in connection panel")
+        )
+        self.scanner_panel.rowsAddRequested.connect(self.registers_panel.add_rows)
+        self.scanner_panel.deviceIdRequested.connect(self._worker.read_device_id)
+        self._worker.deviceIdFinished.connect(
+            self.scanner_panel.handle_device_id_finished
         )
 
         self._worker.logLine.connect(self.log_panel.append)
