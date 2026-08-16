@@ -6,7 +6,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import get_args
 
-from PySide6.QtCore import QItemSelection, QItemSelectionModel, QPoint, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import (
+    QItemSelection,
+    QItemSelectionModel,
+    QPoint,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+    Slot,
+)
 from PySide6.QtGui import (
     QBrush,
     QGuiApplication,
@@ -28,9 +37,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
-    QPushButton,
     QSpinBox,
-    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QToolButton,
@@ -38,7 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from modbus_connector import theme
+from modbus_connector import icons, theme
 from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
 from modbus_connector.datalogger import (
     LOG_FIELDS,
@@ -81,6 +88,11 @@ HEADER_LABELS = (
 TABLE_TOOLTIP = (
     "Enter in 'New value' = write raw values (no scale/offset applied), "
     "Ctrl/Cmd+R = read current row, Ctrl/Cmd+Shift+R = read all rows"
+)
+POLL_BUTTON_TIP = (
+    "Poll all rows with the Interval period; the dropdown chooses whether "
+    "value history is recorded for sparklines and the graph window "
+    "(bounded buffer, ~10k samples per row)"
 )
 
 (
@@ -250,18 +262,18 @@ class RegistersPanel(QWidget):
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(slot)
 
-        add_button = QPushButton()
+        add_button = icons.make_button(tr("Add register"), "add")
         self._track(add_button, "Add register")
         add_button.clicked.connect(lambda: self._add_row())
-        self._read_all_button = QPushButton()
+        self._read_all_button = icons.make_button(tr("Read all"), "read_all")
         self._track(
             self._read_all_button, "Read all", "Read every row once (Ctrl/Cmd+Shift+R)"
         )
         self._read_all_button.clicked.connect(self.read_all)
-        sort_button = QPushButton()
+        sort_button = icons.make_button(tr("Sort by address"), "sort")
         self._track(sort_button, "Sort by address")
         sort_button.clicked.connect(self._sort_by_address)
-        self._mask_write_button = QPushButton()
+        self._mask_write_button = icons.make_button(tr("Mask write (0x16)…"), "mask_write")
         self._track(
             self._mask_write_button,
             "Mask write (0x16)…",
@@ -270,7 +282,7 @@ class RegistersPanel(QWidget):
             "Typical use: bit fields in PLC configuration registers.",
         )
         self._mask_write_button.clicked.connect(self._on_mask_write)
-        self._readwrite_button = QPushButton()
+        self._readwrite_button = icons.make_button(tr("Read/Write (0x17)…"), "readwrite")
         self._track(
             self._readwrite_button,
             "Read/Write (0x17)…",
@@ -285,14 +297,18 @@ class RegistersPanel(QWidget):
         self._filter_edit.setClearButtonEnabled(True)
         self._filter_edit.textChanged.connect(self._apply_filter)
 
-        display_button = QPushButton()
+        display_button = icons.make_button(tr("Display…"), "display")
         self._track(
             display_button,
             "Display…",
             "Per-row Scale/Offset/Unit and byte order settings",
         )
         display_button.clicked.connect(self._on_display_settings)
-        csv_button = QToolButton()
+        csv_button = QToolButton()  # menu button: icon registered manually
+        csv_button.setIcon(icons.icon("csv_export"))
+        csv_button.setIconSize(QSize(icons.ICON_SIZE, icons.ICON_SIZE))
+        csv_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        icons.register(csv_button, "csv_export")
         self._track(csv_button, "CSV", "Import/export the register table as CSV")
         csv_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         csv_menu = QMenu(csv_button)
@@ -307,14 +323,12 @@ class RegistersPanel(QWidget):
         self._log_flush_timer = QTimer(self)
         self._log_flush_timer.setInterval(1000)
         self._log_flush_timer.timeout.connect(self._logger.flush)
-        self._log_button = QPushButton(tr("Log to file"))  # text never changes
-        self._log_button.setCheckable(True)
+        self._log_button = icons.make_button(  # text never changes
+            tr("Log to file"), "log", checkable=True
+        )
         self._log_button.clicked.connect(self._toggle_logging)
-        self._log_settings_button = QToolButton()
-        self._log_settings_button.setText("⚙")
-        self._log_settings_button.setFixedSize(28, 28)
-        self._translatable_tips.append((self._log_settings_button, "Logging settings…"))
-        self._log_settings_button.setToolTip(tr("Logging settings…"))
+        self._log_settings_button = icons.make_button(tr("Logging settings…"), "settings")
+        self._translatable.append((self._log_settings_button, "Logging settings…"))
         self._log_settings_button.clicked.connect(self._on_logging_settings)
         self._sync_logging_ui()
 
@@ -335,17 +349,12 @@ class RegistersPanel(QWidget):
         self._poll_timer.timeout.connect(self._poll_global_rows)
         self._record_mode = True  # last chosen start mode: poll+record by default
         self._recording = False  # capture runs only while polling with record
-        self._poll_button = QToolButton()
+        self._poll_button = QToolButton()  # menu button: icon registered manually
         self._poll_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self._translatable_tips.append(
-            (
-                self._poll_button,
-                "Poll all rows with the Interval period; the dropdown chooses whether "
-                "value history is recorded for sparklines and the graph window "
-                "(bounded buffer, ~10k samples per row)",
-            )
-        )
-        self._poll_button.setToolTip(tr(self._translatable_tips[-1][1]))
+        self._poll_button.setIconSize(QSize(icons.ICON_SIZE, icons.ICON_SIZE))
+        self._poll_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._translatable_tips.append((self._poll_button, POLL_BUTTON_TIP))
+        self._poll_button.setToolTip(tr(POLL_BUTTON_TIP))
         poll_menu = QMenu(self._poll_button)
         self._start_poll_action = poll_menu.addAction(tr("Start polling"))
         self._start_record_action = poll_menu.addAction(tr("Start polling and record"))
@@ -354,7 +363,7 @@ class RegistersPanel(QWidget):
         self._poll_button.setMenu(poll_menu)
         self._poll_button.clicked.connect(self._toggle_polling)
         self.pollStateChanged.connect(self._sync_poll_button)
-        self._poll_button.setText(tr("Start polling and record"))
+        self._sync_poll_button(False, False)  # sets icon + text + tooltip
 
         top = QHBoxLayout()
         top.addWidget(add_button)
@@ -412,6 +421,10 @@ class RegistersPanel(QWidget):
         """Переприменить tr() ко всем строкам панели (по смене языка)."""
         for widget, text in self._translatable:
             widget.setText(tr(text))
+            # icon-only buttons: the tooltip doubles as the (hidden) label
+            if isinstance(widget, QToolButton):
+                widget.setToolTip(tr(text))
+                widget.setAccessibleName(tr(text))
         for widget, tip in self._translatable_tips:
             widget.setToolTip(tr(tip))
         self._table.setHorizontalHeaderLabels([tr(text) for text in HEADER_LABELS])
@@ -649,9 +662,9 @@ class RegistersPanel(QWidget):
         self._table.setCellWidget(index, COL_TREND, sparkline)
 
         delete_button = QToolButton()
-        delete_button.setIcon(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarCloseButton)
-        )
+        delete_button.setIcon(icons.icon("close_tab"))
+        delete_button.setIconSize(QSize(icons.ICON_SIZE, icons.ICON_SIZE))
+        icons.register(delete_button, "close_tab")
         delete_button.setFixedSize(26, 26)
         delete_button.setToolTip(tr("Delete row"))
         delete_button.clicked.connect(self._on_delete_clicked)
@@ -1533,12 +1546,17 @@ class RegistersPanel(QWidget):
     def _sync_poll_button(self, polling: bool, recording: bool) -> None:
         del recording
         if polling:
-            self._poll_button.setText(tr("Stop polling"))
+            text, icon_name = tr("Stop polling"), "poll_stop"
         else:
-            self._poll_button.setText(
+            text = (
                 tr("Start polling and record") if self._record_mode
                 else tr("Start polling")
             )
+            icon_name = "poll_start"
+        self._poll_button.setIcon(icons.icon(icon_name))
+        icons.register(self._poll_button, icon_name)  # theme refresh follows the state
+        self._poll_button.setText(text)
+        self._poll_button.setToolTip(f"{text}\n{tr(POLL_BUTTON_TIP)}")
 
     # --- logging to file --------------------------------------------------
 

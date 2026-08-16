@@ -1,4 +1,4 @@
-"""Немодальная помощь по окнам: кнопка "?" показывает HTML-справку."""
+"""Немодальная помощь по окнам: иконочная кнопка показывает HTML-справку."""
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector import icons
 from modbus_connector.i18n import current_language, tr
 
 REGISTERS_HELP = """
@@ -84,11 +85,10 @@ rows for them — duplicates (same type and address) are skipped.</li>
 
 
 def make_help_button(parent: QWidget, title: str, html: str) -> QToolButton:
-    """Маленькая квадратная кнопка "?", открывающая справку по окну."""
-    button = QToolButton(parent)
-    button.setText("?")
+    """Маленькая квадратная иконочная кнопка, открывающая справку по окну."""
+    button = icons.make_button(tr("Help"), "help")
+    button.setParent(parent)
     button.setFixedSize(26, 26)
-    button.setToolTip(tr("Help"))
     button.clicked.connect(lambda: show_help(parent, title, html))
     return button
 

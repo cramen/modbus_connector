@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QProgressBar,
-    QPushButton,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 from modbus_connector.connection_panel import DEVICE_ID_NAMES
 from modbus_connector.help_dialog import SCANNER_HELP, make_help_button
 from modbus_connector.i18n import tr
+from modbus_connector.icons import icon, make_button, register
 from modbus_connector.models import DEFAULT_SCAN_PROBES, RegisterKind, ScanProbe
 from modbus_connector.theme import FitComboBox
 
@@ -67,15 +67,15 @@ class ScannerPanel(QWidget):
         self._probes_table.verticalHeader().setVisible(False)
         self._probes_table.setMaximumHeight(140)
 
-        add_probe_button = QPushButton()
-        self._track(add_probe_button, "Add probe")
+        add_probe_button = make_button(tr("Add probe"), "add")
+        self._track(add_probe_button, "Add probe", "Add probe")
         add_probe_button.clicked.connect(lambda: self._add_probe())
 
-        self._start_button = QPushButton()
-        self._track(self._start_button, "Start scan")
+        self._start_button = make_button(tr("Start scan"), "scanner")
+        self._track(self._start_button, "Start scan", "Start scan")
         self._start_button.setEnabled(False)
-        self._stop_button = QPushButton()
-        self._track(self._stop_button, "Stop")
+        self._stop_button = make_button(tr("Stop"), "poll_stop")
+        self._track(self._stop_button, "Stop", "Stop")
         self._stop_button.setEnabled(False)
         self._start_button.clicked.connect(self._on_start)
         self._stop_button.clicked.connect(self.scanStopRequested)
@@ -92,7 +92,7 @@ class ScannerPanel(QWidget):
         self._results.setToolTip(tr(self._translatable_tips[-1][1]))
         self._results.itemDoubleClicked.connect(self._on_unit_double_clicked)
         self._results.itemSelectionChanged.connect(self._sync_device_id_button)
-        self._device_id_button = QPushButton()
+        self._device_id_button = make_button(tr("Device ID…"), "device_id")
         self._track(
             self._device_id_button,
             "Device ID…",
@@ -106,11 +106,11 @@ class ScannerPanel(QWidget):
         self._addr_kind.addItems(KINDS)
         self._addr_from = QSpinBox(minimum=0, maximum=65535, value=0)
         self._addr_to = QSpinBox(minimum=0, maximum=65535, value=99)
-        self._addr_start_button = QPushButton()
-        self._track(self._addr_start_button, "Start")
+        self._addr_start_button = make_button(tr("Start"), "scanner")
+        self._track(self._addr_start_button, "Start", "Start")
         self._addr_start_button.setEnabled(False)
-        self._addr_stop_button = QPushButton()
-        self._track(self._addr_stop_button, "Stop")
+        self._addr_stop_button = make_button(tr("Stop"), "poll_stop")
+        self._track(self._addr_stop_button, "Stop", "Stop")
         self._addr_stop_button.setEnabled(False)
         self._addr_start_button.clicked.connect(self._on_addr_start)
         self._addr_stop_button.clicked.connect(self.scanStopRequested)
@@ -118,17 +118,17 @@ class ScannerPanel(QWidget):
         self._addr_progress.setValue(0)
         self._addr_results = QListWidget()
         self._addr_results.itemChanged.connect(self._sync_add_rows_button)
-        self._addr_all_button = QPushButton()
-        self._track(self._addr_all_button, "All")
+        self._addr_all_button = make_button(tr("All"), "add")
+        self._track(self._addr_all_button, "All", "All")
         self._addr_all_button.clicked.connect(
             lambda: self._set_all_hits(Qt.CheckState.Checked)
         )
-        self._addr_none_button = QPushButton()
-        self._track(self._addr_none_button, "None")
+        self._addr_none_button = make_button(tr("None"), "remove")
+        self._track(self._addr_none_button, "None", "None")
         self._addr_none_button.clicked.connect(
             lambda: self._set_all_hits(Qt.CheckState.Unchecked)
         )
-        self._add_rows_button = QPushButton()
+        self._add_rows_button = make_button(tr("Add selected to table"), "add")
         self._track(
             self._add_rows_button,
             "Add selected to table",
@@ -149,6 +149,8 @@ class ScannerPanel(QWidget):
         range_layout.addWidget(self._start_button)
         range_layout.addWidget(self._stop_button)
         self._help_button = make_help_button(self, "Scanner — Help", SCANNER_HELP)
+        self._help_button.setIcon(icon("help"))
+        register(self._help_button, "help")
         range_layout.addWidget(self._help_button)
 
         addr_layout = QHBoxLayout()
@@ -213,7 +215,7 @@ class ScannerPanel(QWidget):
         )
         self._probes_table.setItem(index, COL_COUNT, QTableWidgetItem(str(probe.count)))
 
-        delete_button = QPushButton(tr("Delete"))
+        delete_button = make_button(tr("Delete"), "remove")
         delete_button.clicked.connect(self._on_delete_probe)
         self._probes_table.setCellWidget(index, COL_ACTIONS, delete_button)
 

@@ -56,8 +56,9 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Log panel at the bottom of the window, toggled with the "Log" button:
   human-readable requests/responses, optional raw bus traffic in hex
   ("Raw" checkbox) and export of the whole log to a file ("Save…").
-- A "?" button in each window (table toolbar, graph, scanner) opens a short
-  help sheet with that window's controls and hotkeys.
+- A help button (a "?" icon with a tooltip) in each window (table toolbar,
+  graph, scanner) opens a short help sheet with that window's controls and
+  hotkeys; window toolbars use compact icon buttons with tooltips.
 - Bilingual UI: English and Русский, switched live in View → Language
   (default follows the system locale; the choice persists).
 
@@ -94,7 +95,7 @@ CSV import — map file columns to register fields before loading the table:
 ![CSV import](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/import_dialog.png)
 
 Logging to a file — write polled values to CSV or JSON Lines: file, format,
-field selection and a per-row checklist (the "⚙" button above the table):
+field selection and a per-row checklist (the gear icon next to "Log to file"):
 
 ![Logging settings](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/logging_dialog.png)
 
@@ -314,7 +315,7 @@ Closing the graph window only hides it; the data stays.
 
 The **Log to file** button above the table writes every read value to a file
 while it is on; starting it also starts polling if it wasn't running (with
-history recording if the split button's mode is "and record"). The **⚙**
+history recording if the split button's mode is "and record"). The gear
 button next to it opens the settings: the file (a timestamped name in the
 home directory is suggested), the format, which optional fields —
 timestamp (wall clock, ISO 8601 with milliseconds), row name, register

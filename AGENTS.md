@@ -78,7 +78,9 @@ src/modbus_connector/
                        # лежит в itemData английским, переводится только
                        # отображение, state() хранит английский ключ),
                        # state()/set_state(); две строки: настройки сверху,
-                       # кнопки (Connect/Device ID…/Diagnostics… +
+                       # иконочные кнопки с тултипами (icons.make_button:
+                       # Connect/Disconnect — одна кнопка со сменой иконки,
+                       # Device ID…/Diagnostics…, обновление списка портов +
                        # Scanner…/Graph…/Log от SessionWidget через add_control)
                        # и статус снизу; статус — sizePolicy Ignored, длинный
                        # текст не расширяет окно;
@@ -93,11 +95,14 @@ src/modbus_connector/
                        # кнопка "Diagnostics…" — диалог диагностики (0x08):
                        # loopback, счётчики, clear counters
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
+                       # кнопки тулбара — иконочные QToolButton'ы с тултипами
+                       # (icons.make_button; text() сохраняет подпись),
                        # set_bus_enabled(ok) — гейтинг контролов, ходящих на
                        # шину (Read all, split-поллинг, Log to file, mask
                        # write, read/write; _read/_write_table_row молча
                        # игнорируют), по умолчанию выключены; Add/Filter/
-                       # Sort/Display…/CSV/⚙ — локальные, всегда доступны,
+                       # Sort/Display…/CSV/настройки логирования — локальные,
+                       # всегда доступны,
                        # split-кнопка поллинга (QToolButton MenuButtonPopup,
                        # меню "Start polling" / "Start polling and record",
                        # режим запоминается; выбор пункта на ходу переключает
@@ -127,7 +132,7 @@ src/modbus_connector/
                        # и порядка колонок, +колонка value при экспорте,
                        # при импорте пропускается),
                        # логирование значений в файл: checkable-кнопка
-                       # "Log to file" + кнопка "⚙" (диалог настроек);
+                       # "Log to file" + иконка settings (диалог настроек);
                        # start_logging при выключенном поллинге запускает его
                        # (start_polling(_record_mode)); старт без пути открывает
                        # диалог; stop_logging не останавливает поллинг;
@@ -151,7 +156,8 @@ src/modbus_connector/
                         # расширения), чекбоксы полей, append/overwrite,
                         # чек-лист логируемых строк (group box "Rows to log",
                         # Select all/none, Space/Enter)
-  help_dialog.py    # справка по окнам: make_help_button (кнопка "?") +
+  help_dialog.py    # справка по окнам: make_help_button (иконка help,
+                    # тултип "Help"/"Справка") +
                     # show_help — немодальный диалог с QTextBrowser
                     # (WA_DeleteOnClose); тексты REGISTERS_HELP/GRAPH_HELP/
                     # SCANNER_HELP — HTML со списком хоткеев, русские версии
@@ -164,6 +170,7 @@ src/modbus_connector/
                     # append/clear/len/points/stats(t0, t1), без Qt;
                     # MAX_SAMPLES=10000 (~2.7 ч при поллинге 1 Гц)
   graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
+                    # тулбар — иконочные кнопки с тултипами (icons.make_button),
                     # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
                     # rect, цвета кривых по теме (_curve_color: intColor на
                     # тёмной, tab10-подобный LIGHT_CURVE_COLORS на светлой;
@@ -222,7 +229,8 @@ src/modbus_connector/
                        # (правый клик сначала выбирает строку; "Clear history"
                        # — только на колонке Trend),
   scanner_panel.py     # сканер unit-адресов и адресов регистров (секция
-                       # Registers scan); открывается отдельным окном;
+                       # Registers scan); открывается отдельным окном; кнопки —
+                       # иконочные с тултипами (icons.make_button);
                        # set_bus_enabled(ok) — гейтинг Start-кнопок (Stop
                        # доступны всегда), по умолчанию выключены; двойной
                        # клик по найденному unit выбирает его в панели
@@ -240,7 +248,8 @@ src/modbus_connector/
                        # чекбокс Raw (выкл. по умолчанию) показывает raw-кадры
                        # шины (append_raw), буфер (is_raw, текст) по 5000 строк
                        # каждого вида, перерисовка при переключении;
-                       # Save… — выгрузка всего лога (нормальный + raw) в файл
+                       # иконка save — выгрузка всего лога (нормальный + raw)
+                       # в файл, иконка clear — очистка
   settings_store.py    # load_settings()/save_settings() — JSON в ~/.modbus_connector/
   session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
                     # RegistersPanel + LogPanel + ScannerPanel (окно) +
@@ -255,11 +264,13 @@ src/modbus_connector/
                     # сигналы statsUpdated(object) и titleChanged(str)
                     # ("New connection" → описание соединения), last_stats()
   main_window.py  # главное окно: QTabWidget с SessionWidget'ами (кнопка "+"
-                  # в углу, последнюю вкладку закрыть нельзя), меню File
+                  # — иконка add — в углу, последнюю вкладку закрыть нельзя),
+                  # меню File
                   # (save/load всех вкладок), меню View — радио-переключатели
                   # темы (System/Light/Dark) и языка (English/Русский,
                   # QActionGroup'ы), languageChanged → _retranslate окна и
-                  # сессий, статус-бар следует
+                  # сессий, смена темы → icons.refresh_icons() (цвет иконок
+                  # запечён при рендере), статус-бар следует
                   # активной вкладке; настройки: {"theme": str,
                   # "language": str,
                   # "tabs": [...], "active_tab": i} (theme/language отсутствуют
@@ -280,6 +291,21 @@ src/modbus_connector/
                   # используется для ВСЕХ комбобоксов;
                   # pyqtgraph НЕ импортируется (ленивая
                   # загрузка numpy сохранена)
+  icons.py        # темо-зависимые line-иконки тулбар-кнопок (стиль
+                  # Lucide/Feather, контур 1.6 px, RoundCap/RoundJoin,
+                  # рисуются QPainter'ом на лету — файлов/зависимостей нет,
+                  # рендер в size*2 с devicePixelRatio=2 для retina):
+                  # icon(name, size), ICON_NAMES;
+                  # make_button(text, icon_name, checkable) — компактная
+                  # QToolButton ToolButtonIconOnly: иконка на кнопке, подпись
+                  # в toolTip/accessibleName, text() сохраняется (тесты на
+                  # него опираются); register(btn, name) — слабый реестр
+                  # (WeakKeyDictionary, уже удалённые C++-объекты при
+                  # refresh пропускаются); refresh_icons() перерисовывает
+                  # иконки после смены темы (вызывается из
+                  # MainWindow._on_theme_selected); цвет контура: тёмная
+                  # тема — #E0E0E0, светлая — QPalette.ButtonText
+                  # (pyqtdarktheme красит stylesheet'ом, палитру не меняет)
   i18n.py         # мини-i18n (en/ru) без .ts/.qm: tr(text, **fmt) — английский
                   # текст является ключом, RU dict — перевод (нет ключа →
                   # английский); set_language(None → по QLocale, мусор → "en"),
@@ -321,6 +347,10 @@ tests/
                            # лога worker'а, сканер, окно графика (режимы в
                            # itemData), справка на двух языках
   test_graph_window.py     # чек-лист рядов, маркеры stats, Follow, zoom→Manual
+  test_icons.py            # рендер всех иконок (непустые пиксели, HiDPI,
+                           # масштаб), make_button (text/tooltip/accessibleName),
+                           # refresh_icons: перерисовка, перекраска после смены
+                           # темы, толерантность к удалённым кнопкам
 ```
 
 ## Команды

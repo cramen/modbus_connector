@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QToolButton,
@@ -18,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from modbus_connector import theme
+from modbus_connector import icons, theme
 from modbus_connector.help_dialog import GRAPH_HELP, make_help_button
 from modbus_connector.i18n import tr
 from modbus_connector.registers_panel import RegistersPanel
@@ -69,8 +68,7 @@ class GraphWindow(QWidget):
 
         self._rows_list = QListWidget()
         self._rows_list.itemChanged.connect(self._on_row_toggled)
-        refresh_button = QPushButton()
-        self._track(refresh_button, "Refresh rows")
+        refresh_button = self._make_icon_button("Refresh rows", "read")
         refresh_button.clicked.connect(self._rebuild_rows)
 
         self._mode_combo = theme.FitComboBox()
@@ -78,33 +76,20 @@ class GraphWindow(QWidget):
             self._mode_combo.addItem(tr(mode), mode)
         self._window_spin = QDoubleSpinBox(minimum=1, maximum=86_400, value=60)
         self._window_spin.setSuffix(" s")
-        zoom_rect_button = QToolButton()
-        self._track(zoom_rect_button, "Zoom rect")
-        zoom_rect_button.setCheckable(True)
+        zoom_rect_button = self._make_icon_button("Zoom rect", "scanner", checkable=True)
         zoom_rect_button.toggled.connect(self._on_zoom_rect_toggled)
-        markers_button = QToolButton()
-        self._track(markers_button, "Markers")
-        markers_button.setCheckable(True)
+        markers_button = self._make_icon_button("Markers", "markers", checkable=True)
         markers_button.toggled.connect(self._toggle_markers)
-        reset_button = QPushButton()
-        self._track(reset_button, "Reset view")
+        reset_button = self._make_icon_button("Reset view", "follow")
         reset_button.clicked.connect(self._reset_view)
-        self._clear_button = QPushButton()
-        self._track(
-            self._clear_button,
+        self._clear_button = self._make_icon_button(
             "Clear",
-            "Clear recorded history and restart the time axis",
+            "clear",
+            tip="Clear recorded history and restart the time axis",
         )
         self._clear_button.clicked.connect(self._on_clear)
-        self._poll_button = QPushButton()
+        self._poll_button = icons.make_button(tr("Start polling and record"), "poll_start")
         self._poll_button.setEnabled(False)  # no bus access until a connection is up
-        self._translatable_tips.append(
-            (
-                self._poll_button,
-                "Poll the register table and record value history for this graph",
-            )
-        )
-        self._poll_button.setToolTip(tr(self._translatable_tips[-1][1]))
         self._poll_button.clicked.connect(self._on_poll_toggle)
 
         self._plot = pg.PlotWidget()
@@ -169,6 +154,8 @@ class GraphWindow(QWidget):
         controls.addWidget(self._poll_button)
         controls.addStretch(1)
         self._help_button = make_help_button(self, "Graph — Help", GRAPH_HELP)
+        self._help_button.setIcon(icons.icon("help"))  # replace the "?" glyph
+        icons.register(self._help_button, "help")
         controls.addWidget(self._help_button)
 
         right = QVBoxLayout()
@@ -350,6 +337,18 @@ class GraphWindow(QWidget):
             widget.setToolTip(tr(tip))
             self._translatable_tips.append((widget, tip))
 
+    def _make_icon_button(
+        self, text: str, icon_name: str, tip: str | None = None, *, checkable: bool = False
+    ) -> QToolButton:
+        """Иконочная кнопка: текст скрыт (ToolButtonIconOnly), но text() его
+        возвращает; тултип — лейбл (или более длинная подсказка tip)."""
+        button = icons.make_button(tr(text), icon_name, checkable=checkable)
+        self._translatable.append((button, text))
+        tip_key = tip if tip is not None else text  # tooltip follows the label
+        button.setToolTip(tr(tip_key))
+        self._translatable_tips.append((button, tip_key))
+        return button
+
     def retranslate(self) -> None:
         """Переприменить tr() ко всем строкам окна (по смене языка)."""
         self.setWindowTitle(tr("Graph"))
@@ -401,10 +400,14 @@ class GraphWindow(QWidget):
 
     @Slot(bool, bool)
     def _sync_poll_button(self, polling: bool, recording: bool) -> None:
-        self._poll_button.setText(
-            tr("Stop polling") if polling and recording
-            else tr("Start polling and record")
-        )
+        active = polling and recording
+        text = tr("Stop polling") if active else tr("Start polling and record")
+        icon_name = "poll_stop" if active else "poll_start"
+        self._poll_button.setText(text)
+        self._poll_button.setToolTip(text)
+        self._poll_button.setAccessibleName(text)
+        self._poll_button.setIcon(icons.icon(icon_name))
+        icons.register(self._poll_button, icon_name)  # refresh_icons uses the name
 
     # --- markers ----------------------------------------------------------
 

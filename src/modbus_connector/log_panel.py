@@ -7,11 +7,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QPlainTextEdit,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from modbus_connector import icons
 from modbus_connector.i18n import tr
 
 MAX_LINES_PER_KIND = 5000
@@ -24,11 +24,11 @@ class LogPanel(QWidget):
         self._entries: list[tuple[bool, str]] = []
         self._counts = [0, 0]  # normal, raw
         self._edit = QPlainTextEdit(readOnly=True, maximumBlockCount=2 * MAX_LINES_PER_KIND)
-        self._clear_button = QPushButton(tr("Clear"))
+        self._clear_button = icons.make_button(tr("Clear"), "clear")
         self._clear_button.clicked.connect(self._clear)
         self._raw_checkbox = QCheckBox(tr("Raw"))  # unchecked: raw frames are noisy
         self._raw_checkbox.toggled.connect(self._render)
-        self._save_button = QPushButton(tr("Save…"))
+        self._save_button = icons.make_button(tr("Save…"), "save")
         self._save_button.clicked.connect(self._save_to_file)
 
         buttons = QHBoxLayout()
@@ -42,9 +42,10 @@ class LogPanel(QWidget):
         layout.addWidget(self._edit)
 
     def retranslate(self) -> None:
-        self._clear_button.setText(tr("Clear"))
+        for button, text in ((self._clear_button, "Clear"), (self._save_button, "Save…")):
+            button.setText(tr(text))
+            button.setToolTip(tr(text))
         self._raw_checkbox.setText(tr("Raw"))
-        self._save_button.setText(tr("Save…"))
 
     @Slot(str)
     def append(self, line: str) -> None:

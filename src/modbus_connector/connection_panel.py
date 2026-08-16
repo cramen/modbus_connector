@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 from serial.tools import list_ports
 
-from modbus_connector import theme
+from modbus_connector import icons, theme
 from modbus_connector.i18n import tr
 from modbus_connector.models import (
     ConnectionParams,
@@ -81,7 +81,7 @@ class ConnectionPanel(QWidget):
         self._rtu_port = theme.FitComboBox()
         self._rtu_port.setMinimumWidth(140)
         self._rtu_port.setMaximumWidth(220)  # long device paths must not widen the window
-        self._rtu_refresh = QPushButton()
+        self._rtu_refresh = icons.make_button(tr("Refresh"), "readwrite")
         self._track(self._rtu_refresh, "Refresh")
         self._rtu_baud = theme.FitComboBox(editable=True)
         self._rtu_baud.addItems(BAUDRATES)
@@ -118,13 +118,13 @@ class ConnectionPanel(QWidget):
         self._timeout.setSingleStep(0.5)
         self._timeout.setSuffix(" s")
 
-        self._button = QPushButton(tr("Connect"))  # text set in _sync_button_text
+        self._button = icons.make_button(tr("Connect"), "connect")  # text set in _sync_button_text
         self._button.clicked.connect(self._on_button_clicked)
-        self._device_id_button = QPushButton()
+        self._device_id_button = icons.make_button(tr("Device ID…"), "device_id")
         self._track(self._device_id_button, "Device ID…")
         self._device_id_button.setEnabled(False)  # only meaningful while connected
         self._device_id_button.clicked.connect(self._on_device_id_clicked)
-        self._diag_button = QPushButton()
+        self._diag_button = icons.make_button(tr("Diagnostics…"), "diagnostics")
         self._track(
             self._diag_button,
             "Diagnostics…",
@@ -176,9 +176,9 @@ class ConnectionPanel(QWidget):
     def _track(self, widget: QWidget, text: str, tip: str | None = None) -> None:
         widget.setText(tr(text))
         self._translatable.append((widget, text))
-        if tip is not None:
-            widget.setToolTip(tr(tip))
-            self._translatable_tips.append((widget, tip))
+        # icon-only buttons have no visible text: tooltip carries the label
+        widget.setToolTip(tr(tip if tip is not None else text))
+        self._translatable_tips.append((widget, tip if tip is not None else text))
 
     def retranslate(self) -> None:
         """Переприменить tr() ко всем строкам панели (по смене языка)."""
@@ -193,7 +193,13 @@ class ConnectionPanel(QWidget):
         self._render_status()
 
     def _sync_button_text(self) -> None:
-        self._button.setText(tr("Disconnect") if self._connected else tr("Connect"))
+        text = tr("Disconnect") if self._connected else tr("Connect")
+        icon_name = "disconnect" if self._connected else "connect"
+        self._button.setText(text)
+        self._button.setToolTip(text)
+        self._button.setAccessibleName(text)
+        self._button.setIcon(icons.icon(icon_name))
+        icons.register(self._button, icon_name)
 
     def unit_id(self) -> int:
         return self._unit.value()

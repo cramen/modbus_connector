@@ -9,10 +9,10 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QTabWidget,
-    QToolButton,
     QWidget,
 )
 
+from modbus_connector import icons
 from modbus_connector.i18n import (
     LANGUAGES,
     current_language,
@@ -34,8 +34,7 @@ class MainWindow(QMainWindow):
 
         self._tabs = QTabWidget()
         self._tabs.setMovable(True)
-        add_button = QToolButton()
-        add_button.setText("+")
+        add_button = icons.make_button("+", "add")
         add_button.setToolTip(tr("New connection tab"))
         add_button.clicked.connect(lambda: self._add_session())
         self._tabs.setCornerWidget(add_button)
@@ -200,6 +199,7 @@ class MainWindow(QMainWindow):
 
     def _on_theme_selected(self, name: str) -> None:
         apply_theme(name)
+        icons.refresh_icons()  # icon colors are baked at render time
         # re-tint what stylesheets don't reach: status label colors and
         # already-open graph windows (sparklines read the palette at paint time)
         for index in range(self._tabs.count()):

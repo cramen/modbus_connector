@@ -3,8 +3,9 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QMetaObject, Qt, QThread, QTimer, Signal, Slot
-from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from modbus_connector import icons
 from modbus_connector.connection_panel import ConnectionPanel
 from modbus_connector.i18n import tr
 from modbus_connector.log_panel import LogPanel
@@ -42,13 +43,12 @@ class SessionWidget(QWidget):
         self.scanner_panel.setWindowTitle(tr("Modbus Scanner"))
         self.scanner_panel.resize(700, 500)
 
-        self._scanner_button = QPushButton(tr("Scanner…"))
+        self._scanner_button = icons.make_button(tr("Scanner…"), "scanner")
         self._scanner_button.clicked.connect(self._show_scanner)
-        self._graph_button = QPushButton(tr("Graph…"))
+        self._graph_button = icons.make_button(tr("Graph…"), "graph")
         self._graph_button.clicked.connect(self._show_graph)
         self._graph_window: GraphWindow | None = None
-        self._log_button = QPushButton(tr("Log"))
-        self._log_button.setCheckable(True)
+        self._log_button = icons.make_button(tr("Log"), "log", checkable=True)
         self._log_button.setChecked(True)
         self._log_button.toggled.connect(self.log_panel.setVisible)
         self.connection_panel.add_control(self._scanner_button)
@@ -204,9 +204,13 @@ class SessionWidget(QWidget):
 
     def retranslate(self) -> None:
         """Переприменить tr() к строкам сессии (по смене языка)."""
-        self._scanner_button.setText(tr("Scanner…"))
-        self._graph_button.setText(tr("Graph…"))
-        self._log_button.setText(tr("Log"))
+        for button, text in (
+            (self._scanner_button, "Scanner…"),
+            (self._graph_button, "Graph…"),
+            (self._log_button, "Log"),
+        ):
+            button.setText(tr(text))
+            button.setToolTip(tr(text))
         self.scanner_panel.setWindowTitle(tr("Modbus Scanner"))
         self.connection_panel.retranslate()
         self.registers_panel.retranslate()
