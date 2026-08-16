@@ -81,14 +81,14 @@ RU: dict[str, str] = {
     "Read every row once (Ctrl/Cmd+Shift+R)":
         "Прочитать каждую строку один раз (Ctrl/Cmd+Shift+R)",
     "Sort by address": "Сортировать по адресу",
-    "Mask write (0x16)…": "Mask write (0x16)…",
+    "Mask write (0x16)…": "Запись по маске (0x16)…",
     "Set or clear individual bits of a holding register without touching "
     "others: result = (value AND and-mask) OR (or-mask AND NOT and-mask). "
     "Typical use: bit fields in PLC configuration registers.":
         "Установить или сбросить отдельные биты holding-регистра, не трогая "
         "остальные: result = (value AND and-mask) OR (or-mask AND NOT and-mask). "
         "Типичное применение — битовые поля в регистрах конфигурации ПЛК.",
-    "Read/Write (0x17)…": "Read/Write (0x17)…",
+    "Read/Write (0x17)…": "Чтение/запись (0x17)…",
     "Atomic transaction: write holding registers and read others in a "
     "single Modbus exchange (function 0x17). Used when a device requires "
     "read-modify-write without a race window.":
