@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QTabWidget,
     QWidget,
 )
@@ -23,6 +24,7 @@ from modbus_connector.i18n import (
 from modbus_connector.models import StatsSnapshot
 from modbus_connector.session_widget import SessionWidget
 from modbus_connector.settings_store import load_settings, save_settings
+from modbus_connector.templates import TemplateInfo, list_templates, load_template
 from modbus_connector.theme import THEMES, apply_theme, current_theme
 
 
@@ -56,6 +58,9 @@ class MainWindow(QMainWindow):
             tr("Load Settings from File…"), self._load_from_file
         )
         self._load_action.setShortcut(QKeySequence.StandardKey.Open)
+
+        self._templates_menu = self.menuBar().addMenu(tr("Templates"))
+        self._populate_templates_menu()
 
         view_menu = self.menuBar().addMenu(tr("View"))
         self._view_menu = view_menu
@@ -101,6 +106,41 @@ class MainWindow(QMainWindow):
         self._tabs.setCurrentIndex(index)
         self._update_close_state()
         return session
+
+    def _populate_templates_menu(self) -> None:
+        # the catalog is static (bundled package data), built once at startup
+        infos = list_templates()
+        if not infos:
+            action = self._templates_menu.addAction(tr("(empty)"))
+            action.setEnabled(False)
+            return
+        submenus: dict[str, QMenu] = {}
+        for info in infos:
+            submenu = submenus.get(info.manufacturer)
+            if submenu is None:
+                # explicit C++ parent: wrappers of addMenu(str) results take
+                # ownership and delete the menu when garbage collected
+                submenu = QMenu(info.manufacturer, self._templates_menu)
+                self._templates_menu.addMenu(submenu)
+                submenus[info.manufacturer] = submenu
+            action = submenu.addAction(info.name)
+            if info.description:
+                action.setToolTip(info.description)
+            action.triggered.connect(
+                lambda checked=False, i=info: self._apply_template(i)
+            )
+
+    def _apply_template(self, info: TemplateInfo) -> None:
+        try:
+            state = load_template(info)
+        except ValueError as exc:
+            self._log_line(
+                tr("✗ failed to load template {name}: {exc}", name=info.resource, exc=exc)
+            )
+            return
+        session = self._add_session(state)
+        # until the session connects, the tab shows the template name
+        self._tabs.setTabText(self._tabs.indexOf(session), info.name)
 
     def _close_tab(self, index: int) -> None:
         if self._tabs.count() <= 1:
@@ -189,6 +229,7 @@ class MainWindow(QMainWindow):
         self._file_menu.setTitle(tr("File"))
         self._save_action.setText(tr("Save Settings to File…"))
         self._load_action.setText(tr("Load Settings from File…"))
+        self._templates_menu.setTitle(tr("Templates"))
         self._view_menu.setTitle(tr("View"))
         self._theme_menu.setTitle(tr("Theme"))
         self._language_menu.setTitle(tr("Language"))

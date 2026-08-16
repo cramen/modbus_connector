@@ -22,6 +22,8 @@ RU: dict[str, str] = {
     "Dark": "Тёмная",
     "Save Settings": "Сохранить настройки",
     "Load Settings": "Загрузить настройки",
+    "Templates": "Шаблоны",
+    "(empty)": "(пусто)",
     "Tx: {total}  Err: {errors} ({percent:.1f}%)  Avg: {avg:.0f} ms":
         "Запросов: {total}  Ошибок: {errors} ({percent:.1f}%)  Среднее: {avg:.0f} мс",
     "  top: {kind}": "  частая: {kind}",

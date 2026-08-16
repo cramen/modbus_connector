@@ -1,0 +1,119 @@
+{
+  "name": "Eastron SDM120",
+  "description": "1-phase energy meter, float32 input registers (default 2400 8N1). Register map: Eastron SDM120 Modbus Protocol, https://raw.githubusercontent.com/nmakel/sdm_modbus/master/documents/sdm120_modbus_protocol.pdf",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "2400",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "1",
+    "unit": 1,
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Voltage",
+      "kind": "input_registers",
+      "address": 0,
+      "count": 2,
+      "format": "f32",
+      "unit": "V"
+    },
+    {
+      "name": "Current",
+      "kind": "input_registers",
+      "address": 6,
+      "count": 2,
+      "format": "f32",
+      "unit": "A"
+    },
+    {
+      "name": "Active power",
+      "kind": "input_registers",
+      "address": 12,
+      "count": 2,
+      "format": "f32",
+      "unit": "W"
+    },
+    {
+      "name": "Apparent power",
+      "kind": "input_registers",
+      "address": 18,
+      "count": 2,
+      "format": "f32",
+      "unit": "VA"
+    },
+    {
+      "name": "Reactive power",
+      "kind": "input_registers",
+      "address": 24,
+      "count": 2,
+      "format": "f32",
+      "unit": "var"
+    },
+    {
+      "name": "Power factor",
+      "kind": "input_registers",
+      "address": 30,
+      "count": 2,
+      "format": "f32",
+      "unit": "—"
+    },
+    {
+      "name": "Frequency",
+      "kind": "input_registers",
+      "address": 70,
+      "count": 2,
+      "format": "f32",
+      "unit": "Hz"
+    },
+    {
+      "name": "Import active energy",
+      "kind": "input_registers",
+      "address": 72,
+      "count": 2,
+      "format": "f32",
+      "unit": "kWh"
+    },
+    {
+      "name": "Export active energy",
+      "kind": "input_registers",
+      "address": 74,
+      "count": 2,
+      "format": "f32",
+      "unit": "kWh"
+    },
+    {
+      "name": "Import reactive energy",
+      "kind": "input_registers",
+      "address": 76,
+      "count": 2,
+      "format": "f32",
+      "unit": "kVArh"
+    },
+    {
+      "name": "Export reactive energy",
+      "kind": "input_registers",
+      "address": 78,
+      "count": 2,
+      "format": "f32",
+      "unit": "kVArh"
+    },
+    {
+      "name": "Total active energy",
+      "kind": "input_registers",
+      "address": 342,
+      "count": 2,
+      "format": "f32",
+      "unit": "kWh"
+    },
+    {
+      "name": "Total reactive energy",
+      "kind": "input_registers",
+      "address": 344,
+      "count": 2,
+      "format": "f32",
+      "unit": "kVArh"
+    }
+  ]
+}

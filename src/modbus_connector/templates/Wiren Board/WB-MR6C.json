@@ -1,0 +1,87 @@
+{
+  "name": "Wiren Board WB-MR6C v.2",
+  "description": "6-channel relay module (also WB-MR6LV/x, WB-MR6HV/x): relay coils K1-K6, discrete inputs 1-7 with counters (default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mr6c.json.jinja",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Relay K1",
+      "kind": "coils",
+      "address": 0,
+      "count": 1
+    },
+    {
+      "name": "Relay K2",
+      "kind": "coils",
+      "address": 1,
+      "count": 1
+    },
+    {
+      "name": "Relay K3",
+      "kind": "coils",
+      "address": 2,
+      "count": 1
+    },
+    {
+      "name": "Relay K4",
+      "kind": "coils",
+      "address": 3,
+      "count": 1
+    },
+    {
+      "name": "Relay K5",
+      "kind": "coils",
+      "address": 4,
+      "count": 1
+    },
+    {
+      "name": "Relay K6",
+      "kind": "coils",
+      "address": 5,
+      "count": 1
+    },
+    {
+      "name": "Inputs 1-7 state",
+      "kind": "discrete_inputs",
+      "address": 0,
+      "count": 7
+    },
+    {
+      "name": "Inputs 1-7 counters",
+      "kind": "input_registers",
+      "address": 32,
+      "count": 7
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    }
+  ]
+}

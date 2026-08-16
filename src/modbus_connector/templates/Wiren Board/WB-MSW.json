@@ -1,0 +1,101 @@
+{
+  "name": "Wiren Board WB-MSW v.3/v.4",
+  "description": "Multi-sensor: temperature, humidity, CO2, VOC, illuminance, sound, motion; LEDs and buzzer (default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-msw_v4.json",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Temperature",
+      "kind": "input_registers",
+      "address": 4,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "°C"
+    },
+    {
+      "name": "Humidity",
+      "kind": "input_registers",
+      "address": 5,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "%"
+    },
+    {
+      "name": "Dew point",
+      "kind": "input_registers",
+      "address": 367,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "°C"
+    },
+    {
+      "name": "CO2",
+      "kind": "input_registers",
+      "address": 8,
+      "count": 1,
+      "unit": "ppm"
+    },
+    {
+      "name": "Air quality (VOC)",
+      "kind": "input_registers",
+      "address": 11,
+      "count": 1
+    },
+    {
+      "name": "Sound level",
+      "kind": "input_registers",
+      "address": 3,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "dB"
+    },
+    {
+      "name": "Illuminance",
+      "kind": "input_registers",
+      "address": 9,
+      "count": 2,
+      "format": "u32",
+      "scale": 0.01,
+      "unit": "lx"
+    },
+    {
+      "name": "Motion (current)",
+      "kind": "input_registers",
+      "address": 283,
+      "count": 1
+    },
+    {
+      "name": "Motion (max)",
+      "kind": "input_registers",
+      "address": 280,
+      "count": 1
+    },
+    {
+      "name": "Buzzer",
+      "kind": "coils",
+      "address": 0,
+      "count": 1
+    },
+    {
+      "name": "Red LED",
+      "kind": "coils",
+      "address": 10,
+      "count": 1
+    },
+    {
+      "name": "Green LED",
+      "kind": "coils",
+      "address": 11,
+      "count": 1
+    }
+  ]
+}

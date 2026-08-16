@@ -1,0 +1,198 @@
+{
+  "name": "Wiren Board WB-MAP3E fw2",
+  "description": "3-phase energy meter: per-phase voltage/current/power, totals, frequency, active energy (default 9600 8N2, address on device label). Register map (hex addresses converted to decimal): https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-map3e-fw2.json",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Voltage L1",
+      "kind": "input_registers",
+      "address": 5136,
+      "count": 2,
+      "format": "u32",
+      "scale": 1.52588e-07,
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L2",
+      "kind": "input_registers",
+      "address": 5138,
+      "count": 2,
+      "format": "u32",
+      "scale": 1.52588e-07,
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L3",
+      "kind": "input_registers",
+      "address": 5140,
+      "count": 2,
+      "format": "u32",
+      "scale": 1.52588e-07,
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L1-L2",
+      "kind": "input_registers",
+      "address": 5148,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L2-L3",
+      "kind": "input_registers",
+      "address": 5149,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L3-L1",
+      "kind": "input_registers",
+      "address": 5150,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Current L1",
+      "kind": "input_registers",
+      "address": 5142,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Current L2",
+      "kind": "input_registers",
+      "address": 5144,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Current L3",
+      "kind": "input_registers",
+      "address": 5146,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Active power L1",
+      "kind": "input_registers",
+      "address": 4866,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.00512,
+      "unit": "W"
+    },
+    {
+      "name": "Active power L2",
+      "kind": "input_registers",
+      "address": 4868,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.00512,
+      "unit": "W"
+    },
+    {
+      "name": "Active power L3",
+      "kind": "input_registers",
+      "address": 4870,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.00512,
+      "unit": "W"
+    },
+    {
+      "name": "Total active power",
+      "kind": "input_registers",
+      "address": 4864,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.00512,
+      "unit": "W"
+    },
+    {
+      "name": "Total reactive power",
+      "kind": "input_registers",
+      "address": 4872,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.00512,
+      "unit": "var"
+    },
+    {
+      "name": "Total apparent power",
+      "kind": "input_registers",
+      "address": 4880,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.00512,
+      "unit": "VA"
+    },
+    {
+      "name": "Total power factor",
+      "kind": "input_registers",
+      "address": 4284,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.001
+    },
+    {
+      "name": "Frequency",
+      "kind": "input_registers",
+      "address": 4344,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "Hz"
+    },
+    {
+      "name": "Total active energy",
+      "kind": "input_registers",
+      "address": 4608,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Active energy L1",
+      "kind": "input_registers",
+      "address": 4612,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Active energy L2",
+      "kind": "input_registers",
+      "address": 4616,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Active energy L3",
+      "kind": "input_registers",
+      "address": 4620,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    }
+  ]
+}

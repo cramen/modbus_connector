@@ -24,6 +24,7 @@ fi
     --osx-bundle-identifier com.cramen.modbusconnector \
     --icon "$ICON" \
     --paths src \
+    --add-data "src/modbus_connector/templates:modbus_connector/templates" \
     src/modbus_connector/__main__.py
 
 rm -rf build  # промежуточные файлы PyInstaller, запускать их нельзя

@@ -1,0 +1,139 @@
+{
+  "name": "Delta VFD-C2000",
+  "description": "Vector control VFD, Modbus RS-485 (default 9600; factory protocol is ASCII 7N2 - set Pr.09-04=12 for RTU 8N1). Register map: C2000 User Manual ch.12.1-09, https://delta-automation.at/wp-content/uploads/2020/01/DELTA_IA-MDS_VFD-C2000_UM_EN_20190213.pdf",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "1",
+    "unit": 1,
+    "timeout": 1.0
+  },
+  "registers": [
+    {
+      "name": "Control word (1=stop, 2=run)",
+      "address": 8192,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "Frequency command",
+      "address": 8193,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "Hz"
+    },
+    {
+      "name": "E.F. / reset command (bit1=reset)",
+      "address": 8194,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "Warning / error code",
+      "address": 8448,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "Drive status",
+      "address": 8449,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "Frequency command readback",
+      "address": 8450,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "Hz"
+    },
+    {
+      "name": "Output frequency",
+      "address": 8451,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "Hz"
+    },
+    {
+      "name": "Output current",
+      "address": 8452,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "DC bus voltage",
+      "address": 8453,
+      "count": 1,
+      "scale": 0.1,
+      "unit": "V"
+    },
+    {
+      "name": "Output voltage",
+      "address": 8454,
+      "count": 1,
+      "scale": 0.1,
+      "unit": "V"
+    },
+    {
+      "name": "Multi-step speed step",
+      "address": 8455,
+      "count": 1
+    },
+    {
+      "name": "Power factor angle",
+      "address": 8458,
+      "count": 1,
+      "scale": 0.1,
+      "unit": "°"
+    },
+    {
+      "name": "Output torque",
+      "address": 8459,
+      "count": 1,
+      "scale": 0.1,
+      "unit": "%"
+    },
+    {
+      "name": "Motor speed",
+      "address": 8460,
+      "count": 1,
+      "unit": "rpm"
+    },
+    {
+      "name": "Output power",
+      "address": 8463,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "kW"
+    },
+    {
+      "name": "Multi-function display (Pr.00-04)",
+      "address": 8470,
+      "count": 1
+    },
+    {
+      "name": "IGBT temperature",
+      "address": 8718,
+      "count": 1,
+      "scale": 0.1,
+      "unit": "°C"
+    },
+    {
+      "name": "Capacitor temperature",
+      "address": 8719,
+      "count": 1,
+      "scale": 0.1,
+      "unit": "°C"
+    },
+    {
+      "name": "Energy",
+      "address": 8745,
+      "count": 1,
+      "scale": 0.1,
+      "unit": "kWh"
+    }
+  ]
+}

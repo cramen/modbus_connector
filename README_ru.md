@@ -23,6 +23,11 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 - Типы подключения: TCP (host, port, timeout), RTU (порт, baudrate, parity
   и т.д.; RTU по умолчанию) и **RTU over TCP / RTU over UDP** для
   преобразователей RS-485↔Ethernet — всё настраивается в GUI.
+- Шаблоны устройств (меню «Шаблоны»): готовые карты регистров и настройки
+  подключения по умолчанию для популярных устройств — Eastron SDM120/SDM630,
+  EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 и
+  Wiren Board WB-MSW/WB-MR6C/WB-MAP3E. Выбор шаблона открывает новую вкладку
+  с уже заполненными полями — остаётся нажать Connect.
 - Таблица регистров: строки с именем, типом области (coils, discrete inputs,
   holding/input registers), адресом и количеством; чтение и запись значений.
   Enter в колонке «New value» отправляет команду записи, Ctrl+R (Cmd+R на macOS)
@@ -157,6 +162,37 @@ Modbus-исключения выводятся в лог по имени (нап
 вкладки сохраняются в настройках при выходе и восстанавливаются при запуске —
 включая ширины колонок каждой таблицы. Меню **View** переключает тему
 (System/Light/Dark); выбор общий для приложения и сохраняется в настройках.
+
+### Шаблоны устройств
+
+Меню **«Шаблоны»** (между File и View) показывает встроенные шаблоны
+устройств, сгруппированные по производителям. Выбор шаблона открывает **новую
+вкладку** с настройками подключения и таблицей регистров, заполненными из
+шаблона, — нажмите **Connect** и читайте. До подключения вкладка называется
+именем шаблона.
+
+Чтобы добавить свой шаблон, положите JSON-файл в
+`src/modbus_connector/templates/<Manufacturer>/<Device>.json`:
+
+```json
+{
+  "name": "My Device",
+  "description": "необязательный текст, показывается в тултипе пункта меню",
+  "connection": {"type": "RTU", "rtu_baud": "9600", "unit": 1, "timeout": 3.0},
+  "registers": [
+    {"name": "Voltage", "kind": "input_registers", "address": 0, "count": 2,
+     "format": "f32", "unit": "V"}
+  ]
+}
+```
+
+`connection` принимает те же ключи, что и сохранённые настройки (`type` —
+TCP/RTU/RTU over TCP/RTU over UDP, `tcp_host`/`tcp_port` или `rtu_baud`/
+`rtu_bytesize`/`rtu_parity`/`rtu_stopbits`, `unit`, `timeout`); строка
+регистра — `name`, `kind`, `address` (адрес 0-based PDU), `count`, `format`
+и необязательные `order`, `scale`, `offset`, `unit` — те же поля, что у
+колонок таблицы. Полный пример — любой встроенный файл, например
+`templates/Eastron/SDM120.json`.
 
 ### Добавление регистров
 
@@ -434,9 +470,13 @@ src/modbus_connector/
   log_panel.py         # панель лога (скрываемая): чекбокс Raw с hex-кадрами,
                        # Save…
   settings_store.py    # сохранение настроек в ~/.modbus_connector/settings.json
+  templates/      # встроенные шаблоны устройств: <Manufacturer>/<Device>.json —
+                  # карты регистров + настройки подключения по умолчанию
+                  # (package data, чтение через importlib.resources; лоадер —
+                  # templates/__init__.py)
   session_widget.py # SessionWidget — одна Modbus-сессия (панели, окно
                     # сканера, поток воркера) как самостоятельный виджет
-  main_window.py  # главное окно: сессии во вкладках, меню File,
+  main_window.py  # главное окно: сессии во вкладках, меню File/Шаблоны/View,
                   # статус-бар следует за активной вкладкой
   app.py          # создание QApplication и запуск
   __main__.py     # python -m modbus_connector

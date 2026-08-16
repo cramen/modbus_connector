@@ -251,6 +251,20 @@ src/modbus_connector/
                        # иконка save — выгрузка всего лога (нормальный + raw)
                        # в файл, иконка clear — очистка
   settings_store.py    # load_settings()/save_settings() — JSON в ~/.modbus_connector/
+  templates/      # пакет-каталог шаблонов устройств:
+                  # <Manufacturer>/<Device>.json — карта регистров + дефолтные
+                  # настройки подключения ({"name", "description", "connection",
+                  # "registers": [...]}, адреса 0-based PDU); package data —
+                  # в бандл попадают через package-data в pyproject.toml и
+                  # --add-data в build.sh/build.bat (spec-файл gitignored и
+                  # сборкой не используется). Лоадер — templates/__init__.py
+                  # (НЕ templates.py: пакет перекроет одноимённый модуль);
+                  # чистый Python без Qt, чтение через importlib.resources
+                  # (работает и из PyInstaller-бандла): TemplateInfo(name,
+                  # manufacturer, resource, description), list_templates()
+                  # (сортировка производитель→имя, битые JSON пропускаются
+                  # с warning), load_template(info | "Manufacturer/Device") —
+                  # dict, пригодный для SessionWidget.set_state
   session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
                     # RegistersPanel + LogPanel + ScannerPanel (окно) +
                     # ModbusWorker в QThread, вся проводка сигналов внутри;
@@ -266,7 +280,12 @@ src/modbus_connector/
   main_window.py  # главное окно: QTabWidget с SessionWidget'ами (кнопка "+"
                   # — иконка add — в углу, последнюю вкладку закрыть нельзя),
                   # меню File
-                  # (save/load всех вкладок), меню View — радио-переключатели
+                  # (save/load всех вкладок), меню Templates («Шаблоны») между
+                  # File и View — подменю по производителям из list_templates(),
+                  # пункт-устройство открывает НОВУЮ вкладку и применяет шаблон
+                  # через set_state (заголовок вкладки — имя шаблона до
+                  # подключения; пустой каталог → disabled "(empty)"),
+                  # меню View — радио-переключатели
                   # темы (System/Light/Dark) и языка (English/Русский,
                   # QActionGroup'ы), languageChanged → _retranslate окна и
                   # сессий, смена темы → icons.refresh_icons() (цвет иконок
@@ -351,6 +370,10 @@ tests/
                            # масштаб), make_button (text/tooltip/accessibleName),
                            # refresh_icons: перерисовка, перекраска после смены
                            # темы, толерантность к удалённым кнопкам
+  test_templates.py        # каталог шаблонов: list/load, сортировка, битые
+                           # JSON, round-trip регистров через set_state
+  test_templates_menu.py   # меню Templates: структура подменю, открытие
+                           # вкладки по шаблону, retranslate заголовка
 ```
 
 ## Команды
@@ -363,6 +386,8 @@ ruff check .              # линт
 modbus-connector          # запуск GUI (или python -m modbus_connector)
 ./build.sh                # сборка standalone-приложения PyInstaller'ом в dist/
                           # (macOS: ModbusConnector.app + .dmg; extra `build` в pyproject)
+                          # шаблоны templates/ попадают в бандл: --add-data
+                          # в build.sh/build.bat + package-data в pyproject.toml
                           # иконка: assets/icon.icns (macOS) / icon.ico (Windows) / icon.png (Linux),
                           # источник — assets/icon.png (генерируется скриптом, см. git history)
 build.bat                 # то же под Windows (cmd): dist\ModbusConnector\ModbusConnector.exe

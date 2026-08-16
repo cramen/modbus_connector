@@ -1,0 +1,217 @@
+{
+  "name": "Huawei SUN2000",
+  "description": "Grid-tied PV inverter (SUN2000 KTL/L1/M0-M3 series). All registers are read with function 0x03 (holding); document addresses (32016 etc.) are used directly as PDU addresses — do NOT subtract offsets. Default: RTU 9600 8N1, slave 1; Modbus TCP port 502 available via SDongleA/SmartLogger (switch type to TCP, host = dongle IP). Source: Huawei Solar Inverter Modbus Interface Definitions, Issue 04 (2023-01-10), https://community.symcon.de/uploads/short-url/g80bOFCOJbpY2zKvpaA30EdGNDK.pdf",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "1",
+    "unit": 1,
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Model name",
+      "address": 30000,
+      "count": 15,
+      "format": "ascii"
+    },
+    {
+      "name": "Serial number",
+      "address": 30015,
+      "count": 10,
+      "format": "ascii"
+    },
+    {
+      "name": "Model ID",
+      "address": 30070,
+      "count": 1
+    },
+    {
+      "name": "Number of PV strings",
+      "address": 30071,
+      "count": 1
+    },
+    {
+      "name": "Rated power",
+      "address": 30073,
+      "count": 2,
+      "format": "u32",
+      "scale": 0.001,
+      "unit": "kW"
+    },
+    {
+      "name": "State 1 (bitfield)",
+      "address": 32000,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "Alarm 1 (bitfield)",
+      "address": 32008,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "Alarm 2 (bitfield)",
+      "address": 32009,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "Alarm 3 (bitfield)",
+      "address": 32010,
+      "count": 1,
+      "format": "hex"
+    },
+    {
+      "name": "PV1 voltage",
+      "address": 32016,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "V"
+    },
+    {
+      "name": "PV1 current",
+      "address": 32017,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "PV2 voltage",
+      "address": 32018,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "V"
+    },
+    {
+      "name": "PV2 current",
+      "address": 32019,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "Input power (DC)",
+      "address": 32064,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.001,
+      "unit": "kW"
+    },
+    {
+      "name": "Line voltage A-B / B-C / C-A",
+      "address": 32066,
+      "count": 3,
+      "scale": 0.1,
+      "unit": "V"
+    },
+    {
+      "name": "Phase voltage A / B / C",
+      "address": 32069,
+      "count": 3,
+      "scale": 0.1,
+      "unit": "V"
+    },
+    {
+      "name": "Phase current A / B / C",
+      "address": 32072,
+      "count": 6,
+      "format": "s32",
+      "scale": 0.001,
+      "unit": "A"
+    },
+    {
+      "name": "Peak active power today",
+      "address": 32078,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.001,
+      "unit": "kW"
+    },
+    {
+      "name": "Active power",
+      "address": 32080,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.001,
+      "unit": "kW"
+    },
+    {
+      "name": "Reactive power",
+      "address": 32082,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.001,
+      "unit": "kvar"
+    },
+    {
+      "name": "Power factor",
+      "address": 32084,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.001
+    },
+    {
+      "name": "Grid frequency",
+      "address": 32085,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "Hz"
+    },
+    {
+      "name": "Efficiency",
+      "address": 32086,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "%"
+    },
+    {
+      "name": "Internal temperature",
+      "address": 32087,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    },
+    {
+      "name": "Device status",
+      "address": 32089,
+      "count": 1
+    },
+    {
+      "name": "Fault code",
+      "address": 32090,
+      "count": 1
+    },
+    {
+      "name": "Total energy yield",
+      "address": 32106,
+      "count": 2,
+      "format": "u32",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Daily energy yield",
+      "address": 32114,
+      "count": 2,
+      "format": "u32",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Power meter active power (+export/-import)",
+      "address": 37113,
+      "count": 2,
+      "format": "s32",
+      "unit": "W"
+    }
+  ]
+}

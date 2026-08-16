@@ -1,0 +1,279 @@
+{
+  "name": "EPEver Tracer AN / XTRA",
+  "description": "MPPT solar charge controller (Tracer-AN / XTRA series), input registers, default RTU 115200 8N1 unit 1. Register map: EPEver/Epsolar Modbus protocol (1733_modbus_protocol.pdf, shared by Tracer AN/XTRA), https://raw.githubusercontent.com/tekk/Tracer-RS485-Modbus-Blynk-V2/master/doc/1733_modbus_protocol.pdf",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "115200",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "1",
+    "unit": 1
+  },
+  "registers": [
+    {
+      "name": "Rated PV input voltage",
+      "kind": "input_registers",
+      "address": 12288,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Rated PV input current",
+      "kind": "input_registers",
+      "address": 12289,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "Rated PV input power",
+      "kind": "input_registers",
+      "address": 12290,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "W"
+    },
+    {
+      "name": "Rated battery voltage",
+      "kind": "input_registers",
+      "address": 12292,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Rated charging current",
+      "kind": "input_registers",
+      "address": 12293,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "Rated charging power",
+      "kind": "input_registers",
+      "address": 12294,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "W"
+    },
+    {
+      "name": "Rated load current",
+      "kind": "input_registers",
+      "address": 12302,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "PV voltage",
+      "kind": "input_registers",
+      "address": 12544,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "PV current",
+      "kind": "input_registers",
+      "address": 12545,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "PV power",
+      "kind": "input_registers",
+      "address": 12546,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "W"
+    },
+    {
+      "name": "Battery voltage",
+      "kind": "input_registers",
+      "address": 12548,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Charging current",
+      "kind": "input_registers",
+      "address": 12549,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "Charging power",
+      "kind": "input_registers",
+      "address": 12550,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "W"
+    },
+    {
+      "name": "Load voltage",
+      "kind": "input_registers",
+      "address": 12556,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Load current",
+      "kind": "input_registers",
+      "address": 12557,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "A"
+    },
+    {
+      "name": "Load power",
+      "kind": "input_registers",
+      "address": 12558,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "W"
+    },
+    {
+      "name": "Battery temperature",
+      "kind": "input_registers",
+      "address": 12560,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "°C"
+    },
+    {
+      "name": "Case temperature",
+      "kind": "input_registers",
+      "address": 12561,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "°C"
+    },
+    {
+      "name": "Battery SOC",
+      "kind": "input_registers",
+      "address": 12570,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Battery status",
+      "kind": "input_registers",
+      "address": 12800,
+      "count": 1
+    },
+    {
+      "name": "Charging equipment status",
+      "kind": "input_registers",
+      "address": 12801,
+      "count": 1
+    },
+    {
+      "name": "Consumed energy today",
+      "kind": "input_registers",
+      "address": 13060,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Consumed energy this month",
+      "kind": "input_registers",
+      "address": 13062,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Consumed energy this year",
+      "kind": "input_registers",
+      "address": 13064,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Total consumed energy",
+      "kind": "input_registers",
+      "address": 13066,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Generated energy today",
+      "kind": "input_registers",
+      "address": 13068,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Generated energy this month",
+      "kind": "input_registers",
+      "address": 13070,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Generated energy this year",
+      "kind": "input_registers",
+      "address": 13072,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Total generated energy",
+      "kind": "input_registers",
+      "address": 13074,
+      "count": 2,
+      "format": "u32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "kWh"
+    },
+    {
+      "name": "Battery net current",
+      "kind": "input_registers",
+      "address": 13083,
+      "count": 2,
+      "format": "s32",
+      "order": "CDAB",
+      "scale": 0.01,
+      "unit": "A"
+    }
+  ]
+}

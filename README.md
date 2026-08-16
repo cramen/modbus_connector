@@ -23,6 +23,11 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Connection types: TCP (host, port, timeout), RTU (serial port, baudrate,
   parity, etc.; RTU by default) and **RTU over TCP / RTU over UDP** for
   RS-485↔Ethernet converters — all configured in the GUI.
+- Device templates (the **Templates** menu): ready-made register maps and
+  default connection settings for popular devices — Eastron SDM120/SDM630,
+  EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 and
+  Wiren Board WB-MSW/WB-MR6C/WB-MAP3E. Choosing a template opens a new tab
+  with everything pre-filled — just press Connect.
 - Register table: rows with a name, area type (coils, discrete inputs,
   holding/input registers), address and count; read and write values.
   Enter in the "New value" column sends the write command, Ctrl+R (Cmd+R on
@@ -158,6 +163,37 @@ statistics follow the active tab. All tabs are saved to the settings on exit
 and restored on the next launch — including each table's column widths. The
 **View** menu switches the theme (System/Light/Dark); the choice is app-wide
 and is saved with the settings.
+
+### Device templates
+
+The **Templates** menu (between File and View) lists the bundled device
+templates grouped by manufacturer. Choosing one opens a **new tab** with the
+connection settings and the register table pre-filled from the template —
+press **Connect** and read. The tab keeps the template's name until the
+session connects.
+
+To add your own template, drop a JSON file into
+`src/modbus_connector/templates/<Manufacturer>/<Device>.json`:
+
+```json
+{
+  "name": "My Device",
+  "description": "optional text, shown as the menu item tooltip",
+  "connection": {"type": "RTU", "rtu_baud": "9600", "unit": 1, "timeout": 3.0},
+  "registers": [
+    {"name": "Voltage", "kind": "input_registers", "address": 0, "count": 2,
+     "format": "f32", "unit": "V"}
+  ]
+}
+```
+
+`connection` accepts the same keys as the saved settings (`type` — TCP/RTU/
+RTU over TCP/RTU over UDP, `tcp_host`/`tcp_port` or `rtu_baud`/`rtu_bytesize`/
+`rtu_parity`/`rtu_stopbits`, `unit`, `timeout`); each register row takes
+`name`, `kind`, `address` (0-based PDU address), `count`, `format` and the
+optional `order`, `scale`, `offset`, `unit` — the same fields as the table
+columns. See any bundled file (e.g. `templates/Eastron/SDM120.json`) for a
+full example.
 
 ### Adding registers
 
@@ -427,9 +463,12 @@ src/modbus_connector/
   scanner_panel.py     # unit scanner + register address scan (separate window)
   log_panel.py         # log panel (hideable): Raw hex traffic toggle, Save…
   settings_store.py    # settings persistence in ~/.modbus_connector/settings.json
+  templates/      # bundled device templates: <Manufacturer>/<Device>.json
+                  # register maps + default connection settings (package data,
+                  # read via importlib.resources; loader in templates/__init__.py)
   session_widget.py # SessionWidget — one Modbus session (panels, scanner
                     # window, worker thread) as a self-contained widget
-  main_window.py  # main window: sessions in tabs, File menu,
+  main_window.py  # main window: sessions in tabs, File/Templates/View menus,
                   # status bar following the active tab
   app.py          # QApplication creation and startup
   __main__.py     # python -m modbus_connector

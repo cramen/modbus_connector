@@ -19,6 +19,7 @@ if errorlevel 1 exit /b 1
     --name ModbusConnector ^
     --icon assets\icon.ico ^
     --paths src ^
+    --add-data "src\modbus_connector\templates;modbus_connector/templates" ^
     src\modbus_connector\__main__.py
 if errorlevel 1 exit /b 1
 

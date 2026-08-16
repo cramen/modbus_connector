@@ -1,0 +1,279 @@
+{
+  "name": "Eastron SDM630",
+  "description": "3-phase energy meter, float32 input registers (default 2400 8N1). Register map: Eastron SDM630 Modbus Protocol, https://www.jwsmartmeters.co.uk/wp-content/uploads/2018/02/SDM630-Modbus-Protocol.pdf",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "2400",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "1",
+    "unit": 1,
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Voltage L1-N",
+      "kind": "input_registers",
+      "address": 0,
+      "count": 2,
+      "format": "f32",
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L2-N",
+      "kind": "input_registers",
+      "address": 2,
+      "count": 2,
+      "format": "f32",
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L3-N",
+      "kind": "input_registers",
+      "address": 4,
+      "count": 2,
+      "format": "f32",
+      "unit": "V"
+    },
+    {
+      "name": "Current L1",
+      "kind": "input_registers",
+      "address": 6,
+      "count": 2,
+      "format": "f32",
+      "unit": "A"
+    },
+    {
+      "name": "Current L2",
+      "kind": "input_registers",
+      "address": 8,
+      "count": 2,
+      "format": "f32",
+      "unit": "A"
+    },
+    {
+      "name": "Current L3",
+      "kind": "input_registers",
+      "address": 10,
+      "count": 2,
+      "format": "f32",
+      "unit": "A"
+    },
+    {
+      "name": "Active power L1",
+      "kind": "input_registers",
+      "address": 12,
+      "count": 2,
+      "format": "f32",
+      "unit": "W"
+    },
+    {
+      "name": "Active power L2",
+      "kind": "input_registers",
+      "address": 14,
+      "count": 2,
+      "format": "f32",
+      "unit": "W"
+    },
+    {
+      "name": "Active power L3",
+      "kind": "input_registers",
+      "address": 16,
+      "count": 2,
+      "format": "f32",
+      "unit": "W"
+    },
+    {
+      "name": "Apparent power L1",
+      "kind": "input_registers",
+      "address": 18,
+      "count": 2,
+      "format": "f32",
+      "unit": "VA"
+    },
+    {
+      "name": "Apparent power L2",
+      "kind": "input_registers",
+      "address": 20,
+      "count": 2,
+      "format": "f32",
+      "unit": "VA"
+    },
+    {
+      "name": "Apparent power L3",
+      "kind": "input_registers",
+      "address": 22,
+      "count": 2,
+      "format": "f32",
+      "unit": "VA"
+    },
+    {
+      "name": "Reactive power L1",
+      "kind": "input_registers",
+      "address": 24,
+      "count": 2,
+      "format": "f32",
+      "unit": "var"
+    },
+    {
+      "name": "Reactive power L2",
+      "kind": "input_registers",
+      "address": 26,
+      "count": 2,
+      "format": "f32",
+      "unit": "var"
+    },
+    {
+      "name": "Reactive power L3",
+      "kind": "input_registers",
+      "address": 28,
+      "count": 2,
+      "format": "f32",
+      "unit": "var"
+    },
+    {
+      "name": "Power factor L1",
+      "kind": "input_registers",
+      "address": 30,
+      "count": 2,
+      "format": "f32",
+      "unit": "—"
+    },
+    {
+      "name": "Power factor L2",
+      "kind": "input_registers",
+      "address": 32,
+      "count": 2,
+      "format": "f32",
+      "unit": "—"
+    },
+    {
+      "name": "Power factor L3",
+      "kind": "input_registers",
+      "address": 34,
+      "count": 2,
+      "format": "f32",
+      "unit": "—"
+    },
+    {
+      "name": "Sum of line currents",
+      "kind": "input_registers",
+      "address": 48,
+      "count": 2,
+      "format": "f32",
+      "unit": "A"
+    },
+    {
+      "name": "Total system power",
+      "kind": "input_registers",
+      "address": 52,
+      "count": 2,
+      "format": "f32",
+      "unit": "W"
+    },
+    {
+      "name": "Total system apparent power",
+      "kind": "input_registers",
+      "address": 56,
+      "count": 2,
+      "format": "f32",
+      "unit": "VA"
+    },
+    {
+      "name": "Total system power factor",
+      "kind": "input_registers",
+      "address": 62,
+      "count": 2,
+      "format": "f32",
+      "unit": "—"
+    },
+    {
+      "name": "Frequency",
+      "kind": "input_registers",
+      "address": 70,
+      "count": 2,
+      "format": "f32",
+      "unit": "Hz"
+    },
+    {
+      "name": "Import active energy",
+      "kind": "input_registers",
+      "address": 72,
+      "count": 2,
+      "format": "f32",
+      "unit": "kWh"
+    },
+    {
+      "name": "Export active energy",
+      "kind": "input_registers",
+      "address": 74,
+      "count": 2,
+      "format": "f32",
+      "unit": "kWh"
+    },
+    {
+      "name": "Import reactive energy",
+      "kind": "input_registers",
+      "address": 76,
+      "count": 2,
+      "format": "f32",
+      "unit": "kVArh"
+    },
+    {
+      "name": "Export reactive energy",
+      "kind": "input_registers",
+      "address": 78,
+      "count": 2,
+      "format": "f32",
+      "unit": "kVArh"
+    },
+    {
+      "name": "Voltage L1-L2",
+      "kind": "input_registers",
+      "address": 200,
+      "count": 2,
+      "format": "f32",
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L2-L3",
+      "kind": "input_registers",
+      "address": 202,
+      "count": 2,
+      "format": "f32",
+      "unit": "V"
+    },
+    {
+      "name": "Voltage L3-L1",
+      "kind": "input_registers",
+      "address": 204,
+      "count": 2,
+      "format": "f32",
+      "unit": "V"
+    },
+    {
+      "name": "Neutral current",
+      "kind": "input_registers",
+      "address": 224,
+      "count": 2,
+      "format": "f32",
+      "unit": "A"
+    },
+    {
+      "name": "Total active energy",
+      "kind": "input_registers",
+      "address": 342,
+      "count": 2,
+      "format": "f32",
+      "unit": "kWh"
+    },
+    {
+      "name": "Total reactive energy",
+      "kind": "input_registers",
+      "address": 344,
+      "count": 2,
+      "format": "f32",
+      "unit": "kVArh"
+    }
+  ]
+}
