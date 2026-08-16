@@ -207,6 +207,8 @@ class SessionWidget(QWidget):
         self._log_button.setText(tr("Log"))
         self.scanner_panel.setWindowTitle(tr("Modbus Scanner"))
         self.connection_panel.retranslate()
+        self.registers_panel.retranslate()
+        self.log_panel.retranslate()
         self.titleChanged.emit(self.title())
 
     @Slot(object)

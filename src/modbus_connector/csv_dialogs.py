@@ -14,12 +14,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector.i18n import tr
 from modbus_connector.models import CSV_COLUMNS, guess_column_mapping
 from modbus_connector.theme import FitComboBox
 
 EXPORTABLE_COLUMNS = [*CSV_COLUMNS, "value"]
 ESSENTIAL_FIELDS = ("name", "kind", "address")
-SKIP = "— skip —"
+SKIP = "— skip —"  # display only; the sentinel is the item's None data
 
 
 class ExportColumnsDialog(QDialog):
@@ -27,7 +28,7 @@ class ExportColumnsDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Export CSV")
+        self.setWindowTitle(tr("Export CSV"))
         self.setMinimumSize(380, 360)
 
         self._list = QListWidget()
@@ -39,13 +40,13 @@ class ExportColumnsDialog(QDialog):
         self._list.setCurrentRow(0)
         self._list.installEventFilter(self)  # keys work before the view eats them
 
-        select_all = QPushButton("Select all")
+        select_all = QPushButton(tr("Select all"))
         select_all.clicked.connect(lambda: self._set_all(Qt.CheckState.Checked))
-        select_none = QPushButton("Select none")
+        select_none = QPushButton(tr("Select none"))
         select_none.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
-        move_up = QPushButton("Move up")
+        move_up = QPushButton(tr("Move up"))
         move_up.clicked.connect(lambda: self._move_current(-1))
-        move_down = QPushButton("Move down")
+        move_down = QPushButton(tr("Move down"))
         move_down.clicked.connect(lambda: self._move_current(1))
 
         side = QVBoxLayout()
@@ -66,7 +67,7 @@ class ExportColumnsDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Choose columns to export and their order"))
+        layout.addWidget(QLabel(tr("Choose columns to export and their order")))
         layout.addLayout(center)
         layout.addWidget(buttons)
         self._list.setFocus()
@@ -116,20 +117,23 @@ class ImportMappingDialog(QDialog):
 
     def __init__(self, header: list[str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Import CSV")
+        self.setWindowTitle(tr("Import CSV"))
         self.setMinimumSize(480, 360)
 
         guessed = guess_column_mapping(header)
         self._table = QTableWidget(len(header), 2)
-        self._table.setHorizontalHeaderLabels(["File column", "Maps to"])
+        self._table.setHorizontalHeaderLabels([tr("File column"), tr("Maps to")])
         self._table.verticalHeader().setVisible(False)
         for row, column in enumerate(header):
             item = QTableWidgetItem(column)
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(row, 0, item)
             combo = FitComboBox()
-            combo.addItems([SKIP, *CSV_COLUMNS])
-            combo.setCurrentText(guessed.get(column, SKIP))
+            combo.addItem(tr(SKIP), None)  # the skip sentinel is the None data
+            for field in CSV_COLUMNS:  # field names are data: never translated
+                combo.addItem(field, field)
+            if column in guessed:
+                combo.setCurrentText(guessed[column])
             self._table.setCellWidget(row, 1, combo)
         self._table.resizeColumnsToContents()
         self._table.setCurrentCell(0, 0)
@@ -146,7 +150,7 @@ class ImportMappingDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Match file columns to register fields"))
+        layout.addWidget(QLabel(tr("Match file columns to register fields")))
         layout.addWidget(self._table)
         layout.addWidget(self._warning)
         layout.addWidget(buttons)
@@ -179,15 +183,18 @@ class ImportMappingDialog(QDialog):
         mapping = {}
         for row in range(self._table.rowCount()):
             combo = self._table.cellWidget(row, 1)
-            if combo.currentText() != SKIP:
-                mapping[self._table.item(row, 0).text()] = combo.currentText()
+            field = combo.currentData()  # None for the skip item
+            if field is not None:
+                mapping[self._table.item(row, 0).text()] = field
         return mapping
 
     def _validate(self) -> None:
         fields = set(self.mapping().values())
         missing = [field for field in ESSENTIAL_FIELDS if field not in fields]
         if missing:
-            self._warning.setText(f"Map the essential fields: {', '.join(missing)}")
+            self._warning.setText(
+                tr("Map the essential fields: {fields}", fields=", ".join(missing))
+            )
             self._warning.show()
             return
         self.accept()

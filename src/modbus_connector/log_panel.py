@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector.i18n import tr
+
 MAX_LINES_PER_KIND = 5000
 
 
@@ -22,22 +24,27 @@ class LogPanel(QWidget):
         self._entries: list[tuple[bool, str]] = []
         self._counts = [0, 0]  # normal, raw
         self._edit = QPlainTextEdit(readOnly=True, maximumBlockCount=2 * MAX_LINES_PER_KIND)
-        clear_button = QPushButton("Clear")
-        clear_button.clicked.connect(self._clear)
-        self._raw_checkbox = QCheckBox("Raw")  # unchecked: raw frames are noisy
+        self._clear_button = QPushButton(tr("Clear"))
+        self._clear_button.clicked.connect(self._clear)
+        self._raw_checkbox = QCheckBox(tr("Raw"))  # unchecked: raw frames are noisy
         self._raw_checkbox.toggled.connect(self._render)
-        save_button = QPushButton("Save…")
-        save_button.clicked.connect(self._save_to_file)
+        self._save_button = QPushButton(tr("Save…"))
+        self._save_button.clicked.connect(self._save_to_file)
 
         buttons = QHBoxLayout()
         buttons.addWidget(self._raw_checkbox)
         buttons.addStretch(1)
-        buttons.addWidget(save_button)
-        buttons.addWidget(clear_button)
+        buttons.addWidget(self._save_button)
+        buttons.addWidget(self._clear_button)
 
         layout = QVBoxLayout(self)
         layout.addLayout(buttons)
         layout.addWidget(self._edit)
+
+    def retranslate(self) -> None:
+        self._clear_button.setText(tr("Clear"))
+        self._raw_checkbox.setText(tr("Raw"))
+        self._save_button.setText(tr("Save…"))
 
     @Slot(str)
     def append(self, line: str) -> None:
@@ -76,7 +83,7 @@ class LogPanel(QWidget):
     def _save_to_file(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Log",
+            tr("Save Log"),
             str(Path.home() / "modbus.log"),
             "Log files (*.log);;Text files (*.txt)",
         )
@@ -89,6 +96,8 @@ class LogPanel(QWidget):
                 "\n".join(text for _, text in self._entries) + "\n", encoding="utf-8"
             )
         except OSError as exc:
-            self.append(f"✗ failed to save log to {path}: {exc}")
+            self.append(
+                tr("✗ failed to save log to {path}: {exc}", path=path, exc=exc)
+            )
             return
-        self.append(f"→ log saved to {path}")
+        self.append(tr("→ log saved to {path}", path=path))

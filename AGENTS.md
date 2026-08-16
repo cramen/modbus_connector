@@ -315,7 +315,9 @@ tests/
                            # ключа "theme", меню View (эксклюзивность)
   test_i18n.py             # tr() fallback, set_language, меню Language
                            # (retranslate окна/панелей), round-trip "language",
-                           # тип подключения в state всегда английский
+                           # тип подключения в state всегда английский,
+                           # заголовки/кнопки таблицы, диалоги CSV, шаблоны
+                           # лога worker'а
   test_graph_window.py     # чек-лист рядов, маркеры stats, Follow, zoom→Manual
 ```
 

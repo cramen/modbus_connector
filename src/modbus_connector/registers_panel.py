@@ -49,6 +49,7 @@ from modbus_connector.datalogger import (
 )
 from modbus_connector.datalogger_dialog import LoggingSettingsDialog
 from modbus_connector.help_dialog import REGISTERS_HELP, make_help_button
+from modbus_connector.i18n import tr
 from modbus_connector.models import (
     CSV_COLUMNS,
     ByteOrder,
@@ -71,6 +72,16 @@ KINDS = list(get_args(RegisterKind))
 FORMATS = list(get_args(DisplayFormat))
 ORDERS = list(get_args(ByteOrder))
 REGISTER_KINDS = ("holding_registers", "input_registers")
+
+# English keys for the table header; display text is translated from them
+HEADER_LABELS = (
+    "Name", "Type", "Address", "Count", "Unit ID", "Poll, ms",
+    "Format", "Value", "New value", "Trend", "",
+)
+TABLE_TOOLTIP = (
+    "Enter in 'New value' = write raw values (no scale/offset applied), "
+    "Ctrl/Cmd+R = read current row, Ctrl/Cmd+Shift+R = read all rows"
+)
 
 (
     COL_NAME,
@@ -188,23 +199,11 @@ class RegistersPanel(QWidget):
         self._sparklines: dict[int, SparklineWidget] = {}
         self._last_values: dict[int, list] = {}  # token -> last raw read values
         self._bus_enabled = False  # no bus access until a connection is up
+        self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
+        self._translatable_tips: list[tuple[QWidget, str]] = []
 
         self._table = QTableWidget(0, 11)
-        self._table.setHorizontalHeaderLabels(
-            [
-                "Name",
-                "Type",
-                "Address",
-                "Count",
-                "Unit ID",
-                "Poll, ms",
-                "Format",
-                "Value",
-                "New value",
-                "Trend",
-                "",
-            ]
-        )
+        self._table.setHorizontalHeaderLabels([tr(text) for text in HEADER_LABELS])
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Interactive
         )
@@ -218,10 +217,7 @@ class RegistersPanel(QWidget):
         ):
             self._table.setColumnWidth(col, width)
         self._table.verticalHeader().setVisible(False)
-        self._table.setToolTip(
-            "Enter in 'New value' = write raw values (no scale/offset applied), "
-            "Ctrl/Cmd+R = read current row, Ctrl/Cmd+Shift+R = read all rows"
-        )
+        self._table.setToolTip(tr(TABLE_TOOLTIP))
         self._table.itemChanged.connect(self._on_item_changed)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
@@ -254,43 +250,56 @@ class RegistersPanel(QWidget):
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(slot)
 
-        add_button = QPushButton("Add register")
+        add_button = QPushButton()
+        self._track(add_button, "Add register")
         add_button.clicked.connect(lambda: self._add_row())
-        self._read_all_button = QPushButton("Read all")
-        self._read_all_button.setToolTip("Read every row once (Ctrl/Cmd+Shift+R)")
+        self._read_all_button = QPushButton()
+        self._track(
+            self._read_all_button, "Read all", "Read every row once (Ctrl/Cmd+Shift+R)"
+        )
         self._read_all_button.clicked.connect(self.read_all)
-        sort_button = QPushButton("Sort by address")
+        sort_button = QPushButton()
+        self._track(sort_button, "Sort by address")
         sort_button.clicked.connect(self._sort_by_address)
-        self._mask_write_button = QPushButton("Mask write (0x16)…")
-        self._mask_write_button.setToolTip(
+        self._mask_write_button = QPushButton()
+        self._track(
+            self._mask_write_button,
+            "Mask write (0x16)…",
             "Set or clear individual bits of a holding register without touching "
             "others: result = (value AND and-mask) OR (or-mask AND NOT and-mask). "
-            "Typical use: bit fields in PLC configuration registers."
+            "Typical use: bit fields in PLC configuration registers.",
         )
         self._mask_write_button.clicked.connect(self._on_mask_write)
-        self._readwrite_button = QPushButton("Read/Write (0x17)…")
-        self._readwrite_button.setToolTip(
+        self._readwrite_button = QPushButton()
+        self._track(
+            self._readwrite_button,
+            "Read/Write (0x17)…",
             "Atomic transaction: write holding registers and read others in a "
             "single Modbus exchange (function 0x17). Used when a device requires "
-            "read-modify-write without a race window."
+            "read-modify-write without a race window.",
         )
         self._readwrite_button.clicked.connect(self._on_readwrite)
 
         self._filter_edit = QLineEdit()
-        self._filter_edit.setPlaceholderText("Filter…")
+        self._filter_edit.setPlaceholderText(tr("Filter…"))
         self._filter_edit.setClearButtonEnabled(True)
         self._filter_edit.textChanged.connect(self._apply_filter)
 
-        display_button = QPushButton("Display…")
-        display_button.setToolTip("Per-row Scale/Offset/Unit and byte order settings")
+        display_button = QPushButton()
+        self._track(
+            display_button,
+            "Display…",
+            "Per-row Scale/Offset/Unit and byte order settings",
+        )
         display_button.clicked.connect(self._on_display_settings)
         csv_button = QToolButton()
-        csv_button.setText("CSV")
-        csv_button.setToolTip("Import/export the register table as CSV")
+        self._track(csv_button, "CSV", "Import/export the register table as CSV")
         csv_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         csv_menu = QMenu(csv_button)
-        csv_menu.addAction("Import table…", self._on_csv_import)
-        csv_menu.addAction("Export…", self._on_csv_export)
+        self._csv_import_action = csv_menu.addAction(
+            tr("Import table…"), self._on_csv_import
+        )
+        self._csv_export_action = csv_menu.addAction(tr("Export…"), self._on_csv_export)
         csv_button.setMenu(csv_menu)
 
         self._log_settings = LogSettings()
@@ -298,22 +307,27 @@ class RegistersPanel(QWidget):
         self._log_flush_timer = QTimer(self)
         self._log_flush_timer.setInterval(1000)
         self._log_flush_timer.timeout.connect(self._logger.flush)
-        self._log_button = QPushButton("Log to file")
+        self._log_button = QPushButton(tr("Log to file"))  # text never changes
         self._log_button.setCheckable(True)
         self._log_button.clicked.connect(self._toggle_logging)
         self._log_settings_button = QToolButton()
         self._log_settings_button.setText("⚙")
         self._log_settings_button.setFixedSize(28, 28)
-        self._log_settings_button.setToolTip("Logging settings…")
+        self._translatable_tips.append((self._log_settings_button, "Logging settings…"))
+        self._log_settings_button.setToolTip(tr("Logging settings…"))
         self._log_settings_button.clicked.connect(self._on_logging_settings)
         self._sync_logging_ui()
 
         self._global_order_combo = theme.FitComboBox()
         self._global_order_combo.addItems(ORDERS)
-        self._global_order_combo.setToolTip(
-            "Default byte order for 32/64-bit formats "
-            "(rows without an explicit order inherit it)"
+        self._translatable_tips.append(
+            (
+                self._global_order_combo,
+                "Default byte order for 32/64-bit formats "
+                "(rows without an explicit order inherit it)",
+            )
         )
+        self._global_order_combo.setToolTip(tr(self._translatable_tips[-1][1]))
 
         self._poll_interval = QSpinBox(minimum=100, maximum=600_000, value=1000)
         self._poll_interval.setSuffix(" ms")
@@ -323,20 +337,24 @@ class RegistersPanel(QWidget):
         self._recording = False  # capture runs only while polling with record
         self._poll_button = QToolButton()
         self._poll_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self._poll_button.setToolTip(
-            "Poll all rows with the Interval period; the dropdown chooses whether "
-            "value history is recorded for sparklines and the graph window "
-            "(bounded buffer, ~10k samples per row)"
+        self._translatable_tips.append(
+            (
+                self._poll_button,
+                "Poll all rows with the Interval period; the dropdown chooses whether "
+                "value history is recorded for sparklines and the graph window "
+                "(bounded buffer, ~10k samples per row)",
+            )
         )
+        self._poll_button.setToolTip(tr(self._translatable_tips[-1][1]))
         poll_menu = QMenu(self._poll_button)
-        self._start_poll_action = poll_menu.addAction("Start polling")
-        self._start_record_action = poll_menu.addAction("Start polling and record")
+        self._start_poll_action = poll_menu.addAction(tr("Start polling"))
+        self._start_record_action = poll_menu.addAction(tr("Start polling and record"))
         self._start_poll_action.triggered.connect(lambda: self.start_polling(False))
         self._start_record_action.triggered.connect(lambda: self.start_polling(True))
         self._poll_button.setMenu(poll_menu)
         self._poll_button.clicked.connect(self._toggle_polling)
         self.pollStateChanged.connect(self._sync_poll_button)
-        self._poll_button.setText("Start polling and record")
+        self._poll_button.setText(tr("Start polling and record"))
 
         top = QHBoxLayout()
         top.addWidget(add_button)
@@ -350,9 +368,13 @@ class RegistersPanel(QWidget):
         top.addWidget(self._log_button)
         top.addWidget(self._log_settings_button)
         top.addStretch(1)
-        top.addWidget(QLabel("Order:"))
+        order_label = QLabel()
+        self._track(order_label, "Order:")
+        top.addWidget(order_label)
         top.addWidget(self._global_order_combo)
-        top.addWidget(QLabel("Interval:"))
+        interval_label = QLabel()
+        self._track(interval_label, "Interval:")
+        top.addWidget(interval_label)
         top.addWidget(self._poll_interval)
         top.addWidget(self._poll_button)
         self._help_button = make_help_button(
@@ -378,6 +400,31 @@ class RegistersPanel(QWidget):
             self._log_button,
         ):
             button.setEnabled(ok)
+
+    def _track(self, widget: QWidget, text: str, tip: str | None = None) -> None:
+        widget.setText(tr(text))
+        self._translatable.append((widget, text))
+        if tip is not None:
+            widget.setToolTip(tr(tip))
+            self._translatable_tips.append((widget, tip))
+
+    def retranslate(self) -> None:
+        """Переприменить tr() ко всем строкам панели (по смене языка)."""
+        for widget, text in self._translatable:
+            widget.setText(tr(text))
+        for widget, tip in self._translatable_tips:
+            widget.setToolTip(tr(tip))
+        self._table.setHorizontalHeaderLabels([tr(text) for text in HEADER_LABELS])
+        self._table.setToolTip(tr(TABLE_TOOLTIP))
+        self._filter_edit.setPlaceholderText(tr("Filter…"))
+        self._csv_import_action.setText(tr("Import table…"))
+        self._csv_export_action.setText(tr("Export…"))
+        self._log_button.setText(tr("Log to file"))
+        self._start_poll_action.setText(tr("Start polling"))
+        self._start_record_action.setText(tr("Start polling and record"))
+        # state-dependent texts go through their sync paths, not stale snapshots
+        self._sync_poll_button(self.is_polling(), self._recording)
+        self._sync_logging_ui()
 
     def set_unit_id(self, unit: int) -> None:
         self._unit_id = unit
@@ -534,8 +581,12 @@ class RegistersPanel(QWidget):
             added += 1
         if added or skipped:
             self.logLine.emit(
-                f"← scanner: added {added} rows to the table"
-                + (f", skipped {skipped} duplicates" if skipped else "")
+                tr("← scanner: added {added} rows to the table", added=added)
+                + (
+                    tr(", skipped {skipped} duplicates", skipped=skipped)
+                    if skipped
+                    else ""
+                )
             )
 
     def _add_row(self, row: RegisterRow | None = None) -> None:
@@ -559,13 +610,17 @@ class RegistersPanel(QWidget):
         self._table.setItem(index, COL_COUNT, QTableWidgetItem(str(row.count)))
 
         unit_id_item = QTableWidgetItem("" if row.unit_id is None else str(row.unit_id))
-        unit_id_item.setToolTip("Modbus unit 1..247, empty = unit from the connection panel")
+        unit_id_item.setToolTip(
+            tr("Modbus unit 1..247, empty = unit from the connection panel")
+        )
         self._table.setItem(index, COL_UNIT_ID, unit_id_item)
 
         poll_item = QTableWidgetItem("" if row.poll_ms is None else str(row.poll_ms))
         poll_item.setToolTip(
-            "Per-row poll interval in ms, empty = global interval; "
-            "a row with its own interval is polled by a dedicated timer"
+            tr(
+                "Per-row poll interval in ms, empty = global interval; "
+                "a row with its own interval is polled by a dedicated timer"
+            )
         )
         self._table.setItem(index, COL_POLL, poll_item)
 
@@ -573,7 +628,9 @@ class RegistersPanel(QWidget):
         format_combo.addItems(FORMATS)
         format_combo.setCurrentText(row.format)
         format_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        format_combo.setToolTip("Display format (registers only; coils/discrete show 0/1)")
+        format_combo.setToolTip(
+            tr("Display format (registers only; coils/discrete show 0/1)")
+        )
         self._table.setCellWidget(index, COL_FORMAT, format_combo)
 
         self._row_display[self._row_token_counter] = RowDisplaySettings(
@@ -596,7 +653,7 @@ class RegistersPanel(QWidget):
             self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarCloseButton)
         )
         delete_button.setFixedSize(26, 26)
-        delete_button.setToolTip("Delete row")
+        delete_button.setToolTip(tr("Delete row"))
         delete_button.clicked.connect(self._on_delete_clicked)
         actions = QWidget()
         actions_layout = QHBoxLayout(actions)
@@ -717,7 +774,7 @@ class RegistersPanel(QWidget):
     @Slot()
     def _on_csv_import(self) -> None:
         path_str, _ = QFileDialog.getOpenFileName(
-            self, "Import registers from CSV", str(Path.home()), "CSV (*.csv)"
+            self, tr("Import registers from CSV"), str(Path.home()), "CSV (*.csv)"
         )
         if not path_str:
             return
@@ -725,7 +782,7 @@ class RegistersPanel(QWidget):
         try:
             header = csv_header(path.read_text(encoding="utf-8-sig"))
         except OSError as exc:
-            self.logLine.emit(f"✗ failed to read {path}: {exc}")
+            self.logLine.emit(tr("✗ failed to read {path}: {exc}", path=path, exc=exc))
             return
         if not header:  # no header row at all: let the parser report it in the log
             self.import_csv(path)
@@ -742,10 +799,10 @@ class RegistersPanel(QWidget):
             return
         columns = dialog.columns()
         if not columns:
-            self.logLine.emit("✗ export: no columns selected")
+            self.logLine.emit(tr("✗ export: no columns selected"))
             return
         path_str, _ = QFileDialog.getSaveFileName(
-            self, "Export registers to CSV", str(Path.home() / "registers.csv"),
+            self, tr("Export registers to CSV"), str(Path.home() / "registers.csv"),
             "CSV (*.csv)",
         )
         if path_str:
@@ -755,12 +812,14 @@ class RegistersPanel(QWidget):
         try:
             text = path.read_text(encoding="utf-8-sig")
         except OSError as exc:
-            self.logLine.emit(f"✗ failed to read {path}: {exc}")
+            self.logLine.emit(tr("✗ failed to read {path}: {exc}", path=path, exc=exc))
             return
         try:
             parsed = rows_from_csv(text, mapping)
         except ValueError as exc:
-            self.logLine.emit(f"✗ failed to import {path}: {exc}")
+            self.logLine.emit(
+                tr("✗ failed to import {path}: {exc}", path=path, exc=exc)
+            )
             return
         self.set_state(  # import replaces the whole table
             [
@@ -780,7 +839,9 @@ class RegistersPanel(QWidget):
                 for row, display in parsed
             ]
         )
-        self.logLine.emit(f"← imported {len(parsed)} rows from {path}")
+        self.logLine.emit(
+            tr("← imported {count} rows from {path}", count=len(parsed), path=path)
+        )
 
     def export_csv(self, path: Path, columns: list[str] | None = None) -> None:
         # full snapshot format by default: table columns plus the Value cell
@@ -802,9 +863,11 @@ class RegistersPanel(QWidget):
         try:
             path.write_text(buffer.getvalue(), encoding="utf-8-sig")
         except OSError as exc:
-            self.logLine.emit(f"✗ failed to write {path}: {exc}")
+            self.logLine.emit(tr("✗ failed to write {path}: {exc}", path=path, exc=exc))
             return
-        self.logLine.emit(f"→ exported {count} rows to {path}")
+        self.logLine.emit(
+            tr("→ exported {count} rows to {path}", count=count, path=path)
+        )
 
     @Slot()
     def _on_display_settings(self) -> None:
@@ -813,10 +876,10 @@ class RegistersPanel(QWidget):
             self._display_dialog.activateWindow()
             return
         dialog = QDialog(self)
-        dialog.setWindowTitle("Per-row display settings")
+        dialog.setWindowTitle(tr("Per-row display settings"))
         table = QTableWidget(0, 6)
         table.setHorizontalHeaderLabels(
-            ["Name", "Address", "Scale", "Offset", "Unit", "Order"]
+            [tr(h) for h in ("Name", "Address", "Scale", "Offset", "Unit", "Order")]
         )
         table.blockSignals(True)
         for index in range(self._table.rowCount()):
@@ -835,8 +898,12 @@ class RegistersPanel(QWidget):
             table.setItem(row_index, 3, QTableWidgetItem(f"{settings.offset:g}"))
             table.setItem(row_index, 4, QTableWidgetItem(settings.unit))
             order_combo = theme.FitComboBox()
-            order_combo.addItems(["default", *ORDERS])
-            order_combo.setCurrentText(settings.order or "default")
+            # anything outside ORDERS means "inherit" — display text is free
+            order_combo.addItem(tr("default"), "")
+            order_combo.addItems(ORDERS)
+            order_combo.setCurrentText(
+                settings.order if settings.order else tr("default")
+            )
             order_combo.currentTextChanged.connect(
                 lambda text, t=token: self._set_row_order(t, text)
             )
@@ -848,8 +915,8 @@ class RegistersPanel(QWidget):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel("Rows added or deleted while this dialog is open"
-                                " appear after reopening it."))
+        layout.addWidget(QLabel(tr("Rows added or deleted while this dialog is open"
+                                   " appear after reopening it.")))
         layout.addWidget(table)
         layout.addWidget(buttons)
         dialog.resize(620, 350)
@@ -886,9 +953,9 @@ class RegistersPanel(QWidget):
     @Slot()
     def _on_mask_write(self) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Mask write (function 0x16)")
+        dialog.setWindowTitle(tr("Mask write (function 0x16)"))
         unit_edit = QLineEdit()
-        unit_edit.setPlaceholderText("empty = global unit")
+        unit_edit.setPlaceholderText(tr("empty = global unit"))
         address_edit = QLineEdit()
         and_edit = QLineEdit("0xFFFF")
         or_edit = QLineEdit("0x0000")
@@ -900,15 +967,17 @@ class RegistersPanel(QWidget):
         form = QFormLayout(dialog)
         form.addRow(
             QLabel(
-                "Set/clear bits of one holding register:\n"
-                "result = (value AND and-mask) OR (or-mask AND NOT and-mask).\n"
-                "Masks accept decimal or hex (e.g. 0xFF0F)."
+                tr(
+                    "Set/clear bits of one holding register:\n"
+                    "result = (value AND and-mask) OR (or-mask AND NOT and-mask).\n"
+                    "Masks accept decimal or hex (e.g. 0xFF0F)."
+                )
             )
         )
-        form.addRow("Unit:", unit_edit)
-        form.addRow("Address:", address_edit)
-        form.addRow("AND mask:", and_edit)
-        form.addRow("OR mask:", or_edit)
+        form.addRow(tr("Unit:"), unit_edit)
+        form.addRow(tr("Address:"), address_edit)
+        form.addRow(tr("AND mask:"), and_edit)
+        form.addRow(tr("OR mask:"), or_edit)
         form.addRow(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -917,12 +986,14 @@ class RegistersPanel(QWidget):
             and_mask = int(and_edit.text().strip(), 0)
             or_mask = int(or_edit.text().strip(), 0)
         except ValueError:
-            self.logLine.emit("✗ mask write: invalid address/mask (dec or 0x… hex)")
+            self.logLine.emit(
+                tr("✗ mask write: invalid address/mask (dec or 0x… hex)")
+            )
             return
         if not 0 <= address <= 0xFFFF or not 0 <= and_mask <= 0xFFFF or not (
             0 <= or_mask <= 0xFFFF
         ):
-            self.logLine.emit("✗ mask write: address/mask out of range 0..0xFFFF")
+            self.logLine.emit(tr("✗ mask write: address/mask out of range 0..0xFFFF"))
             return
         unit = _parse_unit_id(unit_edit.text().strip())
         request_id = self._next_request_id()
@@ -950,12 +1021,12 @@ class RegistersPanel(QWidget):
     @Slot()
     def _on_readwrite(self) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Read/Write multiple registers (function 0x17)")
+        dialog.setWindowTitle(tr("Read/Write multiple registers (function 0x17)"))
         unit_edit = QLineEdit()
-        unit_edit.setPlaceholderText("empty = global unit")
+        unit_edit.setPlaceholderText(tr("empty = global unit"))
         write_address_edit = QLineEdit()
         values_edit = QLineEdit()
-        values_edit.setPlaceholderText("comma/space separated, hex ok")
+        values_edit.setPlaceholderText(tr("comma/space separated, hex ok"))
         read_address_edit = QLineEdit()
         read_count_edit = QSpinBox(minimum=1, maximum=125, value=1)
         buttons = QDialogButtonBox(
@@ -966,16 +1037,18 @@ class RegistersPanel(QWidget):
         form = QFormLayout(dialog)
         form.addRow(
             QLabel(
-                "One atomic exchange: write Values at Write address, then read\n"
-                "Read count registers from Read address; read values go to the log.\n"
-                "Addresses accept decimal or hex (e.g. 0x10)."
+                tr(
+                    "One atomic exchange: write Values at Write address, then read\n"
+                    "Read count registers from Read address; read values go to the log.\n"
+                    "Addresses accept decimal or hex (e.g. 0x10)."
+                )
             )
         )
-        form.addRow("Unit:", unit_edit)
-        form.addRow("Write address:", write_address_edit)
-        form.addRow("Values:", values_edit)
-        form.addRow("Read address:", read_address_edit)
-        form.addRow("Read count:", read_count_edit)
+        form.addRow(tr("Unit:"), unit_edit)
+        form.addRow(tr("Write address:"), write_address_edit)
+        form.addRow(tr("Values:"), values_edit)
+        form.addRow(tr("Read address:"), read_address_edit)
+        form.addRow(tr("Read count:"), read_count_edit)
         form.addRow(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -983,15 +1056,17 @@ class RegistersPanel(QWidget):
             write_address = int(write_address_edit.text().strip(), 0)
             read_address = int(read_address_edit.text().strip(), 0)
         except ValueError:
-            self.logLine.emit("✗ read/write: invalid address (dec or 0x… hex)")
+            self.logLine.emit(
+                tr("✗ read/write: invalid address (dec or 0x… hex)")
+            )
             return
         if not 0 <= write_address <= 0xFFFF or not 0 <= read_address <= 0xFFFF:
-            self.logLine.emit("✗ read/write: address out of range 0..0xFFFF")
+            self.logLine.emit(tr("✗ read/write: address out of range 0..0xFFFF"))
             return
         try:
             values = parse_values("holding_registers", values_edit.text())
         except ValueError as exc:
-            self.logLine.emit(f"✗ parse error: {exc}")
+            self.logLine.emit(tr("✗ parse error: {exc}", exc=exc))
             return
         unit = _parse_unit_id(unit_edit.text().strip())
         request_id = self._next_request_id()
@@ -1014,7 +1089,9 @@ class RegistersPanel(QWidget):
             return
         if not ok:
             return  # the worker already logged the failure
-        self.logLine.emit(f"← read/write read values: {format_values(values)}")
+        self.logLine.emit(
+            tr("← read/write read values: {values}", values=format_values(values))
+        )
         # re-read rows that cover the written address so the effect is visible
         for index in range(self._table.rowCount()):
             row = self._row_data(index)
@@ -1074,11 +1151,11 @@ class RegistersPanel(QWidget):
             ("Decrement", "Ctrl+-", lambda: self._step_current_row(-1)),
             ("Toggle", "Ctrl+T", self._toggle_current_row),
         ):
-            action = menu.addAction(text, slot)
+            action = menu.addAction(tr(text), slot)
             action.setShortcut(QKeySequence(key))  # shown next to the item
         if self._table.columnAt(pos.x()) == COL_TREND:
             menu.addSeparator()
-            menu.addAction("Clear history", self.clear_series)
+            menu.addAction(tr("Clear history"), self.clear_series)
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
     def _text_at(self, index: int, col: int) -> str:
@@ -1096,7 +1173,9 @@ class RegistersPanel(QWidget):
         except ValueError:
             address = count = -1
         if not 0 <= address <= 65535 or not 1 <= count <= 125:
-            self.logLine.emit(f"✗ row {index + 1}: invalid address/count")
+            self.logLine.emit(
+                tr("✗ row {row}: invalid address/count", row=index + 1)
+            )
             return None
         settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
         return RegisterRow(
@@ -1178,7 +1257,7 @@ class RegistersPanel(QWidget):
         try:
             values = parse_values(row.kind, text)
         except ValueError as exc:
-            self.logLine.emit(f"✗ parse error: {exc}")
+            self.logLine.emit(tr("✗ parse error: {exc}", exc=exc))
             return
         self._emit_write(index, row, values)
         if new_value_item is not None:
@@ -1205,7 +1284,13 @@ class RegistersPanel(QWidget):
         if row is None:
             return None
         if row.kind not in ("coils", "holding_registers"):
-            self.logLine.emit(f"✗ row {index + 1}: {row.kind} is a read-only area")
+            self.logLine.emit(
+                tr(
+                    "✗ row {row}: {kind} is a read-only area",
+                    row=index + 1,
+                    kind=row.kind,
+                )
+            )
             return None
         return index, row
 
@@ -1231,7 +1316,7 @@ class RegistersPanel(QWidget):
         index, row = found
         last = self._last_values.get(self._token_at(index))
         if not last:
-            self.logLine.emit(f"✗ row {index + 1}: read the row before +/-")
+            self.logLine.emit(tr("✗ row {row}: read the row before +/-", row=index + 1))
             return
         lo, hi = (0, 1) if row.kind == "coils" else (0, 0xFFFF)
         value = min(hi, max(lo, int(last[0]) + delta))  # silent clamp
@@ -1244,7 +1329,9 @@ class RegistersPanel(QWidget):
         index, row = found
         last = self._last_values.get(self._token_at(index))
         if not last:
-            self.logLine.emit(f"✗ row {index + 1}: read the row before toggling")
+            self.logLine.emit(
+                tr("✗ row {row}: read the row before toggling", row=index + 1)
+            )
             return
         if row.kind == "coils":
             self._emit_write(index, row, [not last[0]])
@@ -1446,10 +1533,11 @@ class RegistersPanel(QWidget):
     def _sync_poll_button(self, polling: bool, recording: bool) -> None:
         del recording
         if polling:
-            self._poll_button.setText("Stop polling")
+            self._poll_button.setText(tr("Stop polling"))
         else:
             self._poll_button.setText(
-                "Start polling and record" if self._record_mode else "Start polling"
+                tr("Start polling and record") if self._record_mode
+                else tr("Start polling")
             )
 
     # --- logging to file --------------------------------------------------
@@ -1466,15 +1554,24 @@ class RegistersPanel(QWidget):
         try:
             self._logger.open(self._log_settings)
         except OSError as exc:
-            self.logLine.emit(f"✗ logging: cannot open {self._log_settings.path}: {exc}")
+            self.logLine.emit(
+                tr(
+                    "✗ logging: cannot open {path}: {exc}",
+                    path=self._log_settings.path,
+                    exc=exc,
+                )
+            )
             self._sync_logging_ui()
             return
         self._log_flush_timer.start()
         if not self.is_polling():  # logging needs reads: start polling
             self.start_polling(self._record_mode)  # records per the split mode
         self.logLine.emit(
-            f"→ logging values to {self._log_settings.path} "
-            f"({self._log_settings.format})"
+            tr(
+                "→ logging values to {path} ({format})",
+                path=self._log_settings.path,
+                format=self._log_settings.format,
+            )
         )
         self._sync_logging_ui()
 
@@ -1484,7 +1581,10 @@ class RegistersPanel(QWidget):
         self._log_flush_timer.stop()
         rows, path = self._logger.rows_written, self._log_settings.path
         self._logger.close()
-        self.logLine.emit(f"← logging stopped: {rows} rows written to {path}")
+        self.logLine.emit(
+            tr("← logging stopped: {rows} rows written to {path}",
+               rows=rows, path=path)
+        )
         self._sync_logging_ui()  # polling keeps running on purpose
 
     @Slot()
@@ -1531,8 +1631,10 @@ class RegistersPanel(QWidget):
         is_open = self._logger.is_open
         self._log_button.setChecked(is_open)
         self._log_button.setToolTip(
-            f"Logging to {self._log_settings.path} — click to stop"
+            tr(
+                "Logging to {path} — click to stop", path=self._log_settings.path
+            )
             if is_open
-            else "Log read values to a file (CSV or JSON Lines)"
+            else tr("Log read values to a file (CSV or JSON Lines)")
         )
         self._log_settings_button.setEnabled(not is_open)

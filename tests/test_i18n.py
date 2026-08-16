@@ -32,9 +32,12 @@ def _english() -> None:
 @pytest.fixture(autouse=True)
 def _destroy_windows(qapp: QApplication) -> Iterator[None]:
     yield
+    from modbus_connector.registers_panel import RegistersPanel
+
     for widget in QApplication.topLevelWidgets():
         if isinstance(widget, MainWindow):
             widget._shutdown_sessions()
+        if isinstance(widget, MainWindow | RegistersPanel):
             widget.close()
             widget.deleteLater()
     qapp.processEvents()
@@ -111,3 +114,56 @@ def test_type_combo_keeps_english_state_and_params(qapp: QApplication) -> None:
     assert panel.state()["type"] == "RTU over UDP"  # English in the settings
     params = panel._build_params()
     assert isinstance(params, RtuOverUdpParams)
+
+
+def test_registers_panel_retranslates(qapp: QApplication) -> None:
+    import itertools
+
+    from modbus_connector.registers_panel import RegistersPanel
+
+    panel = RegistersPanel(itertools.count(1).__next__)
+    i18n.set_language("ru")
+    panel.retranslate()
+    headers = [
+        panel._table.horizontalHeaderItem(col).text()
+        for col in range(panel._table.columnCount())
+    ]
+    assert headers[:3] == ["Имя", "Тип", "Адрес"]  # headers, not kind values
+    assert panel._poll_button.text() == "Начать опрос с записью"  # record default
+
+    panel.start_polling(True)
+    assert panel._poll_button.text() == "Остановить опрос"  # state-dependent
+    panel.stop_polling()
+    panel.retranslate()
+    assert panel._poll_button.text() == "Начать опрос с записью"
+
+    i18n.set_language("en")
+    panel.retranslate()
+    assert headers[0] != panel._table.horizontalHeaderItem(0).text()
+    assert panel._table.horizontalHeaderItem(0).text() == "Name"
+    assert panel._poll_button.text() == "Start polling and record"
+
+
+def test_csv_dialog_titles_follow_language(qapp: QApplication) -> None:
+    from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
+
+    i18n.set_language("ru")
+    export = ExportColumnsDialog()
+    assert export.windowTitle() == "Экспорт CSV"
+    imp = ImportMappingDialog(["Register Name", "type"])
+    assert imp.windowTitle() == "Импорт CSV"
+    skip_combo = imp._table.cellWidget(0, 1)
+    assert skip_combo.currentText() == "— пропустить —"
+    assert imp.mapping() == {"type": "kind"}  # sentinel decoupled from display
+    i18n.set_language("en")
+
+
+def test_worker_log_templates_format_in_russian(qapp: QApplication) -> None:
+    i18n.set_language("ru")
+    line = i18n.tr(
+        "→ read {kind} unit={unit} addr={address} count={count}",
+        kind="holding_registers", unit=1, address=0, count=2,
+    )
+    assert line == "→ чтение holding_registers unit=1 адр=0 кол-во=2"
+    assert "holding_registers" in line  # kind strings are never translated
+    i18n.set_language("en")

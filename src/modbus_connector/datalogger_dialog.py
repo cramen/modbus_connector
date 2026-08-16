@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector.datalogger import LOG_FIELDS, LogFormat, LogSettings
+from modbus_connector.i18n import tr
 from modbus_connector.theme import FitComboBox
 
 FORMAT_LABELS: dict[LogFormat, str] = {"csv": "CSV", "jsonl": "JSON Lines"}
@@ -50,11 +51,11 @@ class LoggingSettingsDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Logging settings")
+        self.setWindowTitle(tr("Logging settings"))
 
         self._path_edit = QLineEdit(settings.path or suggested_path(settings.format))
-        self._path_edit.setPlaceholderText("Log file path")
-        browse_button = QPushButton("Browse…")
+        self._path_edit.setPlaceholderText(tr("Log file path"))
+        browse_button = QPushButton(tr("Browse…"))
         browse_button.clicked.connect(self._on_browse)
         path_row = QHBoxLayout()
         path_row.addWidget(self._path_edit, 1)
@@ -66,12 +67,13 @@ class LoggingSettingsDialog(QDialog):
         self._format_combo.currentTextChanged.connect(self._on_format_changed)
 
         self._field_checks = {
-            log_field: QCheckBox(FIELD_LABELS[log_field]) for log_field in LOG_FIELDS
+            log_field: QCheckBox(tr(FIELD_LABELS[log_field]))
+            for log_field in LOG_FIELDS
         }
         for log_field, check in self._field_checks.items():
             check.setChecked(log_field in settings.fields)
 
-        self._append_check = QCheckBox("Append to the file if it exists")
+        self._append_check = QCheckBox(tr("Append to the file if it exists"))
         self._append_check.setChecked(settings.append)
 
         self._rows_list = QListWidget()
@@ -86,15 +88,15 @@ class LoggingSettingsDialog(QDialog):
         if self._rows_list.count():
             self._rows_list.setCurrentRow(0)
         self._rows_list.installEventFilter(self)  # keys work before the view eats them
-        select_all = QPushButton("Select all")
+        select_all = QPushButton(tr("Select all"))
         select_all.clicked.connect(lambda: self._set_all_rows(Qt.CheckState.Checked))
-        select_none = QPushButton("Select none")
+        select_none = QPushButton(tr("Select none"))
         select_none.clicked.connect(lambda: self._set_all_rows(Qt.CheckState.Unchecked))
         rows_buttons = QHBoxLayout()
         rows_buttons.addWidget(select_all)
         rows_buttons.addWidget(select_none)
         rows_buttons.addStretch(1)
-        rows_box = QGroupBox("Rows to log")
+        rows_box = QGroupBox(tr("Rows to log"))
         rows_layout = QVBoxLayout(rows_box)
         rows_layout.addWidget(self._rows_list)
         rows_layout.addLayout(rows_buttons)
@@ -110,12 +112,12 @@ class LoggingSettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         form = QFormLayout(self)
-        form.addRow("File:", path_row)
-        form.addRow("Format:", self._format_combo)
+        form.addRow(tr("File:"), path_row)
+        form.addRow(tr("Format:"), self._format_combo)
         fields_row = QHBoxLayout()
         for check in self._field_checks.values():
             fields_row.addWidget(check)
-        form.addRow("Fields:", fields_row)
+        form.addRow(tr("Fields:"), fields_row)
         form.addRow("", self._append_check)
         form.addRow(rows_box)
         form.addRow(self._warning)
@@ -163,7 +165,7 @@ class LoggingSettingsDialog(QDialog):
     def _on_browse(self) -> None:
         fmt = self._format()
         path_str, _ = QFileDialog.getSaveFileName(
-            self, "Log values to file", self._path_edit.text(),
+            self, tr("Log values to file"), self._path_edit.text(),
             f"{FORMAT_LABELS[fmt]} (*{FORMAT_EXTENSIONS[fmt]})",
         )
         if path_str:
@@ -171,7 +173,7 @@ class LoggingSettingsDialog(QDialog):
 
     def _validate(self) -> None:
         if not self._path_edit.text().strip():
-            self._warning.setText("Choose a log file")
+            self._warning.setText(tr("Choose a log file"))
             self._warning.show()
             return
         self.accept()

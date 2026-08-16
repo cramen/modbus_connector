@@ -4,6 +4,7 @@ from pymodbus.exceptions import ConnectionException, ModbusIOException
 from PySide6.QtCore import QObject, Signal, Slot
 
 from modbus_connector.backend import ModbusBackend, ModbusExceptionError
+from modbus_connector.i18n import tr
 from modbus_connector.models import (
     ConnectionParams,
     RegisterKind,
@@ -64,15 +65,17 @@ class ModbusWorker(QObject):
 
     @Slot(object)
     def connect_to(self, params: ConnectionParams) -> None:
-        self.logLine.emit(f"→ connect {describe_connection(params)}")
+        self.logLine.emit(tr("→ connect {desc}", desc=describe_connection(params)))
         try:
             self._backend.connect(params)
         except Exception as exc:
-            self.logLine.emit(f"✗ connect failed: {exc}")
+            self.logLine.emit(tr("✗ connect failed: {exc}", exc=exc))
             self.connectionChanged.emit(False, str(exc))
             return
-        self.logLine.emit("← connected")
-        self.connectionChanged.emit(True, f"Connected ({describe_connection(params)})")
+        self.logLine.emit(tr("← connected"))
+        self.connectionChanged.emit(
+            True, tr("Connected ({desc})", desc=describe_connection(params))
+        )
 
     @Slot()
     def disconnect(self) -> None:
@@ -80,8 +83,9 @@ class ModbusWorker(QObject):
         try:
             self._backend.disconnect()
         except Exception as exc:
-            self.logLine.emit(f"✗ disconnect failed: {exc}")
-        self.logLine.emit("→ disconnect")
+            self.logLine.emit(tr("✗ disconnect failed: {exc}", exc=exc))
+        self.logLine.emit(tr("→ disconnect"))
+        # English key: the panel translates it at render time
         self.connectionChanged.emit(False, "Disconnected")
 
     @Slot()
@@ -91,13 +95,18 @@ class ModbusWorker(QObject):
 
     @Slot(int, int, object)
     def read(self, request_id: int, unit: int, row: RegisterRow) -> None:
-        self.logLine.emit(f"→ read {row.kind} unit={unit} addr={row.address} count={row.count}")
+        self.logLine.emit(
+            tr(
+                "→ read {kind} unit={unit} addr={address} count={count}",
+                kind=row.kind, unit=unit, address=row.address, count=row.count,
+            )
+        )
         started = time.monotonic()
         try:
             values = self._backend.read(unit, row.kind, row.address, row.count)
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ read failed: {exc}")
+            self.logLine.emit(tr("✗ read failed: {exc}", exc=exc))
             self.readFinished.emit(request_id, False, [], str(exc))
             return
         self._record_stats(True, started)
@@ -107,18 +116,22 @@ class ModbusWorker(QObject):
     @Slot(int, int, object, list)
     def write(self, request_id: int, unit: int, row: RegisterRow, values: list) -> None:
         self.logLine.emit(
-            f"→ write {row.kind} unit={unit} addr={row.address} values={format_values(values)}"
+            tr(
+                "→ write {kind} unit={unit} addr={address} values={values}",
+                kind=row.kind, unit=unit, address=row.address,
+                values=format_values(values),
+            )
         )
         started = time.monotonic()
         try:
             self._backend.write(unit, row.kind, row.address, values)
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ write failed: {exc}")
+            self.logLine.emit(tr("✗ write failed: {exc}", exc=exc))
             self.writeFinished.emit(request_id, False, str(exc))
             return
         self._record_stats(True, started)
-        self.logLine.emit("← ok")
+        self.logLine.emit(tr("← ok"))
         self.writeFinished.emit(request_id, True, "")
 
     @Slot(int, int, int, int, int)
@@ -126,19 +139,22 @@ class ModbusWorker(QObject):
         self, request_id: int, unit: int, address: int, and_mask: int, or_mask: int
     ) -> None:
         self.logLine.emit(
-            f"→ mask write unit={unit} addr={address} "
-            f"and=0x{and_mask:04x} or=0x{or_mask:04x}"
+            tr(
+                "→ mask write unit={unit} addr={address} and=0x{and_mask:04x} "
+                "or=0x{or_mask:04x}",
+                unit=unit, address=address, and_mask=and_mask, or_mask=or_mask,
+            )
         )
         started = time.monotonic()
         try:
             self._backend.mask_write_register(unit, address, and_mask, or_mask)
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ mask write failed: {exc}")
+            self.logLine.emit(tr("✗ mask write failed: {exc}", exc=exc))
             self.writeFinished.emit(request_id, False, str(exc))
             return
         self._record_stats(True, started)
-        self.logLine.emit("← ok")
+        self.logLine.emit(tr("← ok"))
         self.writeFinished.emit(request_id, True, "")
 
     @Slot(int, int, int, int, int, list)
@@ -152,8 +168,12 @@ class ModbusWorker(QObject):
         values: list,
     ) -> None:
         self.logLine.emit(
-            f"→ read/write unit={unit} read@{read_address} x{read_count} "
-            f"write@{write_address} values={format_values(values)}"
+            tr(
+                "→ read/write unit={unit} read@{read_address} x{read_count} "
+                "write@{write_address} values={values}",
+                unit=unit, read_address=read_address, read_count=read_count,
+                write_address=write_address, values=format_values(values),
+            )
         )
         started = time.monotonic()
         try:
@@ -162,7 +182,7 @@ class ModbusWorker(QObject):
             )
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ read/write failed: {exc}")
+            self.logLine.emit(tr("✗ read/write failed: {exc}", exc=exc))
             self.readwriteFinished.emit(request_id, False, [], str(exc))
             return
         self._record_stats(True, started)
@@ -171,81 +191,91 @@ class ModbusWorker(QObject):
 
     @Slot(int, int)
     def read_device_id(self, request_id: int, unit: int) -> None:
-        self.logLine.emit(f"→ read device id unit={unit}")
+        self.logLine.emit(tr("→ read device id unit={unit}", unit=unit))
         started = time.monotonic()
         try:
             info = self._backend.read_device_identification(unit)
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ read device id failed: {exc}")
+            self.logLine.emit(tr("✗ read device id failed: {exc}", exc=exc))
             self.deviceIdFinished.emit(request_id, False, {}, str(exc))
             return
         self._record_stats(True, started)
-        self.logLine.emit(f"← device id: {len(info)} objects")
+        self.logLine.emit(tr("← device id: {count} objects", count=len(info)))
         self.deviceIdFinished.emit(request_id, True, info, "")
 
     @Slot(int, int)
     def diag_loopback(self, request_id: int, unit: int) -> None:
-        self.logLine.emit(f"→ diag loopback unit={unit}")
+        self.logLine.emit(tr("→ diag loopback unit={unit}", unit=unit))
         started = time.monotonic()
         try:
             echo_ok = self._backend.diag_loopback(unit)
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ diag loopback failed: {exc}")
+            self.logLine.emit(tr("✗ diag loopback failed: {exc}", exc=exc))
             self.diagLoopbackFinished.emit(request_id, False, str(exc))
             return
         self._record_stats(True, started)
-        self.logLine.emit("← loopback ok" if echo_ok else "← loopback mismatch")
+        self.logLine.emit(
+            tr("← loopback ok") if echo_ok else tr("← loopback mismatch")
+        )
         self.diagLoopbackFinished.emit(request_id, echo_ok, "")
 
     @Slot(int, int)
     def diag_read_counters(self, request_id: int, unit: int) -> None:
-        self.logLine.emit(f"→ diag counters unit={unit}")
+        self.logLine.emit(tr("→ diag counters unit={unit}", unit=unit))
         started = time.monotonic()
         try:
             counters = self._backend.diag_counters(unit)
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ diag counters failed: {exc}")
+            self.logLine.emit(tr("✗ diag counters failed: {exc}", exc=exc))
             self.diagCountersFinished.emit(request_id, False, {}, str(exc))
             return
         self._record_stats(True, started)
-        self.logLine.emit(f"← diag counters: {counters}")
+        self.logLine.emit(tr("← diag counters: {counters}", counters=counters))
         self.diagCountersFinished.emit(request_id, True, counters, "")
 
     @Slot(int, int)
     def diag_clear_counters(self, request_id: int, unit: int) -> None:
-        self.logLine.emit(f"→ diag clear counters unit={unit}")
+        self.logLine.emit(tr("→ diag clear counters unit={unit}", unit=unit))
         started = time.monotonic()
         try:
             self._backend.diag_clear_counters(unit)
             counters = self._backend.diag_counters(unit)  # show the cleared state
         except Exception as exc:
             self._record_stats(False, started, exc)
-            self.logLine.emit(f"✗ diag clear counters failed: {exc}")
+            self.logLine.emit(tr("✗ diag clear counters failed: {exc}", exc=exc))
             self.diagCountersFinished.emit(request_id, False, {}, str(exc))
             return
         self._record_stats(True, started)
-        self.logLine.emit("← counters cleared")
+        self.logLine.emit(tr("← counters cleared"))
         self.diagCountersFinished.emit(request_id, True, counters, "")
 
     @Slot(list, int, int)
     def start_scan(self, probes: list[ScanProbe], start: int, end: int) -> None:
         self._scan_stop = False
         total = max(0, end - start + 1)
-        self.logLine.emit(f"→ scan units {start}..{end} ({len(probes)} probes)")
+        self.logLine.emit(
+            tr("→ scan units {start}..{end} ({count} probes)",
+               start=start, end=end, count=len(probes))
+        )
         try:
             for unit, indices in self._backend.scan(probes, start, end, lambda: self._scan_stop):
                 self.scanProgress.emit(unit - start + 1, total)
                 if indices:
                     self.scanHit.emit(unit, list(indices))
-                    self.logLine.emit(f"← scan hit unit={unit} probes={list(indices)}")
+                    self.logLine.emit(
+                        tr("← scan hit unit={unit} probes={indices}",
+                           unit=unit, indices=list(indices))
+                    )
         except Exception as exc:
-            self.logLine.emit(f"✗ scan failed: {exc}")
+            self.logLine.emit(tr("✗ scan failed: {exc}", exc=exc))
         self.scanProgress.emit(total, total)
         self.scanFinished.emit()
-        self.logLine.emit("← scan stopped" if self._scan_stop else "← scan finished")
+        self.logLine.emit(
+            tr("← scan stopped") if self._scan_stop else tr("← scan finished")
+        )
 
     @Slot()
     def stop_scan(self) -> None:
@@ -257,18 +287,24 @@ class ModbusWorker(QObject):
         # stop_scan stops whichever is active
         self._scan_stop = False
         total = max(0, end - start + 1)
-        self.logLine.emit(f"→ scan addresses {kind} unit={unit} {start}..{end}")
+        self.logLine.emit(
+            tr("→ scan addresses {kind} unit={unit} {start}..{end}",
+               kind=kind, unit=unit, start=start, end=end)
+        )
         try:
             for address in self._backend.scan_addresses(
                 unit, kind, start, end, lambda: self._scan_stop
             ):
                 self.addrScanHit.emit(address)
-                self.logLine.emit(f"← addr scan hit {kind}@{address}")
+                self.logLine.emit(
+                    tr("← addr scan hit {kind}@{address}", kind=kind, address=address)
+                )
                 self.addrScanProgress.emit(address - start + 1, total)
         except Exception as exc:
-            self.logLine.emit(f"✗ address scan failed: {exc}")
+            self.logLine.emit(tr("✗ address scan failed: {exc}", exc=exc))
         self.addrScanProgress.emit(total, total)
         self.addrScanFinished.emit()
         self.logLine.emit(
-            "← address scan stopped" if self._scan_stop else "← address scan finished"
+            tr("← address scan stopped") if self._scan_stop
+            else tr("← address scan finished")
         )
