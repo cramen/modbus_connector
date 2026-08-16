@@ -295,6 +295,67 @@ RU: dict[str, str] = {
     "✗ address scan failed: {exc}": "✗ скан адресов не удался: {exc}",
     "← address scan stopped": "← скан адресов остановлен",
     "← address scan finished": "← скан адресов завершён",
+    # main window file dialogs and log lines
+    "✗ failed to save settings to {path}: {exc}":
+        "✗ не удалось сохранить настройки в {path}: {exc}",
+    "→ settings saved to {path}": "→ настройки сохранены в {path}",
+    "✗ failed to load settings from {path}: {exc}":
+        "✗ не удалось загрузить настройки из {path}: {exc}",
+    "✗ failed to load settings from {path}: not an object":
+        "✗ не удалось загрузить настройки из {path}: не объект",
+    "← settings loaded from {path}": "← настройки загружены из {path}",
+    # session widget log line
+    "→ unit {unit} selected in connection panel":
+        "→ unit {unit} выбран в панели подключения",
+    # scanner panel
+    "Add probe": "Добавить пробу",
+    "Start scan": "Начать сканирование",
+    "Stop": "Стоп",
+    "Delete": "Удалить",
+    "Start": "Старт",
+    "All": "Все",
+    "None": "Ни одного",
+    "Add selected to table": "Добавить отмеченные в таблицу",
+    "Add one row per checked address to the registers table":
+        "Добавить по строке на каждый отмеченный адрес в таблицу регистров",
+    "Double-click a unit to select it for the connection":
+        "Двойной клик по unit выбирает его для подключения",
+    "Read the selected unit's identification (function 0x2B/0x0E)":
+        "Прочитать идентификацию выбранного unit (функция 0x2B/0x0E)",
+    "Unit range:": "Диапазон unit:",
+    "Type:": "Тип:",
+    "Addresses:": "Адреса:",
+    "Results:": "Результаты:",
+    "Registers scan:": "Скан регистров:",
+    "Unit {unit} — device identification (0x2B/0x0E)":
+        "Unit {unit} — идентификация устройства (0x2B/0x0E)",
+    # graph window
+    "Graph": "График",
+    "Refresh rows": "Обновить строки",
+    "Follow": "Следом",
+    "Full": "Всё",
+    "Manual": "Вручную",
+    "Zoom rect": "Зум рамкой",
+    "Markers": "Маркеры",
+    "Reset view": "Сбросить вид",
+    "Clear recorded history and restart the time axis":
+        "Очистить записанную историю и перезапустить ось времени",
+    "Poll the register table and record value history for this graph":
+        "Опрос таблицы регистров с записью истории для этого графика",
+    "X scale:": "Шкала X:",
+    "Series:": "Ряды:",
+    "Series": "Ряды",
+    "Min": "Мин",
+    "Max": "Макс",
+    "Avg": "Сред",
+    "time, s (relative)": "время, с (относительное)",
+    "Δt = {dt:.4g} s": "Δt = {dt:.4g} с",
+    # help dialog
+    "Help": "Справка",
+    "New connection tab": "Новая вкладка-подключение",
+    "Registers — Help": "Таблица регистров — справка",
+    "Graph — Help": "График — справка",
+    "Scanner — Help": "Сканер — справка",
 }
 
 

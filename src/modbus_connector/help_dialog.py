@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector.i18n import current_language, tr
+
 REGISTERS_HELP = """
 <h3>Registers table</h3>
 <p>Each row is a register range: <b>Name</b>, <b>Type</b> (coils, discrete
@@ -86,7 +88,7 @@ def make_help_button(parent: QWidget, title: str, html: str) -> QToolButton:
     button = QToolButton(parent)
     button.setText("?")
     button.setFixedSize(26, 26)
-    button.setToolTip("Help")
+    button.setToolTip(tr("Help"))
     button.clicked.connect(lambda: show_help(parent, title, html))
     return button
 
@@ -95,10 +97,10 @@ def show_help(parent: QWidget, title: str, html: str) -> QDialog:
     """Показать немодальный диалог помощи; удаляется при закрытии."""
     dialog = QDialog(parent)
     dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-    dialog.setWindowTitle(title)
+    dialog.setWindowTitle(tr(title))
     dialog.resize(520, 480)
     browser = QTextBrowser()
-    browser.setHtml(html)
+    browser.setHtml(_sheet(html))  # resolved at click time, never cached
     buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
     buttons.rejected.connect(dialog.reject)
     layout = QVBoxLayout(dialog)
@@ -106,3 +108,88 @@ def show_help(parent: QWidget, title: str, html: str) -> QDialog:
     layout.addWidget(buttons)
     dialog.show()
     return dialog
+
+
+def _sheet(english_html: str) -> str:
+    """Русская версия листа при текущем русском языке, иначе английская."""
+    if current_language() != "ru":
+        return english_html
+    return HELP_RU.get(english_html, english_html)
+
+
+REGISTERS_HELP_RU = """
+<h3>Таблица регистров</h3>
+<p>Каждая строка — диапазон регистров: <b>имя</b>, <b>тип</b> (coils, discrete
+inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
+<b>кол-во</b>, необязательные <b>Unit ID</b> и интервал <b>Poll, мс</b> на
+строку, <b>формат</b> отображения, последнее прочитанное <b>значение</b> со
+спарклайном и поле <b>Новое значение</b> для записи (сырые значения,
+без scale/offset).</p>
+<ul>
+<li><b>Прочитать все</b> читает каждую строку один раз; split-кнопка начинает
+опрос с записью истории или без (выбор в выпадающем меню; на ходу переключает
+запись без перезапуска таймеров).</li>
+<li><b>Запись в файл</b> пишет значения в CSV или JSON Lines; <b>⚙</b> открывает
+настройки файла, формата, полей и строк.</li>
+<li><b>Отображение…</b> — Scale/Offset/Unit и порядок байт на строку;
+<b>Фильтр…</b> скрывает лишние строки; <b>Сортировать по адресу</b>
+упорядочивает таблицу; <b>CSV</b> — импорт/экспорт; <b>Mask write (0x16)…</b> и
+<b>Read/Write (0x17)…</b> — расширенные функции.</li>
+<li>Правый клик по строке — быстрые действия (копия, запись 0/1, шаг,
+переключение, сдвиг); действуют на выбранные строки.</li>
+</ul>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Клавиши</th><th>Действие</th></tr>
+<tr><td>Enter</td><td>записать «Новое значение» строки</td></tr>
+<tr><td>Ctrl+R</td><td>прочитать текущую строку</td></tr>
+<tr><td>Ctrl+Shift+R</td><td>прочитать все строки</td></tr>
+<tr><td>Ctrl+C</td><td>копировать значение</td></tr>
+<tr><td>Ctrl+0 / Ctrl+1</td><td>записать 0 / 1</td></tr>
+<tr><td>Ctrl+= / Ctrl+-</td><td>увеличить / уменьшить последнее прочитанное
+(работает и Ctrl++ на нампаде)</td></tr>
+<tr><td>Ctrl+T</td><td>переключить (coil инвертируется; регистр 0↔1)</td></tr>
+<tr><td>Ctrl+Up / Ctrl+Down</td><td>сдвинуть выбранные строки</td></tr>
+</table>
+<p>На macOS вместо Ctrl используется ⌘.</p>
+"""
+
+GRAPH_HELP_RU = """
+<h3>Окно графика</h3>
+<ul>
+<li>Чек-лист <b>Series</b> выбирает строки таблицы для построения (новые
+строки добавляются отмеченными; «Refresh rows» перечитывает список).</li>
+<li><b>X scale</b>: <b>Follow</b> ведёт скользящее окно за последними данными,
+<b>Full</b> вписывает всё, <b>Manual</b> замораживает вид. Колесо — зум у
+курсора, драг — панорама, <b>Zoom rect</b> — зум рамкой; любой из них
+переключает режим в Manual; <b>Reset view</b> возвращает Follow.</li>
+<li><b>Markers</b> показывает две перетаскиваемые линии (зелёную A, красную B)
+с min/max/avg каждого ряда между ними и Δt.</li>
+<li>При наведении курсора — кроссхеар: пунктирная вертикаль и значения всех
+рядов в этот момент в правом верхнем углу (ближайший отсчёт).</li>
+<li><b>Clear</b> очищает записанную историю и перезапускает ось времени.</li>
+<li><b>Начать опрос с записью</b> управляет опросом таблицы прямо из окна;
+при активной записи кнопка останавливает его.</li>
+</ul>
+"""
+
+SCANNER_HELP_RU = """
+<h3>Сканер</h3>
+<ul>
+<li><b>Скан unit-адресов</b>: обход диапазона с списком проб (тип, адрес,
+кол-во) и список устройств, ответивших хотя бы на одну пробу. Пробы
+добавляются и удаляются выше; <b>Stop</b> прерывает обход.</li>
+<li><b>Двойной клик</b> по найденному unit подставляет его в панель
+подключения; <b>Device ID…</b> читает идентификацию выбранного unit
+(0x2B/0x0E).</li>
+<li><b>Скан регистров</b>: проверяет диапазон адресов одного unit и типа.
+Найденные адреса отмечены; лишние можно снять (Space переключает, All/None —
+для длинных списков), а <b>Add selected to table</b> создаёт строки таблицы
+по отмеченным — дубли (тот же тип и адрес) пропускаются.</li>
+</ul>
+"""
+
+HELP_RU = {
+    REGISTERS_HELP: REGISTERS_HELP_RU,
+    GRAPH_HELP: GRAPH_HELP_RU,
+    SCANNER_HELP: SCANNER_HELP_RU,
+}

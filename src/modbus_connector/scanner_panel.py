@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from modbus_connector.connection_panel import DEVICE_ID_NAMES
 from modbus_connector.help_dialog import SCANNER_HELP, make_help_button
+from modbus_connector.i18n import tr
 from modbus_connector.models import DEFAULT_SCAN_PROBES, RegisterKind, ScanProbe
 from modbus_connector.theme import FitComboBox
 
@@ -53,21 +54,28 @@ class ScannerPanel(QWidget):
         self._addr_scan_kind = "holding_registers"
         self._device_id_request = -1
         self._device_id_list: QListWidget | None = None
+        self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
+        self._translatable_tips: list[tuple[QWidget, str]] = []
 
         self._start = QSpinBox(minimum=1, maximum=247, value=1)
         self._end = QSpinBox(minimum=1, maximum=247, value=247)
 
         self._probes_table = QTableWidget(0, 4)
-        self._probes_table.setHorizontalHeaderLabels(["Type", "Address", "Count", ""])
+        self._probes_table.setHorizontalHeaderLabels(
+            [tr("Type"), tr("Address"), tr("Count"), ""]
+        )
         self._probes_table.verticalHeader().setVisible(False)
         self._probes_table.setMaximumHeight(140)
 
-        add_probe_button = QPushButton("Add probe")
+        add_probe_button = QPushButton()
+        self._track(add_probe_button, "Add probe")
         add_probe_button.clicked.connect(lambda: self._add_probe())
 
-        self._start_button = QPushButton("Start scan")
+        self._start_button = QPushButton()
+        self._track(self._start_button, "Start scan")
         self._start_button.setEnabled(False)
-        self._stop_button = QPushButton("Stop")
+        self._stop_button = QPushButton()
+        self._track(self._stop_button, "Stop")
         self._stop_button.setEnabled(False)
         self._start_button.clicked.connect(self._on_start)
         self._stop_button.clicked.connect(self.scanStopRequested)
@@ -75,14 +83,22 @@ class ScannerPanel(QWidget):
         self._progress = QProgressBar()
         self._progress.setValue(0)
         self._results = QListWidget()
-        self._results.setToolTip("Double-click a unit to select it for the connection")
+        self._translatable_tips.append(
+            (
+                self._results,
+                "Double-click a unit to select it for the connection",
+            )
+        )
+        self._results.setToolTip(tr(self._translatable_tips[-1][1]))
         self._results.itemDoubleClicked.connect(self._on_unit_double_clicked)
         self._results.itemSelectionChanged.connect(self._sync_device_id_button)
-        self._device_id_button = QPushButton("Device ID…")
-        self._device_id_button.setEnabled(False)
-        self._device_id_button.setToolTip(
-            "Read the selected unit's identification (function 0x2B/0x0E)"
+        self._device_id_button = QPushButton()
+        self._track(
+            self._device_id_button,
+            "Device ID…",
+            "Read the selected unit's identification (function 0x2B/0x0E)",
         )
+        self._device_id_button.setEnabled(False)
         self._device_id_button.clicked.connect(self._on_device_id_clicked)
 
         self._addr_unit = QSpinBox(minimum=1, maximum=247, value=1)
@@ -90,9 +106,11 @@ class ScannerPanel(QWidget):
         self._addr_kind.addItems(KINDS)
         self._addr_from = QSpinBox(minimum=0, maximum=65535, value=0)
         self._addr_to = QSpinBox(minimum=0, maximum=65535, value=99)
-        self._addr_start_button = QPushButton("Start")
+        self._addr_start_button = QPushButton()
+        self._track(self._addr_start_button, "Start")
         self._addr_start_button.setEnabled(False)
-        self._addr_stop_button = QPushButton("Stop")
+        self._addr_stop_button = QPushButton()
+        self._track(self._addr_stop_button, "Stop")
         self._addr_stop_button.setEnabled(False)
         self._addr_start_button.clicked.connect(self._on_addr_start)
         self._addr_stop_button.clicked.connect(self.scanStopRequested)
@@ -100,23 +118,29 @@ class ScannerPanel(QWidget):
         self._addr_progress.setValue(0)
         self._addr_results = QListWidget()
         self._addr_results.itemChanged.connect(self._sync_add_rows_button)
-        self._addr_all_button = QPushButton("All")
+        self._addr_all_button = QPushButton()
+        self._track(self._addr_all_button, "All")
         self._addr_all_button.clicked.connect(
             lambda: self._set_all_hits(Qt.CheckState.Checked)
         )
-        self._addr_none_button = QPushButton("None")
+        self._addr_none_button = QPushButton()
+        self._track(self._addr_none_button, "None")
         self._addr_none_button.clicked.connect(
             lambda: self._set_all_hits(Qt.CheckState.Unchecked)
         )
-        self._add_rows_button = QPushButton("Add selected to table")
-        self._add_rows_button.setEnabled(False)
-        self._add_rows_button.setToolTip(
-            "Add one row per checked address to the registers table"
+        self._add_rows_button = QPushButton()
+        self._track(
+            self._add_rows_button,
+            "Add selected to table",
+            "Add one row per checked address to the registers table",
         )
+        self._add_rows_button.setEnabled(False)
         self._add_rows_button.clicked.connect(self._on_add_rows_clicked)
 
         range_layout = QHBoxLayout()
-        range_layout.addWidget(QLabel("Unit range:"))
+        unit_range_label = QLabel()
+        self._track(unit_range_label, "Unit range:")
+        range_layout.addWidget(unit_range_label)
         range_layout.addWidget(self._start)
         range_layout.addWidget(QLabel("–"))
         range_layout.addWidget(self._end)
@@ -128,11 +152,17 @@ class ScannerPanel(QWidget):
         range_layout.addWidget(self._help_button)
 
         addr_layout = QHBoxLayout()
-        addr_layout.addWidget(QLabel("Unit:"))
+        unit_label = QLabel()
+        self._track(unit_label, "Unit:")
+        addr_layout.addWidget(unit_label)
         addr_layout.addWidget(self._addr_unit)
-        addr_layout.addWidget(QLabel("Type:"))
+        type_label = QLabel()
+        self._track(type_label, "Type:")
+        addr_layout.addWidget(type_label)
         addr_layout.addWidget(self._addr_kind)
-        addr_layout.addWidget(QLabel("Addresses:"))
+        addresses_label = QLabel()
+        self._track(addresses_label, "Addresses:")
+        addr_layout.addWidget(addresses_label)
         addr_layout.addWidget(self._addr_from)
         addr_layout.addWidget(QLabel("–"))
         addr_layout.addWidget(self._addr_to)
@@ -144,13 +174,16 @@ class ScannerPanel(QWidget):
         layout.addLayout(range_layout)
         layout.addWidget(self._probes_table)
         layout.addWidget(self._progress)
-        layout.addWidget(QLabel("Results:"))
+        results_label = QLabel()
+        self._track(results_label, "Results:")
+        layout.addWidget(results_label)
         layout.addWidget(self._results)
         unit_buttons = QHBoxLayout()
         unit_buttons.addStretch(1)
         unit_buttons.addWidget(self._device_id_button)
         layout.addLayout(unit_buttons)
-        self._addr_section_label = QLabel("Registers scan:")
+        self._addr_section_label = QLabel()
+        self._track(self._addr_section_label, "Registers scan:")
         layout.addWidget(self._addr_section_label)
         layout.addLayout(addr_layout)
         layout.addWidget(self._addr_progress)
@@ -180,7 +213,7 @@ class ScannerPanel(QWidget):
         )
         self._probes_table.setItem(index, COL_COUNT, QTableWidgetItem(str(probe.count)))
 
-        delete_button = QPushButton("Delete")
+        delete_button = QPushButton(tr("Delete"))
         delete_button.clicked.connect(self._on_delete_probe)
         self._probes_table.setCellWidget(index, COL_ACTIONS, delete_button)
 
@@ -298,7 +331,9 @@ class ScannerPanel(QWidget):
                 labels.append(f"{probe.kind}@{probe.address} x{probe.count}")
             else:
                 labels.append(f"probe#{i}")
-        item = QListWidgetItem(f"Unit {unit}: {', '.join(labels)}")
+        item = QListWidgetItem(
+            tr("Unit {unit}: {labels}", unit=unit, labels=", ".join(labels))
+        )
         item.setData(Qt.ItemDataRole.UserRole, unit)
         self._results.addItem(item)
 
@@ -307,6 +342,23 @@ class ScannerPanel(QWidget):
         unit = item.data(Qt.ItemDataRole.UserRole)
         if isinstance(unit, int):
             self.unitSelected.emit(unit)
+
+    def _track(self, widget: QWidget, text: str, tip: str | None = None) -> None:
+        widget.setText(tr(text))
+        self._translatable.append((widget, text))
+        if tip is not None:
+            widget.setToolTip(tr(tip))
+            self._translatable_tips.append((widget, tip))
+
+    def retranslate(self) -> None:
+        """Переприменить tr() ко всем строкам сканера (по смене языка)."""
+        for widget, text in self._translatable:
+            widget.setText(tr(text))
+        for widget, tip in self._translatable_tips:
+            widget.setToolTip(tr(tip))
+        self._probes_table.setHorizontalHeaderLabels(
+            [tr("Type"), tr("Address"), tr("Count"), ""]
+        )
 
     def set_bus_enabled(self, ok: bool) -> None:
         """Включить/выключить кнопки Start по connectionChanged (Stop — всегда)."""
@@ -402,9 +454,11 @@ class ScannerPanel(QWidget):
             return
         dialog = QDialog(self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.setWindowTitle(f"Unit {unit} — device identification (0x2B/0x0E)")
+        dialog.setWindowTitle(
+            tr("Unit {unit} — device identification (0x2B/0x0E)", unit=unit)
+        )
         list_widget = QListWidget()
-        list_widget.addItem("Reading…")
+        list_widget.addItem(tr("Reading…"))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         layout = QVBoxLayout(dialog)
@@ -433,7 +487,7 @@ class ScannerPanel(QWidget):
         if not ok:
             list_widget.addItem(f"✗ {error}")
         elif not info:
-            list_widget.addItem("(device reported no objects)")
+            list_widget.addItem(tr("(device reported no objects)"))
         else:
             for object_id, value in sorted(info.items()):
                 label = DEVICE_ID_NAMES.get(object_id, f"object 0x{object_id:02X}")

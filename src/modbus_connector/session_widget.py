@@ -109,7 +109,9 @@ class SessionWidget(QWidget):
 
         self.scanner_panel.unitSelected.connect(self.connection_panel.set_unit_id)
         self.scanner_panel.unitSelected.connect(
-            lambda unit: self.log_panel.append(f"→ unit {unit} selected in connection panel")
+            lambda unit: self.log_panel.append(
+                tr("→ unit {unit} selected in connection panel", unit=unit)
+            )
         )
         self.scanner_panel.rowsAddRequested.connect(self.registers_panel.add_rows)
         self.scanner_panel.deviceIdRequested.connect(self._worker.read_device_id)
@@ -209,6 +211,9 @@ class SessionWidget(QWidget):
         self.connection_panel.retranslate()
         self.registers_panel.retranslate()
         self.log_panel.retranslate()
+        self.scanner_panel.retranslate()
+        if self._graph_window is not None:
+            self._graph_window.retranslate()
         self.titleChanged.emit(self.title())
 
     @Slot(object)

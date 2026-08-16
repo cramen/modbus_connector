@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
         self._tabs.setMovable(True)
         add_button = QToolButton()
         add_button.setText("+")
-        add_button.setToolTip("New connection tab")
+        add_button.setToolTip(tr("New connection tab"))
         add_button.clicked.connect(lambda: self._add_session())
         self._tabs.setCornerWidget(add_button)
         self._tabs.tabCloseRequested.connect(self._close_tab)
@@ -234,7 +234,10 @@ class MainWindow(QMainWindow):
 
     def _save_to_file(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
-            self, "Save Settings", str(Path.home() / "settings.json"), "JSON (*.json)"
+            self,
+            tr("Save Settings"),
+            str(Path.home() / "settings.json"),
+            "JSON (*.json)",
         )
         if not path_str:
             return
@@ -242,13 +245,15 @@ class MainWindow(QMainWindow):
         try:
             path.write_text(json.dumps(self._collect_state(), indent=2), encoding="utf-8")
         except OSError as exc:
-            self._log_line(f"✗ failed to save settings to {path}: {exc}")
+            self._log_line(
+                tr("✗ failed to save settings to {path}: {exc}", path=path, exc=exc)
+            )
             return
-        self._log_line(f"→ settings saved to {path}")
+        self._log_line(tr("→ settings saved to {path}", path=path))
 
     def _load_from_file(self) -> None:
         path_str, _ = QFileDialog.getOpenFileName(
-            self, "Load Settings", str(Path.home()), "JSON (*.json)"
+            self, tr("Load Settings"), str(Path.home()), "JSON (*.json)"
         )
         if not path_str:
             return
@@ -256,14 +261,18 @@ class MainWindow(QMainWindow):
         try:
             state = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            self._log_line(f"✗ failed to load settings from {path}: {exc}")
+            self._log_line(
+                tr("✗ failed to load settings from {path}: {exc}", path=path, exc=exc)
+            )
             return
         if not isinstance(state, dict):
-            self._log_line(f"✗ failed to load settings from {path}: not an object")
+            self._log_line(
+                tr("✗ failed to load settings from {path}: not an object", path=path)
+            )
             return
         self._clear_sessions()
         self._apply_state(state)
-        self._log_line(f"← settings loaded from {path}")
+        self._log_line(tr("← settings loaded from {path}", path=path))
 
     def _log_line(self, line: str) -> None:
         session = self._tabs.currentWidget()

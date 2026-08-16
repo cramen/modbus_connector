@@ -167,3 +167,86 @@ def test_worker_log_templates_format_in_russian(qapp: QApplication) -> None:
     assert line == "→ чтение holding_registers unit=1 адр=0 кол-во=2"
     assert "holding_registers" in line  # kind strings are never translated
     i18n.set_language("en")
+
+
+def test_scanner_retranslates(qapp: QApplication) -> None:
+    from modbus_connector.scanner_panel import ScannerPanel
+
+    panel = ScannerPanel()
+    i18n.set_language("ru")
+    panel.retranslate()
+    assert panel._start_button.text() == "Начать сканирование"
+    assert panel._add_rows_button.text() == "Добавить отмеченные в таблицу"
+    headers = [
+        panel._probes_table.horizontalHeaderItem(col).text() for col in range(3)
+    ]
+    assert headers == ["Тип", "Адрес", "Кол-во"]
+    assert panel._addr_section_label.text() == "Скан регистров:"
+    i18n.set_language("en")
+    panel.retranslate()
+    assert panel._start_button.text() == "Start scan"
+    panel.close()
+    panel.deleteLater()
+    qapp.processEvents()
+
+
+def test_graph_window_retranslates(qapp: QApplication) -> None:
+    import itertools
+
+    from modbus_connector.graph_window import GraphWindow
+    from modbus_connector.registers_panel import RegistersPanel
+
+    panel = RegistersPanel(itertools.count(1).__next__)
+    window = GraphWindow(panel)
+    i18n.set_language("ru")
+    window.retranslate()
+    assert window.windowTitle() == "График"
+    assert window._mode_combo.currentData() == "Follow"  # English key in data
+    assert window._mode_combo.currentText() == "Следом"
+    stats_headers = [
+        window._stats_table.horizontalHeaderItem(col).text() for col in range(4)
+    ]
+    assert stats_headers == ["Ряды", "Мин", "Макс", "Сред"]
+
+    panel.start_polling(True)  # state-dependent poll button under Russian
+    window._sync_poll_button(panel.is_polling(), panel.is_recording())
+    assert window._poll_button.text() == "Остановить опрос"
+    panel.stop_polling()
+    i18n.set_language("en")
+    window.retranslate()
+    assert window._poll_button.text() == "Start polling and record"
+    assert window._mode_combo.currentText() == "Follow"  # tests rely on this
+    window.close()
+    window.deleteLater()
+    panel.close()
+    panel.deleteLater()
+    qapp.processEvents()
+
+
+def test_help_sheets_follow_language(qapp: QApplication) -> None:
+    import itertools
+
+    from PySide6.QtWidgets import QTextBrowser
+
+    from modbus_connector.help_dialog import show_help
+    from modbus_connector.registers_panel import RegistersPanel
+
+    panel = RegistersPanel(itertools.count(1).__next__)
+    from modbus_connector.help_dialog import REGISTERS_HELP
+
+    english = show_help(panel, "Registers — Help", REGISTERS_HELP)
+    assert "quick actions" in english.findChild(QTextBrowser).toPlainText()
+    english.close()
+    qapp.processEvents()
+
+    i18n.set_language("ru")
+    russian = show_help(panel, "Registers — Help", REGISTERS_HELP)
+    assert russian.windowTitle() == "Таблица регистров — справка"
+    assert "быстрые действия" in russian.findChild(QTextBrowser).toPlainText()
+    assert "Ctrl+Shift+R" in russian.findChild(QTextBrowser).toPlainText()
+    russian.close()
+    qapp.processEvents()
+    i18n.set_language("en")
+    panel.close()
+    panel.deleteLater()
+    qapp.processEvents()

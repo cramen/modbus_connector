@@ -154,8 +154,9 @@ src/modbus_connector/
   help_dialog.py    # справка по окнам: make_help_button (кнопка "?") +
                     # show_help — немодальный диалог с QTextBrowser
                     # (WA_DeleteOnClose); тексты REGISTERS_HELP/GRAPH_HELP/
-                    # SCANNER_HELP — HTML со списком хоткеев; кнопки стоят в
-                    # панели регистров, окне графика и сканере
+                    # SCANNER_HELP — HTML со списком хоткеев, русские версии
+                    # в HELP_RU (выбор по текущему языку при открытии);
+                    # кнопки стоят в панели регистров, окне графика и сканере
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)
@@ -317,7 +318,8 @@ tests/
                            # (retranslate окна/панелей), round-trip "language",
                            # тип подключения в state всегда английский,
                            # заголовки/кнопки таблицы, диалоги CSV, шаблоны
-                           # лога worker'а
+                           # лога worker'а, сканер, окно графика (режимы в
+                           # itemData), справка на двух языках
   test_graph_window.py     # чек-лист рядов, маркеры stats, Follow, zoom→Manual
 ```
 

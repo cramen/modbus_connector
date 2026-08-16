@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from modbus_connector import theme
 from modbus_connector.help_dialog import GRAPH_HELP, make_help_button
+from modbus_connector.i18n import tr
 from modbus_connector.registers_panel import RegistersPanel
 
 MODES = ("Follow", "Full", "Manual")
@@ -53,7 +54,9 @@ class GraphWindow(QWidget):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Window)
         self._panel = panel
-        self.setWindowTitle("Graph")
+        self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
+        self._translatable_tips: list[tuple[QWidget, str]] = []
+        self.setWindowTitle(tr("Graph"))
         self.resize(950, 520)
 
         self._seen: set[int] = set()
@@ -66,31 +69,42 @@ class GraphWindow(QWidget):
 
         self._rows_list = QListWidget()
         self._rows_list.itemChanged.connect(self._on_row_toggled)
-        refresh_button = QPushButton("Refresh rows")
+        refresh_button = QPushButton()
+        self._track(refresh_button, "Refresh rows")
         refresh_button.clicked.connect(self._rebuild_rows)
 
         self._mode_combo = theme.FitComboBox()
-        self._mode_combo.addItems(MODES)
+        for mode in MODES:  # the English key rides in userData
+            self._mode_combo.addItem(tr(mode), mode)
         self._window_spin = QDoubleSpinBox(minimum=1, maximum=86_400, value=60)
         self._window_spin.setSuffix(" s")
         zoom_rect_button = QToolButton()
-        zoom_rect_button.setText("Zoom rect")
+        self._track(zoom_rect_button, "Zoom rect")
         zoom_rect_button.setCheckable(True)
         zoom_rect_button.toggled.connect(self._on_zoom_rect_toggled)
         markers_button = QToolButton()
-        markers_button.setText("Markers")
+        self._track(markers_button, "Markers")
         markers_button.setCheckable(True)
         markers_button.toggled.connect(self._toggle_markers)
-        reset_button = QPushButton("Reset view")
+        reset_button = QPushButton()
+        self._track(reset_button, "Reset view")
         reset_button.clicked.connect(self._reset_view)
-        self._clear_button = QPushButton("Clear")
-        self._clear_button.setToolTip("Clear recorded history and restart the time axis")
+        self._clear_button = QPushButton()
+        self._track(
+            self._clear_button,
+            "Clear",
+            "Clear recorded history and restart the time axis",
+        )
         self._clear_button.clicked.connect(self._on_clear)
         self._poll_button = QPushButton()
         self._poll_button.setEnabled(False)  # no bus access until a connection is up
-        self._poll_button.setToolTip(
-            "Poll the register table and record value history for this graph"
+        self._translatable_tips.append(
+            (
+                self._poll_button,
+                "Poll the register table and record value history for this graph",
+            )
         )
+        self._poll_button.setToolTip(tr(self._translatable_tips[-1][1]))
         self._poll_button.clicked.connect(self._on_poll_toggle)
 
         self._plot = pg.PlotWidget()
@@ -98,7 +112,7 @@ class GraphWindow(QWidget):
         pg.setConfigOptions(background=background, foreground=foreground)
         self._plot.setBackground(background)
         self._plot.showGrid(x=True, y=True, alpha=0.3)
-        self._plot.setLabel("bottom", "time, s (relative)")
+        self._plot.setLabel("bottom", tr("time, s (relative)"))
         self._plot.addLegend(offset=(4, 4))
         viewbox = self._plot.getPlotItem().getViewBox()
         viewbox.sigRangeChanged.connect(self._on_range_changed)
@@ -130,7 +144,9 @@ class GraphWindow(QWidget):
         self._marker_lines: list[pg.InfiniteLine] = []
         self._delta_label = QLabel()
         self._stats_table = QTableWidget(0, 4)
-        self._stats_table.setHorizontalHeaderLabels(["Series", "Min", "Max", "Avg"])
+        self._stats_table.setHorizontalHeaderLabels(
+            [tr(h) for h in ("Series", "Min", "Max", "Avg")]
+        )
         self._stats_table.verticalHeader().setVisible(False)
         self._stats_table.setMaximumHeight(120)
         self._stats_box = QWidget()
@@ -141,7 +157,9 @@ class GraphWindow(QWidget):
         self._stats_box.hide()
 
         controls = QHBoxLayout()
-        controls.addWidget(QLabel("X scale:"))
+        x_scale_label = QLabel()
+        self._track(x_scale_label, "X scale:")
+        controls.addWidget(x_scale_label)
         controls.addWidget(self._mode_combo)
         controls.addWidget(self._window_spin)
         controls.addWidget(zoom_rect_button)
@@ -159,7 +177,9 @@ class GraphWindow(QWidget):
         right.addWidget(self._stats_box)
 
         left = QVBoxLayout()
-        left.addWidget(QLabel("Series:"))
+        series_label = QLabel()
+        self._track(series_label, "Series:")
+        left.addWidget(series_label)
         left.addWidget(self._rows_list, 1)
         left.addWidget(refresh_button)
 
@@ -248,7 +268,7 @@ class GraphWindow(QWidget):
             curve.setData([t - self._origin for t in times], values)
             if latest is None or times[-1] > latest:
                 latest = times[-1]
-        mode = self._mode_combo.currentText()
+        mode = self._mode_combo.currentData()  # English key, display is translated
         if latest is not None and self._origin is not None:
             now = latest - self._origin
             if mode == "Follow":
@@ -287,9 +307,12 @@ class GraphWindow(QWidget):
 
     def _on_range_changed(self) -> None:
         # a user zoom/pan leaves Follow/Full — make the mode change visible
-        if not self._updating_range and self._mode_combo.currentText() != "Manual":
-            self._mode_combo.setCurrentText("Manual")
+        if not self._updating_range and self._mode_combo.currentData() != "Manual":
+            self._set_mode("Manual")
         self._pin_readout()
+
+    def _set_mode(self, mode: str) -> None:
+        self._mode_combo.setCurrentIndex(self._mode_combo.findData(mode))
 
     @Slot(bool)
     def _on_zoom_rect_toggled(self, on: bool) -> None:
@@ -304,7 +327,7 @@ class GraphWindow(QWidget):
             self._plot.autoRange()
         finally:
             self._updating_range = False
-        self._mode_combo.setCurrentText("Follow")
+        self._set_mode("Follow")
 
     @Slot()
     def _on_clear(self) -> None:
@@ -319,6 +342,31 @@ class GraphWindow(QWidget):
 
     def set_bus_enabled(self, ok: bool) -> None:
         self._poll_button.setEnabled(ok)
+
+    def _track(self, widget: QWidget, text: str, tip: str | None = None) -> None:
+        widget.setText(tr(text))
+        self._translatable.append((widget, text))
+        if tip is not None:
+            widget.setToolTip(tr(tip))
+            self._translatable_tips.append((widget, tip))
+
+    def retranslate(self) -> None:
+        """Переприменить tr() ко всем строкам окна (по смене языка)."""
+        self.setWindowTitle(tr("Graph"))
+        for widget, text in self._translatable:
+            widget.setText(tr(text))
+        for widget, tip in self._translatable_tips:
+            widget.setToolTip(tr(tip))
+        for index in range(self._mode_combo.count()):
+            self._mode_combo.setItemText(
+                index, tr(self._mode_combo.itemData(index))
+            )
+        self._stats_table.setHorizontalHeaderLabels(
+            [tr(h) for h in ("Series", "Min", "Max", "Avg")]
+        )
+        self._plot.setLabel("bottom", tr("time, s (relative)"))
+        # state-dependent text goes through its sync path, not a stale snapshot
+        self._sync_poll_button(self._panel.is_polling(), self._panel.is_recording())
 
     def update_theme(self) -> None:
         """Перекрасить открытый график под текущую тему (вызывает MainWindow)."""
@@ -354,7 +402,8 @@ class GraphWindow(QWidget):
     @Slot(bool, bool)
     def _sync_poll_button(self, polling: bool, recording: bool) -> None:
         self._poll_button.setText(
-            "Stop polling" if polling and recording else "Start polling and record"
+            tr("Stop polling") if polling and recording
+            else tr("Start polling and record")
         )
 
     # --- markers ----------------------------------------------------------
@@ -419,7 +468,7 @@ class GraphWindow(QWidget):
         # provisional extent placement in Follow/Full is refined to the visible
         # range on the next refresh; in Manual the extent placement is final
         self._markers_need_placement = (
-            not self._view_ranged and self._mode_combo.currentText() != "Manual"
+            not self._view_ranged and self._mode_combo.currentData() != "Manual"
         )
 
     @Slot()
@@ -429,7 +478,7 @@ class GraphWindow(QWidget):
         a = self._marker_lines[0].value() + self._origin
         b = self._marker_lines[1].value() + self._origin
         t0, t1 = min(a, b), max(a, b)
-        self._delta_label.setText(f"Δt = {t1 - t0:.4g} s")
+        self._delta_label.setText(tr("Δt = {dt:.4g} s", dt=t1 - t0))
         rows = [
             (token, series.stats(t0, t1))
             for token in self._curves
