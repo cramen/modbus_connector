@@ -1,0 +1,116 @@
+{
+  "name": "Wiren Board WB-MAI11",
+  "description": "11-channel analog input module: per-channel raw measurement value (s32, interpretation depends on the configured channel mode: uV / nA / 0.01 Ohm), 5V output, internal temperature, uptime (default 9600 8N2, address on device label). Register map (hex addresses converted to decimal): https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mai11.json.jinja",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2"
+  },
+  "registers": [
+    {
+      "name": "IN 1 raw value",
+      "kind": "input_registers",
+      "address": 5376,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 2 raw value",
+      "kind": "input_registers",
+      "address": 9472,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 3 raw value",
+      "kind": "input_registers",
+      "address": 13568,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 4 raw value",
+      "kind": "input_registers",
+      "address": 17664,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 5 raw value",
+      "kind": "input_registers",
+      "address": 21760,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 6 raw value",
+      "kind": "input_registers",
+      "address": 25856,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 7 raw value",
+      "kind": "input_registers",
+      "address": 29952,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 8 raw value",
+      "kind": "input_registers",
+      "address": 34048,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 9 raw value",
+      "kind": "input_registers",
+      "address": 38144,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 10 raw value",
+      "kind": "input_registers",
+      "address": 42240,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "IN 11 raw value",
+      "kind": "input_registers",
+      "address": 46336,
+      "count": 2,
+      "format": "s32"
+    },
+    {
+      "name": "5V output",
+      "kind": "input_registers",
+      "address": 1536,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Internal temperature",
+      "kind": "input_registers",
+      "address": 1537,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.01,
+      "unit": "°C"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    }
+  ]
+}

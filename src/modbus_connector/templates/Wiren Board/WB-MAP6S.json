@@ -1,0 +1,192 @@
+{
+  "name": "Wiren Board WB-MAP6S fw2",
+  "description": "6-channel power meter: common voltage/frequency, per-channel current, active power and active energy (default 9600 8N2, address on device label). Register map (hex addresses converted to decimal): https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-map6s-fw2.json",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Voltage",
+      "kind": "input_registers",
+      "address": 4313,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "V"
+    },
+    {
+      "name": "Frequency",
+      "kind": "input_registers",
+      "address": 4344,
+      "count": 1,
+      "scale": 0.01,
+      "unit": "Hz"
+    },
+    {
+      "name": "Current 1",
+      "kind": "input_registers",
+      "address": 5146,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Active power 1",
+      "kind": "input_registers",
+      "address": 4870,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.000244141,
+      "unit": "W"
+    },
+    {
+      "name": "Active energy 1",
+      "kind": "input_registers",
+      "address": 4620,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Current 2",
+      "kind": "input_registers",
+      "address": 5144,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Active power 2",
+      "kind": "input_registers",
+      "address": 4868,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.000244141,
+      "unit": "W"
+    },
+    {
+      "name": "Active energy 2",
+      "kind": "input_registers",
+      "address": 4616,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Current 3",
+      "kind": "input_registers",
+      "address": 5142,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Active power 3",
+      "kind": "input_registers",
+      "address": 4866,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.000244141,
+      "unit": "W"
+    },
+    {
+      "name": "Active energy 3",
+      "kind": "input_registers",
+      "address": 4612,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Current 4",
+      "kind": "input_registers",
+      "address": 9242,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Active power 4",
+      "kind": "input_registers",
+      "address": 8966,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.000244141,
+      "unit": "W"
+    },
+    {
+      "name": "Active energy 4",
+      "kind": "input_registers",
+      "address": 8716,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Current 5",
+      "kind": "input_registers",
+      "address": 9240,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Active power 5",
+      "kind": "input_registers",
+      "address": 8964,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.000244141,
+      "unit": "W"
+    },
+    {
+      "name": "Active energy 5",
+      "kind": "input_registers",
+      "address": 8712,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    },
+    {
+      "name": "Current 6",
+      "kind": "input_registers",
+      "address": 9238,
+      "count": 2,
+      "format": "u32",
+      "scale": 2.44141e-07,
+      "unit": "A"
+    },
+    {
+      "name": "Active power 6",
+      "kind": "input_registers",
+      "address": 8962,
+      "count": 2,
+      "format": "s32",
+      "scale": 0.000244141,
+      "unit": "W"
+    },
+    {
+      "name": "Active energy 6",
+      "kind": "input_registers",
+      "address": 8708,
+      "count": 4,
+      "format": "u64",
+      "scale": 1e-05,
+      "unit": "kWh"
+    }
+  ]
+}

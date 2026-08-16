@@ -26,7 +26,10 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Device templates (the **Templates** menu): ready-made register maps and
   default connection settings for popular devices — Eastron SDM120/SDM630,
   EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 and
-  Wiren Board WB-MSW/WB-MR6C/WB-MAP3E. Choosing a template opens a new tab
+  16 Wiren Board devices (WB-MS/WB-MSW sensors, WB-M1W2, WB-MR6C/WB-MR2M/
+  WB-MRWM2 relays, WB-MDM3/WB-MRGBW-D dimmers, WB-MAP3E/WB-MAP6S/WB-MAP12E
+  energy meters, WB-MAI6/WB-MAI11/WB-MAO4 analog I/O, WB-MCM8, WB-MIR).
+  Choosing a template opens a new tab
   with everything pre-filled — just press Connect.
 - Register table: rows with a name, area type (coils, discrete inputs,
   holding/input registers), address and count; read and write values.

@@ -1,0 +1,63 @@
+{
+  "name": "Wiren Board WB-MR2M",
+  "description": "Compact 2-channel relay module (same hardware and register map as WB-MRM2-mini, hw signature \"WBMR2m\"; current map revision): relay coils K1-K2, inputs 1-2 with counters, supply voltage and MCU temperature (default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mrm2-mini.json.jinja",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Relay K1",
+      "kind": "coils",
+      "address": 0,
+      "count": 1
+    },
+    {
+      "name": "Relay K2",
+      "kind": "coils",
+      "address": 1,
+      "count": 1
+    },
+    {
+      "name": "Inputs 1-2 state",
+      "kind": "discrete_inputs",
+      "address": 0,
+      "count": 2
+    },
+    {
+      "name": "Inputs 1-2 counters",
+      "kind": "input_registers",
+      "address": 32,
+      "count": 2
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    }
+  ]
+}

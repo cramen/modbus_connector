@@ -1,0 +1,67 @@
+{
+  "name": "Wiren Board WB-MCM8",
+  "description": "8-channel pulse counter module: discrete inputs 1-8 states, u32 pulse counters and frequencies per input, reset all counters (default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mcm8.json.jinja",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Inputs 1-8 state",
+      "kind": "discrete_inputs",
+      "address": 0,
+      "count": 8
+    },
+    {
+      "name": "Inputs 1-8 counters",
+      "kind": "input_registers",
+      "address": 60,
+      "count": 16,
+      "format": "u32"
+    },
+    {
+      "name": "Inputs 1-8 frequencies",
+      "kind": "input_registers",
+      "address": 40,
+      "count": 16,
+      "format": "u32",
+      "scale": 1.52588e-05,
+      "unit": "Hz"
+    },
+    {
+      "name": "Reset all counters",
+      "kind": "holding_registers",
+      "address": 100,
+      "count": 1
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    }
+  ]
+}

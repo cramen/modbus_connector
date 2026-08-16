@@ -26,7 +26,10 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 - Шаблоны устройств (меню «Шаблоны»): готовые карты регистров и настройки
   подключения по умолчанию для популярных устройств — Eastron SDM120/SDM630,
   EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 и
-  Wiren Board WB-MSW/WB-MR6C/WB-MAP3E. Выбор шаблона открывает новую вкладку
+  16 устройств Wiren Board (датчики WB-MS/WB-MSW, WB-M1W2, реле WB-MR6C/
+  WB-MR2M/WB-MRWM2, диммеры WB-MDM3/WB-MRGBW-D, измерители WB-MAP3E/WB-MAP6S/
+  WB-MAP12E, аналоговые модули WB-MAI6/WB-MAI11/WB-MAO4, WB-MCM8, WB-MIR).
+  Выбор шаблона открывает новую вкладку
   с уже заполненными полями — остаётся нажать Connect.
 - Таблица регистров: строки с именем, типом области (coils, discrete inputs,
   holding/input registers), адресом и количеством; чтение и запись значений.

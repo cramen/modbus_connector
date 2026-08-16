@@ -1,0 +1,78 @@
+{
+  "name": "Wiren Board WB-MIR v.2",
+  "description": "Modbus IR remote control transceiver: learn/play IR commands (RAM and ROM1-10 slots), ROM command sizes, 1-Wire temperature sensor on input 1 (default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mir_v2.json",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Learn to RAM",
+      "kind": "coils",
+      "address": 5001,
+      "count": 1
+    },
+    {
+      "name": "Play from RAM",
+      "kind": "coils",
+      "address": 5002,
+      "count": 1
+    },
+    {
+      "name": "Play from ROM1-10",
+      "kind": "coils",
+      "address": 5100,
+      "count": 10
+    },
+    {
+      "name": "Learn to ROM1-10",
+      "kind": "coils",
+      "address": 5300,
+      "count": 10
+    },
+    {
+      "name": "ROM1-10 command size",
+      "kind": "input_registers",
+      "address": 5400,
+      "count": 10
+    },
+    {
+      "name": "External temperature sensor",
+      "kind": "input_registers",
+      "address": 7,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.0625,
+      "unit": "°C"
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    }
+  ]
+}

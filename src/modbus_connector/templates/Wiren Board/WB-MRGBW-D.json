@@ -1,0 +1,134 @@
+{
+  "name": "Wiren Board WB-MRGBW-D fw3",
+  "description": "4-channel constant-voltage LED dimmer (firmware 3.x): channels 1-4 (B/R/G/W) on/off and brightness 0-100%, RGB palette / HSV and hue-changing effect in RGB+W mode (default dimmer mode 256), 3 inputs with counters. Channel registers return 0xFFFF when not used by the current dimmer mode (holding 4000). Default 9600 8N2, address on device label. Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mrgbw-d-fw3.json.jinja",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "Channel 1 (B) on/off",
+      "kind": "coils",
+      "address": 0,
+      "count": 1
+    },
+    {
+      "name": "Channel 2 (R) on/off",
+      "kind": "coils",
+      "address": 1,
+      "count": 1
+    },
+    {
+      "name": "Channel 3 (G) on/off",
+      "kind": "coils",
+      "address": 2,
+      "count": 1
+    },
+    {
+      "name": "Channel 4 (W) on/off",
+      "kind": "coils",
+      "address": 3,
+      "count": 1
+    },
+    {
+      "name": "RGB strip on/off",
+      "kind": "coils",
+      "address": 9,
+      "count": 1
+    },
+    {
+      "name": "Hue changing on/off",
+      "kind": "coils",
+      "address": 10,
+      "count": 1
+    },
+    {
+      "name": "Channel 1 (B) brightness",
+      "address": 2000,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Channel 2 (R) brightness",
+      "address": 2001,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Channel 3 (G) brightness",
+      "address": 2002,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Channel 4 (W) brightness",
+      "address": 2003,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "RGB palette (R;G;B)",
+      "address": 2011,
+      "count": 3
+    },
+    {
+      "name": "RGB strip hue",
+      "address": 2014,
+      "count": 1,
+      "unit": "°"
+    },
+    {
+      "name": "RGB strip saturation",
+      "address": 2015,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "RGB strip brightness",
+      "address": 2016,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Inputs 1-3 state",
+      "kind": "discrete_inputs",
+      "address": 0,
+      "count": 3
+    },
+    {
+      "name": "Inputs 1-3 counters",
+      "kind": "input_registers",
+      "address": 32,
+      "count": 3
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    }
+  ]
+}

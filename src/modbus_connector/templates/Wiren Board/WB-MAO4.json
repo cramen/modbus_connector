@@ -1,0 +1,102 @@
+{
+  "name": "Wiren Board WB-MAO4",
+  "description": "4-channel analog output module 0-10V (also WB-MAO4-20mA): channel setpoints in mV (0-10000, PWM mode: %*100), output on/off coils, 3 discrete inputs with counters (default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mao4.json.jinja, https://wiki.wirenboard.com/wiki/WB-MAO4_0-10V_Modbus_Analog_Outputs",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2"
+  },
+  "registers": [
+    {
+      "name": "Channel 1 setpoint",
+      "address": 0,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Channel 2 setpoint",
+      "address": 1,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Channel 3 setpoint",
+      "address": 2,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Channel 4 setpoint",
+      "address": 3,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Channel 1 switch",
+      "kind": "coils",
+      "address": 16,
+      "count": 1
+    },
+    {
+      "name": "Channel 2 switch",
+      "kind": "coils",
+      "address": 17,
+      "count": 1
+    },
+    {
+      "name": "Channel 3 switch",
+      "kind": "coils",
+      "address": 18,
+      "count": 1
+    },
+    {
+      "name": "Channel 4 switch",
+      "kind": "coils",
+      "address": 19,
+      "count": 1
+    },
+    {
+      "name": "Inputs 1-3 state",
+      "kind": "discrete_inputs",
+      "address": 0,
+      "count": 3
+    },
+    {
+      "name": "Inputs 1-3 counters",
+      "kind": "input_registers",
+      "address": 32,
+      "count": 3
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    }
+  ]
+}

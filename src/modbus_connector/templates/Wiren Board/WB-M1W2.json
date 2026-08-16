@@ -1,0 +1,93 @@
+{
+  "name": "Wiren Board WB-M1W2 v.3",
+  "description": "1-Wire to Modbus temperature module: two universal inputs, each 1-Wire (up to 20 DS18B20 per input) or discrete input with counter; per-input temperature and sensor status (default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-m1w2_v3-multiple_w1.json.jinja",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "External Sensor 1",
+      "kind": "input_registers",
+      "address": 7,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.0625,
+      "unit": "°C"
+    },
+    {
+      "name": "External Sensor 2",
+      "kind": "input_registers",
+      "address": 8,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.0625,
+      "unit": "°C"
+    },
+    {
+      "name": "Sensor 1 OK",
+      "kind": "discrete_inputs",
+      "address": 16,
+      "count": 1
+    },
+    {
+      "name": "Sensor 2 OK",
+      "kind": "discrete_inputs",
+      "address": 17,
+      "count": 1
+    },
+    {
+      "name": "Input 1 state",
+      "kind": "discrete_inputs",
+      "address": 0,
+      "count": 1
+    },
+    {
+      "name": "Input 2 state",
+      "kind": "discrete_inputs",
+      "address": 1,
+      "count": 1
+    },
+    {
+      "name": "Input 1 counter",
+      "kind": "input_registers",
+      "address": 277,
+      "count": 1
+    },
+    {
+      "name": "Input 2 counter",
+      "kind": "input_registers",
+      "address": 278,
+      "count": 1
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    }
+  ]
+}

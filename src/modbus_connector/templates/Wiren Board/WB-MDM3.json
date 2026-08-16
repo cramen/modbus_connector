@@ -1,0 +1,99 @@
+{
+  "name": "Wiren Board WB-MDM3",
+  "description": "3-channel MOSFET dimmer: channel on/off coils, brightness 0-100% per channel, 6 inputs with counters, AC/overcurrent status (current firmware 2.x; default 9600 8N2, address on device label). Register map: https://github.com/wirenboard/wb-mqtt-serial/blob/master/templates/config-wb-mdm3.json.jinja",
+  "connection": {
+    "type": "RTU",
+    "rtu_baud": "9600",
+    "rtu_bytesize": "8",
+    "rtu_parity": "N",
+    "rtu_stopbits": "2",
+    "timeout": 3.0
+  },
+  "registers": [
+    {
+      "name": "K1 (on/off)",
+      "kind": "coils",
+      "address": 0,
+      "count": 1
+    },
+    {
+      "name": "K2 (on/off)",
+      "kind": "coils",
+      "address": 1,
+      "count": 1
+    },
+    {
+      "name": "K3 (on/off)",
+      "kind": "coils",
+      "address": 2,
+      "count": 1
+    },
+    {
+      "name": "Channel 1 brightness",
+      "address": 0,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Channel 2 brightness",
+      "address": 1,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Channel 3 brightness",
+      "address": 2,
+      "count": 1,
+      "unit": "%"
+    },
+    {
+      "name": "Inputs 1-6 state",
+      "kind": "discrete_inputs",
+      "address": 0,
+      "count": 6
+    },
+    {
+      "name": "Inputs 1-6 counters",
+      "kind": "input_registers",
+      "address": 32,
+      "count": 6
+    },
+    {
+      "name": "AC on L-N",
+      "kind": "input_registers",
+      "address": 97,
+      "count": 1
+    },
+    {
+      "name": "Overcurrent",
+      "kind": "input_registers",
+      "address": 100,
+      "count": 1
+    },
+    {
+      "name": "Supply voltage",
+      "kind": "input_registers",
+      "address": 121,
+      "count": 1,
+      "scale": 0.001,
+      "unit": "V"
+    },
+    {
+      "name": "Uptime",
+      "kind": "input_registers",
+      "address": 104,
+      "count": 2,
+      "format": "u32",
+      "unit": "s"
+    },
+    {
+      "name": "MCU temperature",
+      "kind": "input_registers",
+      "address": 124,
+      "count": 1,
+      "format": "s16",
+      "scale": 0.1,
+      "unit": "°C"
+    }
+  ]
+}
