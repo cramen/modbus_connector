@@ -74,7 +74,9 @@ src/modbus_connector/
                   # сканера (одновременно работает только один);
                   # read/write замеряют wall time и пишут в Stats
   connection_panel.py  # параметры подключения (TCP / RTU / RTU over TCP /
-                       # RTU over UDP — страницы network/serial),
+                       # RTU over UDP — страницы network/serial; тип в комбо
+                       # лежит в itemData английским, переводится только
+                       # отображение, state() хранит английский ключ),
                        # state()/set_state(); две строки: настройки сверху,
                        # кнопки (Connect/Device ID…/Diagnostics… +
                        # Scanner…/Graph…/Log от SessionWidget через add_control)
@@ -253,11 +255,14 @@ src/modbus_connector/
                     # ("New connection" → описание соединения), last_stats()
   main_window.py  # главное окно: QTabWidget с SessionWidget'ами (кнопка "+"
                   # в углу, последнюю вкладку закрыть нельзя), меню File
-                  # (save/load всех вкладок), меню View — радио-переключатель
-                  # темы (System/Light/Dark, QActionGroup), статус-бар следует
+                  # (save/load всех вкладок), меню View — радио-переключатели
+                  # темы (System/Light/Dark) и языка (English/Русский,
+                  # QActionGroup'ы), languageChanged → _retranslate окна и
+                  # сессий, статус-бар следует
                   # активной вкладке; настройки: {"theme": str,
-                  # "tabs": [...], "active_tab": i} (theme отсутствует в старых
-                  # файлах → "system"),
+                  # "language": str,
+                  # "tabs": [...], "active_tab": i} (theme/language отсутствуют
+                  # в старых файлах → "system"/по локали),
                   # старый односессионный формат читается как одна вкладка
   theme.py        # тема (pyqtdarktheme): THEMES, apply_theme(name) —
                   # system→"auto" (вызывать после QApplication),
@@ -274,10 +279,19 @@ src/modbus_connector/
                   # используется для ВСЕХ комбобоксов;
                   # pyqtgraph НЕ импортируется (ленивая
                   # загрузка numpy сохранена)
+  i18n.py         # мини-i18n (en/ru) без .ts/.qm: tr(text, **fmt) — английский
+                  # текст является ключом, RU dict — перевод (нет ключа →
+                  # английский); set_language(None → по QLocale, мусор → "en"),
+                  # current_language(), сигнал languageChanged(str);
+                  # переводятся ТОЛЬКО display-строки — RegisterKind/форматы/
+                  # порядки/значения настроек не переводятся никогда;
+                  # у виджетов — retranslate() по сохранённым английским
+                  # ключам; диалоги читают язык при открытии; лог —
+                  # в момент эмиссии; настройки: "language" рядом с "theme"
   app.py          # QApplication, configure_qt() (контекстные меню показывают
                   # хоткеи и на macOS — AA_DontShowShortcutsInContextMenus
                   # =False до создания app), apply_theme(из настроек),
-                  # entry point main()
+                  # set_language(из настроек), entry point main()
   __main__.py     # python -m modbus_connector
 tests/
   conftest.py     # фикстура modbus_server (порт): asyncio-ModbusTcpServer на
@@ -299,6 +313,9 @@ tests/
   test_timeseries.py       # TimeSeries: буфер, вытеснение, stats
   test_theme.py            # apply_theme (stylesheet меняется), round-trip
                            # ключа "theme", меню View (эксклюзивность)
+  test_i18n.py             # tr() fallback, set_language, меню Language
+                           # (retranslate окна/панелей), round-trip "language",
+                           # тип подключения в state всегда английский
   test_graph_window.py     # чек-лист рядов, маркеры stats, Follow, zoom→Manual
 ```
 

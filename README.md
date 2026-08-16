@@ -58,6 +58,8 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   ("Raw" checkbox) and export of the whole log to a file ("Save…").
 - A "?" button in each window (table toolbar, graph, scanner) opens a short
   help sheet with that window's controls and hotkeys.
+- Bilingual UI: English and Русский, switched live in View → Language
+  (default follows the system locale; the choice persists).
 
 ## Screenshots
 

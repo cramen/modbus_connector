@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from serial.tools import list_ports
 
 from modbus_connector import theme
+from modbus_connector.i18n import tr
 from modbus_connector.models import (
     ConnectionParams,
     RtuOverTcpParams,
@@ -28,6 +29,7 @@ from modbus_connector.models import (
 )
 
 BAUDRATES = ["9600", "19200", "38400", "57600", "115200"]
+CONNECTION_TYPES = ("TCP", "RTU", "RTU over TCP", "RTU over UDP")  # never translated
 
 DEVICE_ID_NAMES = {0x00: "VendorName", 0x01: "ProductCode", 0x02: "MajorMinorRevision"}
 
@@ -56,9 +58,13 @@ class ConnectionPanel(QWidget):
         self._connected = False
         self._alive = False
         self._status_message = "Disconnected"
+        self._status_is_error = False
+        self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
+        self._translatable_tips: list[tuple[QWidget, str]] = []
 
         self._type_combo = theme.FitComboBox()
-        self._type_combo.addItems(["TCP", "RTU", "RTU over TCP", "RTU over UDP"])
+        for type_name in CONNECTION_TYPES:
+            self._type_combo.addItem(tr(type_name), type_name)  # data stays English
 
         self._tcp_host = QLineEdit("127.0.0.1")
         self._tcp_host.setMaximumWidth(140)
@@ -66,16 +72,17 @@ class ConnectionPanel(QWidget):
         network_page = QWidget()  # shared by TCP and both RTU-over-* types
         network_layout = QHBoxLayout(network_page)
         network_layout.setContentsMargins(0, 0, 0, 0)
-        network_layout.addWidget(QLabel("Host:"))
+        network_layout.addWidget(self._label("Host:"))
         network_layout.addWidget(self._tcp_host)
-        network_layout.addWidget(QLabel("Port:"))
+        network_layout.addWidget(self._label("Port:"))
         network_layout.addWidget(self._tcp_port)
         network_layout.addStretch(1)
 
         self._rtu_port = theme.FitComboBox()
         self._rtu_port.setMinimumWidth(140)
         self._rtu_port.setMaximumWidth(220)  # long device paths must not widen the window
-        self._rtu_refresh = QPushButton("Refresh")
+        self._rtu_refresh = QPushButton()
+        self._track(self._rtu_refresh, "Refresh")
         self._rtu_baud = theme.FitComboBox(editable=True)
         self._rtu_baud.addItems(BAUDRATES)
         self._rtu_bytesize = theme.FitComboBox()
@@ -96,7 +103,7 @@ class ConnectionPanel(QWidget):
             ("Stop:", self._rtu_stopbits),
         ):
             if label:
-                rtu_layout.addWidget(QLabel(label))
+                rtu_layout.addWidget(self._label(label))
             rtu_layout.addWidget(widget)
         rtu_layout.addStretch(1)
 
@@ -111,18 +118,21 @@ class ConnectionPanel(QWidget):
         self._timeout.setSingleStep(0.5)
         self._timeout.setSuffix(" s")
 
-        self._button = QPushButton("Connect")
+        self._button = QPushButton(tr("Connect"))  # text set in _sync_button_text
         self._button.clicked.connect(self._on_button_clicked)
-        self._device_id_button = QPushButton("Device ID…")
+        self._device_id_button = QPushButton()
+        self._track(self._device_id_button, "Device ID…")
         self._device_id_button.setEnabled(False)  # only meaningful while connected
         self._device_id_button.clicked.connect(self._on_device_id_clicked)
-        self._diag_button = QPushButton("Diagnostics…")
-        self._diag_button.setEnabled(False)
-        self._diag_button.setToolTip(
-            "Serial-line diagnostics (0x08); some TCP devices answer it too"
+        self._diag_button = QPushButton()
+        self._track(
+            self._diag_button,
+            "Diagnostics…",
+            "Serial-line diagnostics (0x08); some TCP devices answer it too",
         )
+        self._diag_button.setEnabled(False)
         self._diag_button.clicked.connect(self._on_diag_clicked)
-        self._status = QLabel("Disconnected")
+        self._status = QLabel(tr("Disconnected"))
         self._status.setStyleSheet("color: gray")
         # the status text must never drive the window width: Ignored keeps it
         # out of the layout's size hint, long messages just truncate visually
@@ -135,9 +145,9 @@ class ConnectionPanel(QWidget):
         settings_row = QHBoxLayout()
         settings_row.addWidget(self._type_combo)
         settings_row.addWidget(self._stack, 1)
-        settings_row.addWidget(QLabel("Unit:"))
+        settings_row.addWidget(self._label("Unit:"))
         settings_row.addWidget(self._unit)
-        settings_row.addWidget(QLabel("Timeout:"))
+        settings_row.addWidget(self._label("Timeout:"))
         settings_row.addWidget(self._timeout)
         settings_row.addStretch(1)
 
@@ -158,6 +168,33 @@ class ConnectionPanel(QWidget):
         """Add a button to the panel's second row (before the status label)."""
         self._controls_row.insertWidget(self._controls_row.count() - 1, widget)
 
+    def _label(self, text: str) -> QLabel:
+        label = QLabel(tr(text))
+        self._translatable.append((label, text))
+        return label
+
+    def _track(self, widget: QWidget, text: str, tip: str | None = None) -> None:
+        widget.setText(tr(text))
+        self._translatable.append((widget, text))
+        if tip is not None:
+            widget.setToolTip(tr(tip))
+            self._translatable_tips.append((widget, tip))
+
+    def retranslate(self) -> None:
+        """Переприменить tr() ко всем строкам панели (по смене языка)."""
+        for widget, text in self._translatable:
+            widget.setText(tr(text))
+        for widget, tip in self._translatable_tips:
+            widget.setToolTip(tr(tip))
+        for index in range(self._type_combo.count()):
+            key = self._type_combo.itemData(index)  # English, set at build time
+            self._type_combo.setItemText(index, tr(key))
+        self._sync_button_text()
+        self._render_status()
+
+    def _sync_button_text(self) -> None:
+        self._button.setText(tr("Disconnect") if self._connected else tr("Connect"))
+
     def unit_id(self) -> int:
         return self._unit.value()
 
@@ -167,7 +204,7 @@ class ConnectionPanel(QWidget):
 
     def state(self) -> dict:
         return {
-            "type": self._type_combo.currentText(),
+            "type": self._type_combo.currentData(),  # English key, not the display text
             "tcp_host": self._tcp_host.text(),
             "tcp_port": self._tcp_port.value(),
             "rtu_port": self._rtu_port.currentText(),
@@ -182,7 +219,7 @@ class ConnectionPanel(QWidget):
     def set_state(self, state: dict) -> None:
         if not state:
             return
-        type_index = self._type_combo.findText(str(state.get("type", "")))
+        type_index = self._type_combo.findData(str(state.get("type", "")))
         if type_index >= 0:
             self._type_combo.setCurrentIndex(type_index)
         self._tcp_host.setText(str(state.get("tcp_host", self._tcp_host.text())))
@@ -246,8 +283,9 @@ class ConnectionPanel(QWidget):
         try:
             params = self._build_params()
         except ValueError:
-            self._status.setText("Invalid settings")
-            self._status.setStyleSheet("color: red")
+            self._status_message = "Invalid settings"
+            self._status_is_error = True
+            self._render_status()
             return
         self.connectRequested.emit(params, self._unit.value())
 
@@ -271,8 +309,9 @@ class ConnectionPanel(QWidget):
         self._connected = ok
         self._alive = ok  # assume alive right after connect; reset on disconnect
         self._status_message = message
+        self._status_is_error = False
         self._render_status()
-        self._button.setText("Disconnect" if ok else "Connect")
+        self._sync_button_text()
         self._device_id_button.setEnabled(ok)
         self._diag_button.setEnabled(ok)
         for widget in (
@@ -295,6 +334,10 @@ class ConnectionPanel(QWidget):
         self._render_status()
 
     def _render_status(self) -> None:
+        if self._status_is_error:
+            self._status.setText(tr(self._status_message))
+            self._status.setStyleSheet("color: red")
+            return
         colors = theme.status_colors()
         if not self._connected:
             text, color = self._status_message, colors["off"]
@@ -303,8 +346,9 @@ class ConnectionPanel(QWidget):
         else:
             # pymodbus drops `connected` after a timeout but silently reconnects
             # on the next transaction — the link is idle/degraded, not dead
-            text, color = f"{self._status_message} (idle)", colors["idle"]
-        self._status.setText(text)
+            text = f"{self._status_message} {tr('(idle)')}"
+            color = colors["idle"]
+        self._status.setText(tr(text))  # unknown strings pass through as English
         self._status.setStyleSheet(f"color: {color}")
 
     def refresh_theme(self) -> None:
@@ -313,9 +357,9 @@ class ConnectionPanel(QWidget):
     @Slot()
     def _on_device_id_clicked(self) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Device identification (0x2B/0x0E)")
+        dialog.setWindowTitle(tr("Device identification (0x2B/0x0E)"))
         list_widget = QListWidget()
-        list_widget.addItem("Reading…")
+        list_widget.addItem(tr("Reading…"))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         layout = QVBoxLayout(dialog)
@@ -340,7 +384,7 @@ class ConnectionPanel(QWidget):
             list_widget.addItem(f"✗ {error}")
             return
         if not info:
-            list_widget.addItem("(device reported no objects)")
+            list_widget.addItem(tr("(device reported no objects)"))
         for object_id, value in sorted(info.items()):
             label = DEVICE_ID_NAMES.get(object_id, f"object 0x{object_id:02X}")
             list_widget.addItem(f"{label}: {value}")
@@ -348,12 +392,12 @@ class ConnectionPanel(QWidget):
     @Slot()
     def _on_diag_clicked(self) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Diagnostics (function 0x08)")
-        loopback_button = QPushButton("Loopback")
+        dialog.setWindowTitle(tr("Diagnostics (function 0x08)"))
+        loopback_button = QPushButton(tr("Loopback"))
         status_label = QLabel("—")
         counters_list = QListWidget()
-        refresh_button = QPushButton("Refresh")
-        clear_button = QPushButton("Clear counters")
+        refresh_button = QPushButton(tr("Refresh"))
+        clear_button = QPushButton(tr("Clear counters"))
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(dialog.reject)
         top = QHBoxLayout()
@@ -406,7 +450,7 @@ class ConnectionPanel(QWidget):
         if error:
             self._diag_status.setText(f"✗ {error}")
         else:
-            self._diag_status.setText("OK" if echo_ok else "mismatch")
+            self._diag_status.setText("OK" if echo_ok else tr("mismatch"))
 
     @Slot(int, bool, dict, str)
     def handle_diag_counters_finished(

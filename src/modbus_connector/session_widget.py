@@ -6,6 +6,7 @@ from PySide6.QtCore import QMetaObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
 
 from modbus_connector.connection_panel import ConnectionPanel
+from modbus_connector.i18n import tr
 from modbus_connector.log_panel import LogPanel
 from modbus_connector.models import ConnectionParams, StatsSnapshot, describe_connection
 from modbus_connector.registers_panel import RegistersPanel
@@ -38,15 +39,15 @@ class SessionWidget(QWidget):
 
         self.scanner_panel = ScannerPanel(lambda: next(self._request_ids), self)
         self.scanner_panel.setWindowFlags(Qt.WindowType.Window)
-        self.scanner_panel.setWindowTitle("Modbus Scanner")
+        self.scanner_panel.setWindowTitle(tr("Modbus Scanner"))
         self.scanner_panel.resize(700, 500)
 
-        self._scanner_button = QPushButton("Scanner…")
+        self._scanner_button = QPushButton(tr("Scanner…"))
         self._scanner_button.clicked.connect(self._show_scanner)
-        self._graph_button = QPushButton("Graph…")
+        self._graph_button = QPushButton(tr("Graph…"))
         self._graph_button.clicked.connect(self._show_graph)
         self._graph_window: GraphWindow | None = None
-        self._log_button = QPushButton("Log")
+        self._log_button = QPushButton(tr("Log"))
         self._log_button.setCheckable(True)
         self._log_button.setChecked(True)
         self._log_button.toggled.connect(self.log_panel.setVisible)
@@ -197,7 +198,16 @@ class SessionWidget(QWidget):
             self._graph_window.set_bus_enabled(ok)
 
     def title(self) -> str:
-        return self._title
+        return tr(self._title)  # English key stored, translated for display
+
+    def retranslate(self) -> None:
+        """Переприменить tr() к строкам сессии (по смене языка)."""
+        self._scanner_button.setText(tr("Scanner…"))
+        self._graph_button.setText(tr("Graph…"))
+        self._log_button.setText(tr("Log"))
+        self.scanner_panel.setWindowTitle(tr("Modbus Scanner"))
+        self.connection_panel.retranslate()
+        self.titleChanged.emit(self.title())
 
     @Slot(object)
     def _on_stats_updated(self, snapshot: StatsSnapshot) -> None:

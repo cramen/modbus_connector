@@ -12,6 +12,7 @@ except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
 from modbus_connector import theme  # noqa: E402
+from modbus_connector.i18n import set_language  # noqa: E402
 from modbus_connector.main_window import MainWindow  # noqa: E402
 
 
@@ -24,6 +25,7 @@ def qapp() -> QApplication:
 def _restore_theme() -> None:
     yield
     theme.apply_theme("system")  # the theme is app-global: leave no trace
+    set_language("en")  # a MainWindow applies the persisted language on build
 
 
 def test_apply_theme_switches_stylesheet(qapp: QApplication) -> None:

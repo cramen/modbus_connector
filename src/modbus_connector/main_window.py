@@ -13,6 +13,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from modbus_connector.i18n import (
+    LANGUAGES,
+    current_language,
+    languageChanged,
+    set_language,
+    tr,
+)
 from modbus_connector.models import StatsSnapshot
 from modbus_connector.session_widget import SessionWidget
 from modbus_connector.settings_store import load_settings, save_settings
@@ -40,23 +47,46 @@ class MainWindow(QMainWindow):
         self._update_stats(StatsSnapshot())
         self.statusBar().addPermanentWidget(self._stats_label)
 
-        file_menu = self.menuBar().addMenu("File")
-        save_action = file_menu.addAction("Save Settings to File…", self._save_to_file)
-        save_action.setShortcut(QKeySequence.StandardKey.Save)
-        load_action = file_menu.addAction("Load Settings from File…", self._load_from_file)
-        load_action.setShortcut(QKeySequence.StandardKey.Open)
+        file_menu = self.menuBar().addMenu(tr("File"))
+        self._file_menu = file_menu
+        self._save_action = file_menu.addAction(
+            tr("Save Settings to File…"), self._save_to_file
+        )
+        self._save_action.setShortcut(QKeySequence.StandardKey.Save)
+        self._load_action = file_menu.addAction(
+            tr("Load Settings from File…"), self._load_from_file
+        )
+        self._load_action.setShortcut(QKeySequence.StandardKey.Open)
 
-        view_menu = self.menuBar().addMenu("View")
+        view_menu = self.menuBar().addMenu(tr("View"))
+        self._view_menu = view_menu
+        self._theme_menu = view_menu.addMenu(tr("Theme"))
         self._theme_actions = {}
         theme_group = QActionGroup(self)
         labels = {"system": "System", "light": "Light", "dark": "Dark"}
         for key in THEMES:
-            action = view_menu.addAction(labels[key])
+            action = self._theme_menu.addAction(labels[key])
             action.setCheckable(True)
             theme_group.addAction(action)
             action.triggered.connect(lambda checked=False, name=key: self._on_theme_selected(name))
             self._theme_actions[key] = action
         self._sync_theme_menu()
+
+        self._language_menu = view_menu.addMenu(tr("Language"))
+        self._language_actions = {}
+        language_group = QActionGroup(self)
+        for key in LANGUAGES:  # language names stay native on purpose
+            action = self._language_menu.addAction(
+                "Русский" if key == "ru" else "English"
+            )
+            action.setCheckable(True)
+            language_group.addAction(action)
+            action.triggered.connect(
+                lambda checked=False, name=key: self._on_language_selected(name)
+            )
+            self._language_actions[key] = action
+        self._sync_language_menu()
+        languageChanged.connect(self._on_language_changed)
 
         self._apply_state(load_settings())
 
@@ -113,13 +143,16 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _update_stats(self, snapshot: StatsSnapshot) -> None:
-        text = (
-            f"Tx: {snapshot.total}  Err: {snapshot.errors} "
-            f"({snapshot.error_percent:.1f}%)  Avg: {snapshot.avg_ms:.0f} ms"
+        text = tr(
+            "Tx: {total}  Err: {errors} ({percent:.1f}%)  Avg: {avg:.0f} ms",
+            total=snapshot.total,
+            errors=snapshot.errors,
+            percent=snapshot.error_percent,
+            avg=snapshot.avg_ms,
         )
         top = snapshot.top_error_kind
         if top is not None:
-            text += f"  top: {top.removeprefix('exception:')}"
+            text += tr("  top: {kind}", kind=top.removeprefix("exception:"))
         self._stats_label.setText(text)
         tooltip = "\n".join(
             f"{kind}: {count}"
@@ -127,17 +160,43 @@ class MainWindow(QMainWindow):
                 snapshot.error_kinds.items(), key=lambda item: -item[1]
             )
         )
-        self._stats_label.setToolTip(tooltip or "no errors yet")
+        self._stats_label.setToolTip(tooltip or tr("no errors yet"))
 
     def _collect_state(self) -> dict[str, Any]:
         return {
             "theme": current_theme(),
+            "language": current_language(),
             "tabs": [self._tabs.widget(i).state() for i in range(self._tabs.count())],
             "active_tab": self._tabs.currentIndex(),
         }
 
     def _sync_theme_menu(self) -> None:
         self._theme_actions[current_theme()].setChecked(True)
+
+    def _sync_language_menu(self) -> None:
+        self._language_actions[current_language()].setChecked(True)
+
+    def _on_language_selected(self, name: str) -> None:
+        set_language(name)  # emits languageChanged → _on_language_changed
+
+    @Slot(str)
+    def _on_language_changed(self, _name: str) -> None:
+        self._retranslate()
+        for index in range(self._tabs.count()):
+            self._tabs.widget(index).retranslate()
+        self._sync_language_menu()
+
+    def _retranslate(self) -> None:
+        self._file_menu.setTitle(tr("File"))
+        self._save_action.setText(tr("Save Settings to File…"))
+        self._load_action.setText(tr("Load Settings from File…"))
+        self._view_menu.setTitle(tr("View"))
+        self._theme_menu.setTitle(tr("Theme"))
+        self._language_menu.setTitle(tr("Language"))
+        for key, label in (("system", "System"), ("light", "Light"), ("dark", "Dark")):
+            self._theme_actions[key].setText(tr(label))
+        session = self._tabs.currentWidget()
+        self._update_stats(session.last_stats() if session else StatsSnapshot())
 
     def _on_theme_selected(self, name: str) -> None:
         apply_theme(name)
@@ -154,6 +213,10 @@ class MainWindow(QMainWindow):
         if isinstance(theme, str):
             self._on_theme_selected(theme)  # also re-tints open sessions
         self._sync_theme_menu()
+        language = state.get("language") if isinstance(state, dict) else None
+        if isinstance(language, str):
+            set_language(language)  # before tabs: they build in this language
+        self._sync_language_menu()
         tabs = state.get("tabs") if isinstance(state, dict) else None
         if isinstance(tabs, list):
             for entry in tabs:

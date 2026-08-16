@@ -17,6 +17,16 @@ from pymodbus.server import ModbusTcpServer
 UNIT_ID = 1
 
 
+@pytest.fixture(autouse=True)
+def _english_ui() -> None:
+    # the UI language defaults to the system locale: pin tests to English
+    try:
+        from modbus_connector.i18n import set_language
+    except ImportError:
+        return  # Qt-less environment: Qt tests are skipped anyway
+    set_language("en")
+
+
 def _serve(framer: Framer) -> Iterator[int]:
     """Тестовый Modbus TCP сервер на 127.0.0.1, возвращает порт.
 

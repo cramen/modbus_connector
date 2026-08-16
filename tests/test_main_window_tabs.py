@@ -12,6 +12,7 @@ try:
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
+from modbus_connector.i18n import set_language  # noqa: E402
 from modbus_connector.main_window import MainWindow  # noqa: E402
 
 
@@ -36,6 +37,7 @@ def _destroy_windows(qapp: QApplication) -> Iterator[None]:
 def _fresh_window() -> MainWindow:
     window = MainWindow()
     window._clear_sessions()  # drop whatever the user's settings file restored
+    set_language("en")  # construction re-applied the persisted language; pin en
     return window
 
 
