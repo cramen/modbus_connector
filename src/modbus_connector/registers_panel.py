@@ -27,6 +27,7 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -46,6 +47,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector import icons, theme
+from modbus_connector.alarms_dialog import AlarmsDialog
 from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
 from modbus_connector.datalogger import (
     LOG_FIELDS,
@@ -59,13 +61,17 @@ from modbus_connector.help_dialog import REGISTERS_HELP, make_help_button
 from modbus_connector.i18n import tr
 from modbus_connector.models import (
     CSV_COLUMNS,
+    AlarmRule,
     ByteOrder,
     DisplayFormat,
     RegisterKind,
     RegisterRow,
     RowDisplaySettings,
+    alarm_rule_to_json,
+    alarm_rules_from_json,
     csv_header,
     decode_register_values,
+    evaluate_alarm,
     format_register_values,
     format_scaled_values,
     format_values,
@@ -183,6 +189,17 @@ def _parse_poll_ms(text: str) -> int | None:
     return poll if poll is not None and poll >= 100 else None
 
 
+_CONDITION_SYMBOLS = {"gt": ">", "lt": "<", "ge": ">=", "le": "<=", "eq": "==", "ne": "!="}
+
+
+def _describe_rule(rule: AlarmRule) -> str:
+    """Короткое условие правила для лог-строки аларма ("> 20", "in 10..30")."""
+    if rule.condition in _CONDITION_SYMBOLS:
+        return f"{_CONDITION_SYMBOLS[rule.condition]} {rule.value:g}"
+    verb = "in" if rule.condition == "in_range" else "outside"
+    return f"{verb} {rule.value:g}..{rule.value2:g}"
+
+
 class RegistersPanel(QWidget):
     readRequested = Signal(int, int, object)
     writeRequested = Signal(int, int, object, list)
@@ -212,6 +229,7 @@ class RegistersPanel(QWidget):
         self._series: dict[int, TimeSeries] = {}  # token -> value history (runtime only)
         self._sparklines: dict[int, SparklineWidget] = {}
         self._last_values: dict[int, list] = {}  # token -> last raw read values
+        self._active_alarms: dict[int, AlarmRule] = {}  # token -> rule currently firing
         self._bus_enabled = False  # no bus access until a connection is up
         self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
         self._translatable_tips: list[tuple[QWidget, str]] = []
@@ -307,6 +325,14 @@ class RegistersPanel(QWidget):
             "Per-row Scale/Offset/Unit and byte order settings",
         )
         display_button.clicked.connect(self._on_display_settings)
+        alarms_button = icons.make_button(tr("Alarms…"), "alarm")
+        self._track(
+            alarms_button,
+            "Alarms…",
+            "Per-row alarm rules: highlight, log and beep when the scaled "
+            "value matches a condition",
+        )
+        alarms_button.clicked.connect(self._on_alarms)
         csv_button = QToolButton()  # menu button: icon registered manually
         csv_button.setIcon(icons.icon("csv_export"))
         csv_button.setIconSize(QSize(icons.ICON_SIZE, icons.ICON_SIZE))
@@ -376,6 +402,7 @@ class RegistersPanel(QWidget):
         top.addWidget(self._readwrite_button)
         top.addWidget(self._filter_edit)
         top.addWidget(display_button)
+        top.addWidget(alarms_button)
         top.addWidget(csv_button)
         top.addWidget(self._log_button)
         top.addWidget(self._log_settings_button)
@@ -480,6 +507,7 @@ class RegistersPanel(QWidget):
                     "offset": settings.offset,
                     "unit": settings.unit,
                     "log": settings.log,
+                    "alarms": [alarm_rule_to_json(rule) for rule in settings.alarms],
                 }
             )
         return rows
@@ -555,9 +583,13 @@ class RegistersPanel(QWidget):
             except (AttributeError, KeyError, TypeError, ValueError):
                 continue
             self._add_row(row)
-            # the log flag lives outside RegisterRow: apply it to the new token
+            # the log flag and alarm rules live outside RegisterRow:
+            # apply them to the new token
             self._row_display[self._row_token_counter].log = bool(
                 entry.get("log", True)
+            )
+            self._row_display[self._row_token_counter].alarms = alarm_rules_from_json(
+                entry.get("alarms")
             )
             # missing key (older settings files) defaults to polling enabled
             if not bool(entry.get("poll_enabled", True)):
@@ -988,6 +1020,85 @@ class RegistersPanel(QWidget):
         elif item.column() == 4:
             settings.unit = text
 
+    # --- alarms (conditional row highlight) -----------------------------------
+
+    @Slot()
+    def _on_alarms(self) -> None:
+        dialog = AlarmsDialog(self._alarm_row_entries(), self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        rules_by_token = dialog.rules()
+        if rules_by_token is None:  # the dialog validates before accepting
+            return
+        for token, rules in rules_by_token.items():
+            self._row_display.setdefault(token, RowDisplaySettings()).alarms = rules
+        # re-evaluate against the last reads: _update_alarm resolves the
+        # transitions (cleared highlight, new color) from the kept edge state
+        for index in range(self._table.rowCount()):
+            self._re_evaluate_alarm(index)
+
+    def _alarm_row_entries(self) -> list[tuple[int, str, list[AlarmRule]]]:
+        """(token, label, rules) per table row for the alarms dialog."""
+        entries = []
+        for index in range(self._table.rowCount()):
+            token = self._token_at(index)
+            entries.append(
+                (
+                    token,
+                    self.row_label(token),
+                    list(self._row_display.get(token, RowDisplaySettings()).alarms),
+                )
+            )
+        return entries
+
+    def _re_evaluate_alarm(self, index: int) -> None:
+        """Переоценить аларм строки по последнему прочитанному значению."""
+        token = self._token_at(index)
+        values = self._last_values.get(token)
+        if values is None:  # never read: nothing to match, clear any highlight
+            self._active_alarms.pop(token, None)
+            item = self._table.item(index, COL_VALUE)
+            if item is not None:
+                item.setBackground(QBrush())
+            return
+        self._update_alarm(index, values)
+
+    def _update_alarm(self, index: int, values: list) -> None:
+        """Оценить правила строки по свежему чтению: подсветка, edge-лог, звук."""
+        token = self._token_at(index)
+        rules = self._row_display.get(token, RowDisplaySettings()).alarms
+        previous = self._active_alarms.get(token)
+        primary = self._primary_value(index, values) if rules else None
+        # hex/ascii/non-numeric rows never match
+        matched = evaluate_alarm(primary, rules) if primary is not None else None
+        if matched is None and previous is None:
+            return
+        item = self._table.item(index, COL_VALUE)
+        if matched is None:  # active -> cleared edge
+            cleared = self._active_alarms.pop(token)
+            if item is not None:
+                item.setBackground(QBrush())
+            if cleared.log:
+                self.logLine.emit(
+                    tr("ALARM cleared {label}", label=self.row_label(token))
+                )
+            return
+        self._active_alarms[token] = matched
+        if item is not None:
+            item.setBackground(theme.alarm_color(matched.color))
+        if previous is None:  # inactive -> active edge: log once, optional beep
+            if matched.log:
+                self.logLine.emit(
+                    tr(
+                        "ALARM {label}: {value} {condition}",
+                        label=self.row_label(token),
+                        value=f"{primary:g}",
+                        condition=_describe_rule(matched),
+                    )
+                )
+            if matched.sound:
+                QApplication.beep()
+
     @Slot()
     def _on_mask_write(self) -> None:
         dialog = QDialog(self)
@@ -1254,6 +1365,7 @@ class RegistersPanel(QWidget):
         if index is not None:
             token = self._token_at(index)
             self._flash_generations.pop(token, None)
+            self._active_alarms.pop(token, None)
             self._row_display.pop(token, None)
             self._series.pop(token, None)
             self._last_values.pop(token, None)
@@ -1520,8 +1632,12 @@ class RegistersPanel(QWidget):
             if text != item.text():
                 self._flash_value_cell(token, item)
             item.setText(text)
+        if ok:
+            self._update_alarm(index, values)
 
     def _flash_value_cell(self, token: int, item: QTableWidgetItem) -> None:
+        if token in self._active_alarms:
+            return  # an active alarm keeps its color: it outranks the change flash
         item.setBackground(theme.flash_color())
         generation = self._flash_generations.get(token, 0) + 1
         self._flash_generations[token] = generation
@@ -1536,7 +1652,11 @@ class RegistersPanel(QWidget):
             return
         item = self._table.item(index, COL_VALUE)
         if item is not None:
-            item.setBackground(QBrush())
+            # an alarm raised after the flash was scheduled keeps its color
+            active = self._active_alarms.get(token)
+            item.setBackground(
+                theme.alarm_color(active.color) if active is not None else QBrush()
+            )
 
     @Slot(int, bool, str)
     def handle_write_finished(self, request_id: int, ok: bool, error: str) -> None:

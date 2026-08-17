@@ -44,6 +44,9 @@ src/modbus_connector/
                   # CSV таблицы регистров (толерантный разбор,
                   # guess_column_mapping/csv_header, subset колонок),
                   # EXCEPTION_CODES/describe_exception — имена Modbus-исключений,
+                  # AlarmRule/evaluate_alarm/rule_matches/alarm_rule_to_json/
+                  # alarm_rules_from_json — правила алармов (иммутабельные,
+                  # приоритет = порядок, границы диапазонов включительные),
                   # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms,
                   # разбивка ошибок по видам)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
@@ -107,8 +110,8 @@ src/modbus_connector/
                        # шину (Read all, split-поллинг, Log to file, mask
                        # write, read/write; _read/_write_table_row молча
                        # игнорируют), по умолчанию выключены; Add/Filter/
-                       # Sort/Display…/CSV/настройки логирования — локальные,
-                       # всегда доступны,
+                       # Sort/Display…/Alarms…/CSV/настройки логирования —
+                       # локальные, всегда доступны,
                        # split-кнопка поллинга (QToolButton MenuButtonPopup,
                        # меню "Start polling" / "Start polling and record",
                        # режим запоминается; выбор пункта на ходу переключает
@@ -152,6 +155,18 @@ src/modbus_connector/
                        # в _log_read;
                        # logging_state()/set_logging_state() — настройки в
                        # session state (как registers_options), без on/off
+                       # алармы: кнопка "Alarms…" (иконка alarm, локальная)
+                       # открывает AlarmsDialog; правила хранятся в
+                       # RowDisplaySettings.alarms (state-ключ "alarms" через
+                       # alarm_rule_to_json/alarm_rules_from_json, default [],
+                       # в CSV не входят); оценка в _update_alarm по
+                       # масштабированному primary-значению (hex/ascii
+                       # пропускаются); активное правило красит ячейку Value
+                       # (theme.alarm_color, приоритет над flash изменений),
+                       # _active_alarms по токену — edge-детекция: лог
+                       # "ALARM <label>: value условие" / "ALARM cleared" один
+                       # раз на фронт (rule.log) и QApplication.beep()
+                       # (rule.sound); смена правил сбрасывает edge-состояние
   datalogger.py     # без Qt: LogSettings (path/format csv|jsonl/fields —
                     # subset timestamp/name/address/kind, value всегда/
                     # append), LogSample, DataLogger — open/write/flush/close/
@@ -162,6 +177,14 @@ src/modbus_connector/
                         # расширения), чекбоксы полей, append/overwrite,
                         # чек-лист логируемых строк (group box "Rows to log",
                         # Select all/none, Space/Enter)
+  alarms_dialog.py  # AlarmsDialog — модальный диалог правил алармов: слева
+                    # список строк (label по токену), справа таблица правил
+                    # (Condition-комбо с ключом в itemData, Value, Value2 —
+                    # только для диапазонов, Color red/yellow, чекбоксы
+                    # Log/Sound), Add/Remove/Up/Down (порядок = приоритет);
+                    # редактирование через «черновики» (сырые тексты переживают
+                    # переключение строк), парсинг в AlarmRule на OK;
+                    # нечисловой Value блокирует OK, range без value2 = value
   help_dialog.py    # справка по окнам: make_help_button (иконка help,
                     # тултип "Help"/"Справка") +
                     # show_help — немодальный диалог с QTextBrowser
@@ -362,6 +385,8 @@ tests/
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
   test_datalogger.py  # DataLogger: csv/jsonl, subset полей, append/overwrite
   test_registers_panel.py  # offscreen Qt тесты таблицы регистров
+  test_alarms_dialog.py   # диалог алармов (add/edit/remove/round-trip) и
+                          # алармы панели: подсветка, edge-лог, state, hex/ascii
   test_session_widget.py   # smoke: state round-trip + shutdown сессии
   test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
                            # закрытие вкладок

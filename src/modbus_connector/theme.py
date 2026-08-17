@@ -5,6 +5,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QComboBox, QStyle
 
+from modbus_connector.models import AlarmColor
+
 THEMES = ("system", "light", "dark")
 _QDARKTHEME = {"system": "auto", "light": "light", "dark": "dark"}
 _current = THEMES[0]
@@ -47,6 +49,13 @@ def crosshair_color() -> QColor:
 def flash_color() -> QColor:
     """Подсветка изменившейся при чтении ячейки Value."""
     return QColor(45, 95, 50) if is_dark() else QColor(144, 238, 144)
+
+
+def alarm_color(color: "AlarmColor") -> QColor:
+    """Фон ячейки Value при активном аларме (red/yellow), читаемый в обеих темах."""
+    if is_dark():
+        return QColor(0x7A, 0x24, 0x1E) if color == "red" else QColor(0x6B, 0x58, 0x1B)
+    return QColor(0xF5, 0xB7, 0xB1) if color == "red" else QColor(0xF7, 0xE2, 0x8B)
 
 
 def sparkline_color() -> QColor:

@@ -313,6 +313,17 @@ def _raw(p: QPainter, _c: QColor) -> None:
     _line(p, 9.0, 12.0, 14.0, 12.0)
 
 
+@_drawer("alarm")
+def _alarm(p: QPainter, _c: QColor) -> None:
+    # колокольчик: купол, раструб и язычок
+    _line(p, 8.0, 1.8, 8.0, 2.8)
+    p.drawArc(QRectF(4.0, 2.8, 8.0, 8.0), 0, 180 * 16)
+    _poly(p, (4.0, 6.8), (4.0, 10.5), (2.6, 12.5))
+    _poly(p, (12.0, 6.8), (12.0, 10.5), (13.4, 12.5))
+    _line(p, 2.6, 12.5, 13.4, 12.5)
+    p.drawArc(QRectF(6.9, 12.5, 2.2, 2.0), 180 * 16, 180 * 16)
+
+
 ICON_NAMES: tuple[str, ...] = tuple(_DRAWERS)
 
 

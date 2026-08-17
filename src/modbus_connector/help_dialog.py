@@ -33,6 +33,10 @@ opens file/format/field/row settings.</li>
 <b>Filter…</b> hides non-matching rows; <b>Sort by address</b> reorders;
 <b>CSV</b> imports/exports the table; <b>Mask write (0x16)…</b> and
 <b>Read/Write (0x17)…</b> run the advanced functions.</li>
+<li><b>Alarms…</b> — per-row alarm rules over the scaled value (hex/ascii
+rows are skipped). The first matching rule wins and paints the Value cell
+red/yellow, outranking the change flash; activation and clearing are logged
+once per edge (if Log is set), with a beep on activation if Sound is set.</li>
 <li>Right-click a row for quick actions (copy, write 0/1, increment,
 decrement, toggle, move) — they act on the selected rows.</li>
 </ul>
@@ -143,6 +147,11 @@ inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
 <b>Фильтр…</b> скрывает лишние строки; <b>Сортировать по адресу</b>
 упорядочивает таблицу; <b>CSV</b> — импорт/экспорт; <b>Mask write (0x16)…</b> и
 <b>Read/Write (0x17)…</b> — расширенные функции.</li>
+<li><b>Алармы…</b> — правила алармов на строку по масштабированному значению
+(строки hex/ascii пропускаются). Срабатывает первое совпавшее правило и
+красит ячейку значения в красный/жёлтый (приоритет над зелёной вспышкой
+изменения); активация и снятие пишутся в лог один раз на фронт (если
+включён «Лог»), при активации — звук, если включён «Звук».</li>
 <li>Правый клик по строке — быстрые действия (копия, запись 0/1, шаг,
 переключение, сдвиг); действуют на выбранные строки.</li>
 </ul>

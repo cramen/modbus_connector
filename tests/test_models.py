@@ -1,12 +1,17 @@
 import pytest
 
 from modbus_connector.models import (
+    AlarmRule,
     RegisterRow,
     RowDisplaySettings,
     Stats,
+    alarm_rule_from_json,
+    alarm_rule_to_json,
+    alarm_rules_from_json,
     csv_header,
     decode_register_values,
     describe_exception,
+    evaluate_alarm,
     format_register_values,
     format_scaled_values,
     format_values,
@@ -14,6 +19,7 @@ from modbus_connector.models import (
     parse_values,
     rows_from_csv,
     rows_to_csv,
+    rule_matches,
 )
 
 
@@ -380,6 +386,138 @@ class TestCsv:
     def test_csv_header(self) -> None:
         assert csv_header("a,b,c\n1,2,3\n") == ["a", "b", "c"]
         assert csv_header("") == []
+
+
+class TestAlarmRuleValidation:
+    def test_range_bounds_normalized(self) -> None:
+        rule = AlarmRule("in_range", 10.0, 2.0)
+        assert rule.value == 2.0
+        assert rule.value2 == 10.0
+
+    def test_range_requires_value2(self) -> None:
+        with pytest.raises(ValueError):
+            AlarmRule("in_range", 5.0)
+
+    def test_scalar_rejects_value2(self) -> None:
+        with pytest.raises(ValueError):
+            AlarmRule("gt", 5.0, 6.0)
+
+    def test_unknown_condition_and_color(self) -> None:
+        with pytest.raises(ValueError):
+            AlarmRule("bogus", 5.0)  # type: ignore[arg-type]
+        with pytest.raises(ValueError):
+            AlarmRule("gt", 5.0, color="blue")  # type: ignore[arg-type]
+
+
+class TestRuleMatches:
+    @pytest.mark.parametrize(
+        ("rule", "matching", "not_matching"),
+        [
+            (AlarmRule("gt", 5.0), [5.1, 100.0], [5.0, 4.9]),
+            (AlarmRule("ge", 5.0), [5.0, 5.1], [4.9]),
+            (AlarmRule("lt", 5.0), [4.9, -100.0], [5.0, 5.1]),
+            (AlarmRule("le", 5.0), [5.0, 4.9], [5.1]),
+            (AlarmRule("eq", 5.0), [5.0], [5.0001, 4.9]),
+            (AlarmRule("ne", 5.0), [5.1, 0.0], [5.0]),
+        ],
+    )
+    def test_scalar_conditions(
+        self, rule: AlarmRule, matching: list[float], not_matching: list[float]
+    ) -> None:
+        for x in matching:
+            assert rule_matches(rule, x), x
+        for x in not_matching:
+            assert not rule_matches(rule, x), x
+
+    def test_in_range_bounds_inclusive(self) -> None:
+        rule = AlarmRule("in_range", 2.0, 10.0)
+        assert rule_matches(rule, 2.0)
+        assert rule_matches(rule, 10.0)
+        assert rule_matches(rule, 5.0)
+        assert not rule_matches(rule, 1.999)
+        assert not rule_matches(rule, 10.001)
+
+    def test_outside_range_bounds_inclusive(self) -> None:
+        rule = AlarmRule("outside_range", 2.0, 10.0)
+        assert not rule_matches(rule, 2.0)
+        assert not rule_matches(rule, 10.0)
+        assert not rule_matches(rule, 5.0)
+        assert rule_matches(rule, 1.999)
+        assert rule_matches(rule, 10.001)
+
+
+class TestEvaluateAlarm:
+    def test_first_match_wins(self) -> None:
+        first = AlarmRule("ge", 5.0, color="yellow")
+        second = AlarmRule("gt", 3.0, color="red")
+        assert evaluate_alarm(10.0, [first, second]) is first
+
+    def test_skips_non_matching(self) -> None:
+        rule = AlarmRule("gt", 3.0, color="red")
+        assert evaluate_alarm(10.0, [AlarmRule("lt", 5.0), rule]) is rule
+
+    def test_no_match_returns_none(self) -> None:
+        assert evaluate_alarm(5.0, [AlarmRule("gt", 10.0)]) is None
+        assert evaluate_alarm(5.0, []) is None
+
+
+class TestAlarmRuleJson:
+    def test_roundtrip_scalar(self) -> None:
+        rule = AlarmRule("gt", 5.0, color="red", log=True, sound=False)
+        data = alarm_rule_to_json(rule)
+        assert data == {
+            "condition": "gt", "value": 5.0, "color": "red", "log": True, "sound": False,
+        }
+        assert "value2" not in data
+        assert alarm_rule_from_json(data) == rule
+
+    def test_roundtrip_range(self) -> None:
+        rule = AlarmRule("outside_range", 2.0, 10.0, color="yellow", log=False, sound=True)
+        data = alarm_rule_to_json(rule)
+        assert data["value2"] == 10.0
+        assert alarm_rule_from_json(data) == rule
+
+    def test_int_value_coerced_to_float(self) -> None:
+        rule = alarm_rule_from_json({"condition": "ge", "value": 5})
+        assert rule is not None
+        assert rule.value == 5.0
+
+    def test_missing_color_defaults_to_red(self) -> None:
+        rule = alarm_rule_from_json({"condition": "gt", "value": 5.0})
+        assert rule is not None
+        assert rule.color == "red"
+        assert rule.log is True
+        assert rule.sound is False
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            None,
+            "gt",
+            [1, 2],
+            {},
+            {"condition": "bogus", "value": 5.0},
+            {"condition": "gt"},
+            {"condition": "gt", "value": "high"},
+            {"condition": "gt", "value": None},
+            {"condition": "gt", "value": True},
+            {"condition": "gt", "value": 5.0, "color": "blue"},
+            {"condition": "in_range", "value": 5.0},
+            {"condition": "in_range", "value": 5.0, "value2": "x"},
+            {"condition": "gt", "value": 5.0, "value2": 6.0},
+        ],
+    )
+    def test_garbage_returns_none(self, data: object) -> None:
+        assert alarm_rule_from_json(data) is None
+
+    def test_rules_from_json_skips_broken(self) -> None:
+        good = alarm_rule_to_json(AlarmRule("gt", 5.0))
+        rules = alarm_rules_from_json([good, {"condition": "bogus"}, "junk", None])
+        assert rules == [AlarmRule("gt", 5.0)]
+
+    def test_rules_from_json_non_list(self) -> None:
+        assert alarm_rules_from_json(None) == []
+        assert alarm_rules_from_json({"condition": "gt", "value": 5.0}) == []
 
 
 class TestDescribeException:

@@ -1,6 +1,7 @@
 import csv
 import io
 import struct
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Literal, get_args
 
@@ -77,6 +78,8 @@ class RowDisplaySettings:
     unit: str = ""
     order: ByteOrder | None = None  # None = inherit the panel's global order
     log: bool = True  # include the row when logging values to a file
+    # alarm rules over the scaled primary value (AlarmRule is defined below)
+    alarms: list["AlarmRule"] = field(default_factory=list)
 
 
 CSV_COLUMNS = [
@@ -450,3 +453,126 @@ class Stats:
         self._ok_ms = 0.0
         self._last_ms = 0.0
         self._error_kinds.clear()
+
+
+AlarmCondition = Literal["gt", "lt", "ge", "le", "eq", "ne", "in_range", "outside_range"]
+
+AlarmColor = Literal["red", "yellow"]
+
+_RANGE_CONDITIONS = ("in_range", "outside_range")
+
+
+@dataclass(frozen=True)
+class AlarmRule:
+    """Правило аларма над числовым значением регистра.
+
+    Для диапазонных условий (in_range/outside_range) value/value2 — границы,
+    нормализуются в порядке (нижняя, верхняя); границы включаются в диапазон.
+    Для остальных условий value2 должен быть None. log/sound — флаги реакции
+    (запись в лог / звук), потребитель решает, как их применять.
+    """
+
+    condition: AlarmCondition
+    value: float
+    value2: float | None = None
+    color: AlarmColor = "red"
+    log: bool = True
+    sound: bool = False
+
+    def __post_init__(self) -> None:
+        if self.condition not in get_args(AlarmCondition):
+            raise ValueError(f"Неизвестное условие аларма: {self.condition!r}")
+        if self.color not in get_args(AlarmColor):
+            raise ValueError(f"Неизвестный цвет аларма: {self.color!r}")
+        if self.condition in _RANGE_CONDITIONS:
+            if self.value2 is None:
+                raise ValueError(f"Условие {self.condition!r} требует value2")
+            if self.value > self.value2:
+                lo, hi = self.value2, self.value
+                object.__setattr__(self, "value", lo)
+                object.__setattr__(self, "value2", hi)
+        elif self.value2 is not None:
+            raise ValueError(f"Условие {self.condition!r} не использует value2")
+
+
+def rule_matches(rule: AlarmRule, x: float) -> bool:
+    """Проверить значение против одного правила (границы диапазона включительно)."""
+    condition = rule.condition
+    if condition == "gt":
+        return x > rule.value
+    if condition == "ge":
+        return x >= rule.value
+    if condition == "lt":
+        return x < rule.value
+    if condition == "le":
+        return x <= rule.value
+    if condition == "eq":
+        return x == rule.value
+    if condition == "ne":
+        return x != rule.value
+    in_range = rule.value <= x <= (rule.value2 if rule.value2 is not None else rule.value)
+    return in_range if condition == "in_range" else not in_range
+
+
+def evaluate_alarm(x: float, rules: Sequence[AlarmRule]) -> AlarmRule | None:
+    """Первое совпавшее правило (приоритет = порядок в списке) или None."""
+    for rule in rules:
+        if rule_matches(rule, x):
+            return rule
+    return None
+
+
+def alarm_rule_to_json(rule: AlarmRule) -> dict[str, object]:
+    data: dict[str, object] = {
+        "condition": rule.condition,
+        "value": rule.value,
+        "color": rule.color,
+        "log": rule.log,
+        "sound": rule.sound,
+    }
+    if rule.value2 is not None:
+        data["value2"] = rule.value2
+    return data
+
+
+def _json_float(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
+
+
+def alarm_rule_from_json(data: object) -> AlarmRule | None:
+    """Разобрать правило из JSON-словаря; мусор/неизвестные значения → None."""
+    if not isinstance(data, dict):
+        return None
+    condition = data.get("condition")
+    if condition not in get_args(AlarmCondition):
+        return None
+    value = _json_float(data.get("value"))
+    if value is None:
+        return None
+    raw_value2 = data.get("value2")
+    value2 = _json_float(raw_value2) if raw_value2 is not None else None
+    if raw_value2 is not None and value2 is None:
+        return None
+    color = data.get("color", "red")
+    if color not in get_args(AlarmColor):
+        return None
+    try:
+        return AlarmRule(
+            condition=condition,
+            value=value,
+            value2=value2,
+            color=color,
+            log=bool(data.get("log", True)),
+            sound=bool(data.get("sound", False)),
+        )
+    except ValueError:
+        return None
+
+
+def alarm_rules_from_json(data: object) -> list[AlarmRule]:
+    """Разобрать список правил; битые элементы пропускаются."""
+    if not isinstance(data, list):
+        return []
+    return [rule for item in data if (rule := alarm_rule_from_json(item)) is not None]

@@ -212,6 +212,31 @@ RU: dict[str, str] = {
         "→ запись значений в {path} ({format})",
     "← logging stopped: {rows} rows written to {path}":
         "← запись остановлена: записано строк: {rows} в {path}",
+    # alarms dialog and log lines
+    "Alarms…": "Алармы…",
+    "Per-row alarm rules: highlight, log and beep when the scaled "
+    "value matches a condition":
+        "Правила алармов по строкам: подсветка, лог и звук, когда "
+        "масштабированное значение совпадает с условием",
+    "Alarm rules": "Правила алармов",
+    "Condition": "Условие",
+    "Value 2": "Значение 2",
+    "Color": "Цвет",
+    "Sound": "Звук",
+    "in range": "в диапазоне",
+    "outside range": "вне диапазона",
+    "red": "красный",
+    "yellow": "жёлтый",
+    "Add": "Добавить",
+    "Remove": "Удалить",
+    "Up": "Вверх",
+    "Down": "Вниз",
+    "The first matching rule wins; Value 2 is used by the range conditions":
+        "Срабатывает первое совпавшее правило; Значение 2 используется "
+        "условиями диапазона",
+    "Rule value must be a number": "Значение правила должно быть числом",
+    "ALARM {label}: {value} {condition}": "АЛАРМ {label}: {value} {condition}",
+    "ALARM cleared {label}": "АЛАРМ снят: {label}",
     # CSV dialogs
     "Export CSV": "Экспорт CSV",
     "Choose columns to export and their order":
