@@ -188,7 +188,7 @@ class RegistersPanel(QWidget):
     writeRequested = Signal(int, int, object, list)
     maskWriteRequested = Signal(int, int, int, int, int)
     readwriteRequested = Signal(int, int, int, int, int, list)
-    rowsChanged = Signal()  # a row was added or removed
+    rowsChanged = Signal()  # a row was added/removed or its poll-enabled flag toggled
     pollStateChanged = Signal(bool, bool)  # (polling, recording) after any change
     logLine = Signal(str)
 
@@ -1161,6 +1161,10 @@ class RegistersPanel(QWidget):
         kind = self._table.cellWidget(index, COL_TYPE).currentText()
         return f"{kind}@{self._text_at(index, COL_ADDRESS)}"
 
+    def row_poll_enabled(self, token: int) -> bool:
+        index = self._find_row_by_token(token)
+        return index is not None and self._poll_enabled_at(index)
+
     def series(self, token: int) -> TimeSeries | None:
         return self._series.get(token)
 
@@ -1267,6 +1271,8 @@ class RegistersPanel(QWidget):
             self._write_table_row(item.row())
         elif item.column() in (COL_POLL, COL_POLL_ENABLED):
             self._sync_row_timer(item.row())
+            if item.column() == COL_POLL_ENABLED:
+                self.rowsChanged.emit()  # the graph window hides/shows the row
 
     @Slot()
     def _read_current_row(self) -> None:

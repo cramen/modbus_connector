@@ -177,7 +177,11 @@ src/modbus_connector/
                     # MAX_SAMPLES=10000 (~2.7 ч при поллинге 1 Гц)
   graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
                     # тулбар — иконочные кнопки с тултипами (icons.make_button),
-                    # чек-лист рядов (по токенам), Follow/Full/Manual + zoom
+                    # чек-лист рядов (по токенам; показываются только строки,
+                    # включённые в поллинг — скрытие живое по rowsChanged,
+                    # при toggle COL_POLL_ENABLED панель его эмитит; состояние
+                    # галочек чек-листа при скрытии/показе строки сохраняется),
+                    # Follow/Full/Manual + zoom
                     # rect, цвета кривых по теме (_curve_color: intColor на
                     # тёмной, tab10-подобный LIGHT_CURVE_COLORS на светлой;
                     # update_theme перекрашивает существующие кривые), маркеры A/B с min/max/avg и Δt (размещение внутри
@@ -200,7 +204,8 @@ src/modbus_connector/
                     # label.setText(label.text) — цвет запечён в HTML; вызывается
                     # из __init__ и MainWindow при переключении темы),
                     # QTimer 500 мс
-                    # читает панель (row_tokens/row_label/series, rowsChanged)
+                    # читает панель (row_tokens/row_label/row_poll_enabled/series,
+                    # rowsChanged)
                        # колонки таблицы ресайзятся (Interactive),
                        # колонка Trend — SparklineWidget (QPainter) по ряду
                        # _series[token] (TimeSeries; пишется primary-значение

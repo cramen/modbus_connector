@@ -19,7 +19,7 @@ except ImportError as exc:
 
 from modbus_connector.graph_window import GraphWindow  # noqa: E402
 from modbus_connector.models import RegisterRow  # noqa: E402
-from modbus_connector.registers_panel import RegistersPanel  # noqa: E402
+from modbus_connector.registers_panel import COL_POLL_ENABLED, RegistersPanel  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -66,6 +66,54 @@ def test_checklist_lists_rows_and_tracks_tokens(qapp: QApplication) -> None:
     panel._add_row(RegisterRow(name="x", kind="coils", address=0))
     assert panel._token_at(0) not in window._curves  # the uncheck survives rebuilds
     assert window._rows_list.count() == 4
+
+
+def test_poll_disabled_rows_are_hidden_live(qapp: QApplication) -> None:
+    panel = _panel()
+    window = GraphWindow(panel)
+    assert window._rows_list.count() == 2
+    temp_token = panel._token_at(0)
+
+    item = panel._table.item(0, COL_POLL_ENABLED)
+    assert item is not None
+    item.setCheckState(Qt.CheckState.Unchecked)
+    assert window._rows_list.count() == 1  # rowsChanged fires on the toggle
+    assert temp_token not in window._curves
+    remaining = window._rows_list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert remaining == panel._token_at(1)
+
+    item.setCheckState(Qt.CheckState.Checked)
+    assert window._rows_list.count() == 2
+    assert temp_token in window._curves  # reappears checked, as before hiding
+
+
+def test_hidden_row_keeps_its_unchecked_state(qapp: QApplication) -> None:
+    panel = _panel()
+    window = GraphWindow(panel)
+    pressure_token = panel._token_at(1)
+    window._rows_list.item(1).setCheckState(Qt.CheckState.Unchecked)
+    assert pressure_token not in window._curves
+
+    item = panel._table.item(1, COL_POLL_ENABLED)
+    assert item is not None
+    item.setCheckState(Qt.CheckState.Unchecked)  # hides the row
+    assert window._rows_list.count() == 1
+    item.setCheckState(Qt.CheckState.Checked)  # shows it again
+    assert window._rows_list.count() == 2
+    assert pressure_token not in window._curves  # user uncheck survived the cycle
+
+
+def test_all_rows_poll_disabled_leaves_empty_checklist(qapp: QApplication) -> None:
+    panel = _panel()
+    window = GraphWindow(panel)
+    for index in range(panel._table.rowCount()):
+        item = panel._table.item(index, COL_POLL_ENABLED)
+        assert item is not None
+        item.setCheckState(Qt.CheckState.Unchecked)
+    assert window._rows_list.count() == 0
+    assert not window._curves
+    window._refresh()  # no data, no crash
+    window._update_stats()
 
 
 def test_marker_stats_match_timeseries_math(qapp: QApplication) -> None:

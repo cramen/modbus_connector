@@ -55,7 +55,9 @@ GRAPH_HELP = """
 <h3>Graph window</h3>
 <ul>
 <li>The <b>Series</b> checklist picks which table rows are plotted (new rows
-join checked; "Refresh rows" rebuilds the list).</li>
+join checked; "Refresh rows" rebuilds the list). Only rows enabled for polling
+(the leftmost checkbox in the table) are listed — unchecking a row there hides
+its series here, and the checklist state survives the hide/show cycle.</li>
 <li><b>X scale</b>: <b>Follow</b> slides a window of the given width behind
 the latest data, <b>Full</b> fits everything, <b>Manual</b> freezes the
 view. Wheel zooms at the cursor, left-drag pans, <b>Zoom rect</b> zooms to a
@@ -163,7 +165,10 @@ GRAPH_HELP_RU = """
 <h3>Окно графика</h3>
 <ul>
 <li>Чек-лист <b>Series</b> выбирает строки таблицы для построения (новые
-строки добавляются отмеченными; «Refresh rows» перечитывает список).</li>
+строки добавляются отмеченными; «Refresh rows» перечитывает список). В список
+попадают только строки, включённые в поллинг (крайняя левая галочка в таблице)
+— снятие галочки скрывает ряд отсюда, состояние чек-листа при этом
+сохраняется.</li>
 <li><b>X scale</b>: <b>Follow</b> ведёт скользящее окно за последними данными,
 <b>Full</b> вписывает всё, <b>Manual</b> замораживает вид. Колесо — зум у
 курсора, драг — панорама, <b>Zoom rect</b> — зум рамкой; любой из них

@@ -187,12 +187,14 @@ class GraphWindow(QWidget):
 
     @Slot()
     def _rebuild_rows(self) -> None:
-        tokens = self._panel.row_tokens()
+        all_tokens = self._panel.row_tokens()
+        # rows opted out of polling are hidden from the graph entirely
+        tokens = [t for t in all_tokens if self._panel.row_poll_enabled(t)]
         for token in tokens:
             if token not in self._seen:  # first sight: plot new rows by default
                 self._checked.add(token)
-        self._seen.update(tokens)
-        self._checked &= set(tokens)  # forget deleted rows
+        self._seen.update(all_tokens)
+        self._checked &= set(all_tokens)  # forget deleted rows, keep hidden ones
         self._rows_list.blockSignals(True)
         self._rows_list.clear()
         for token in tokens:
@@ -205,10 +207,11 @@ class GraphWindow(QWidget):
             )
             self._rows_list.addItem(item)
         self._rows_list.blockSignals(False)
+        visible = set(tokens) & self._checked
         for token in list(self._curves):
-            if token not in self._checked:
+            if token not in visible:
                 self._remove_curve(token)
-        for token in self._checked:
+        for token in visible:
             if token not in self._curves:
                 self._add_curve(token)
 
