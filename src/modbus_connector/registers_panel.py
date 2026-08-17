@@ -121,6 +121,17 @@ POLL_BUTTON_TIP = (
     COL_ACTIONS,
 ) = range(12)
 
+# Stable string keys per column (aligned with COL_*): session state stores
+# column order/hidden sets by key so future column insertions stay compatible
+COLUMN_KEYS = (
+    "poll_enabled", "name", "type", "address", "count", "unit_id",
+    "poll_ms", "format", "value", "new_value", "trend", "actions",
+)
+KEY_TO_COL = {key: col for col, key in enumerate(COLUMN_KEYS)}
+# data columns the user may hide via the header context menu; the two control
+# columns (poll checkbox, delete button) always stay visible
+DATA_COLUMNS = tuple(range(COL_NAME, COL_TREND + 1))
+
 
 class SparklineWidget(QWidget):
     """Крошечный тренд строки: линия по последним точкам, авто-масштаб Y."""
@@ -257,9 +268,11 @@ class RegistersPanel(QWidget):
 
         self._table = QTableWidget(0, 12)
         self._sync_header()
-        self._table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Interactive
-        )
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setSectionsMovable(True)  # items/cellWidgets stay in logical cols
+        header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._on_header_context_menu)
         for col, width in (
             (COL_POLL_ENABLED, 34),
             (COL_NAME, 160),
@@ -555,8 +568,18 @@ class RegistersPanel(QWidget):
         header = self._table.horizontalHeader()
         return {
             "order": self._global_order_combo.currentText(),
+            # sectionSize/resizeSection take logical indexes, so widths stay
+            # bound to columns across drag'n'drop reordering
             "column_widths": [
                 header.sectionSize(col) for col in range(header.count())
+            ],
+            # visual order left to right as logical keys
+            "column_order": [
+                COLUMN_KEYS[header.logicalIndex(visual)]
+                for visual in range(header.count())
+            ],
+            "hidden_columns": [
+                COLUMN_KEYS[col] for col in DATA_COLUMNS if header.isSectionHidden(col)
             ],
         }
 
@@ -565,9 +588,30 @@ class RegistersPanel(QWidget):
             return
         if options.get("order") in ORDERS:
             self._global_order_combo.setCurrentText(str(options["order"]))
+        header = self._table.horizontalHeader()
+        order = options.get("column_order")
+        if isinstance(order, list):
+            cols: list[int] = []  # desired visual order as logical indexes
+            for key in order:
+                col = KEY_TO_COL.get(key)
+                if col is not None and col not in cols:
+                    cols.append(col)
+            cols.extend(col for col in range(header.count()) if col not in cols)
+            for visual, logical in enumerate(cols):
+                header.moveSection(header.visualIndex(logical), visual)
+        hidden = options.get("hidden_columns")
+        if isinstance(hidden, list):
+            hide = {
+                KEY_TO_COL[key]
+                for key in hidden
+                if isinstance(key, str) and KEY_TO_COL.get(key) in DATA_COLUMNS
+            }
+            if not any(col not in hide for col in DATA_COLUMNS):
+                hide.discard(COL_NAME)  # at least one data column stays visible
+            for col in DATA_COLUMNS:
+                header.setSectionHidden(col, col in hide)
         widths = options.get("column_widths")
         if isinstance(widths, list):
-            header = self._table.horizontalHeader()
             for col, width in enumerate(widths[: header.count()]):
                 # clamp so a corrupted file cannot hide or explode a column
                 if isinstance(width, int | float) and not isinstance(width, bool):
@@ -1432,6 +1476,29 @@ class RegistersPanel(QWidget):
             menu.addSeparator()
             menu.addAction(tr("Clear history"), self.clear_series)
         menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _on_header_context_menu(self, pos: QPoint) -> None:
+        header = self._table.horizontalHeader()
+        self._build_columns_menu().exec(header.mapToGlobal(pos))
+
+    def _build_columns_menu(self) -> QMenu:
+        """Чек-лист видимых колонок (правый клик по заголовку таблицы).
+        Контрольные колонки (галочка поллинга, кнопка удаления) в меню не
+        показываются; последнюю видимую колонку данных скрыть нельзя."""
+        header = self._table.horizontalHeader()
+        visible_data = [col for col in DATA_COLUMNS if not header.isSectionHidden(col)]
+        menu = QMenu(self)
+        for col in DATA_COLUMNS:
+            action = menu.addAction(tr(HEADER_LABELS[col]))
+            action.setCheckable(True)
+            action.setChecked(not header.isSectionHidden(col))
+            if action.isChecked() and len(visible_data) == 1:
+                action.setEnabled(False)  # the last visible data column
+            else:
+                action.triggered.connect(
+                    lambda checked, c=col: header.setSectionHidden(c, not checked)
+                )
+        return menu
 
     def _text_at(self, index: int, col: int) -> str:
         item = self._table.item(index, col)

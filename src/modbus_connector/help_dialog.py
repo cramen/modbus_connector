@@ -43,7 +43,9 @@ the latest reads — changed rows are highlighted, "(removed)" marks rows
 deleted after the snapshot, "Take new snapshot" accepts the current values
 as the new baseline.</li>
 <li>Right-click a row for quick actions (copy, write 0/1, increment,
-decrement, toggle, move) — they act on the selected rows.</li>
+decrement, toggle, move) — they act on the selected rows. Drag a column
+header to reorder columns; right-click the header to hide/show columns
+(the layout is saved between sessions).</li>
 </ul>
 <table border="1" cellspacing="0" cellpadding="3">
 <tr><th>Hotkey</th><th>Action</th></tr>
@@ -163,7 +165,9 @@ inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
 строки, удалённые после снапшота, «Снять новый снапшот» принимает текущие
 значения как новую базу.</li>
 <li>Правый клик по строке — быстрые действия (копия, запись 0/1, шаг,
-переключение, сдвиг); действуют на выбранные строки.</li>
+переключение, сдвиг); действуют на выбранные строки. Колонки можно
+перетаскивать за заголовки, а правый клик по заголовку скрывает/показывает
+колонки (раскладка сохраняется между сессиями).</li>
 </ul>
 <table border="1" cellspacing="0" cellpadding="3">
 <tr><th>Клавиши</th><th>Действие</th></tr>

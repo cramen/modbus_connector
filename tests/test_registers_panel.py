@@ -34,9 +34,12 @@ from modbus_connector.csv_dialogs import (  # noqa: E402
 )
 from modbus_connector.datalogger import LogSettings  # noqa: E402
 from modbus_connector.datalogger_dialog import LoggingSettingsDialog  # noqa: E402
+from modbus_connector.i18n import tr  # noqa: E402
 from modbus_connector.models import RegisterRow, csv_header  # noqa: E402
 from modbus_connector.registers_panel import (  # noqa: E402
+    COL_ACTIONS,
     COL_ADDRESS,
+    COL_FORMAT,
     COL_NAME,
     COL_NEW_VALUE,
     COL_POLL,
@@ -45,6 +48,8 @@ from modbus_connector.registers_panel import (  # noqa: E402
     COL_TYPE,
     COL_UNIT_ID,
     COL_VALUE,
+    COLUMN_KEYS,
+    DATA_COLUMNS,
     RegistersPanel,
 )
 
@@ -962,6 +967,123 @@ def test_column_widths_tolerate_garbage(qapp: QApplication) -> None:
 
     panel.set_options({"order": "ABCD"})  # missing key: widths untouched
     assert header.sectionSize(0) == 30
+
+
+# --- column layout (movable, hide/show via header menu, persistence) ---------
+
+
+def test_columns_movable_and_menu_excludes_control_columns(
+    qapp: QApplication,
+) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    header = panel._table.horizontalHeader()
+    assert header.sectionsMovable()
+
+    menu = panel._build_columns_menu()
+    texts = [action.text() for action in menu.actions()]
+    assert len(menu.actions()) == len(DATA_COLUMNS)
+    assert all(texts)  # every listed column has a non-empty label
+    assert tr("Name") in texts and tr("Format") in texts and tr("Trend") in texts
+    # checkbox and delete-button columns (empty headers) are never listed
+    assert "" not in texts
+
+
+def test_header_menu_hides_and_shows_column(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    header = panel._table.horizontalHeader()
+
+    menu = panel._build_columns_menu()
+    action = next(a for a in menu.actions() if a.text() == tr("Format"))
+    assert action.isChecked()
+    action.trigger()
+    assert header.isSectionHidden(COL_FORMAT)
+
+    menu = panel._build_columns_menu()
+    action = next(a for a in menu.actions() if a.text() == tr("Format"))
+    assert not action.isChecked()
+    action.trigger()
+    assert not header.isSectionHidden(COL_FORMAT)
+
+
+def test_last_visible_column_cannot_be_hidden(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    header = panel._table.horizontalHeader()
+    for col in DATA_COLUMNS:
+        if col != COL_NAME:
+            header.setSectionHidden(col, True)
+
+    menu = panel._build_columns_menu()
+    checked = [action for action in menu.actions() if action.isChecked()]
+    assert [action.text() for action in checked] == [tr("Name")]
+    assert not checked[0].isEnabled()  # the last visible data column
+    checked[0].trigger()  # a disabled action must not fire
+    assert not header.isSectionHidden(COL_NAME)
+
+
+def test_column_order_and_hidden_round_trip(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    header = panel._table.horizontalHeader()
+    header.moveSection(header.visualIndex(COL_VALUE), 1)  # Value to the 2nd slot
+    header.setSectionHidden(COL_TREND, True)
+    header.setSectionHidden(COL_UNIT_ID, True)
+
+    options = panel.options_state()
+    assert options["column_order"][1] == "value"
+    assert options["hidden_columns"] == ["unit_id", "trend"]  # in DATA_COLUMNS order
+
+    fresh = RegistersPanel(itertools.count(100).__next__)
+    fresh.set_options(options)
+    fheader = fresh._table.horizontalHeader()
+    assert fheader.logicalIndex(1) == COL_VALUE  # order applied by visual index
+    assert fheader.isSectionHidden(COL_TREND)
+    assert fheader.isSectionHidden(COL_UNIT_ID)
+    assert not fheader.isSectionHidden(COL_NAME)
+    # control columns are never hidden, even by state
+    assert not fheader.isSectionHidden(COL_POLL_ENABLED)
+    assert not fheader.isSectionHidden(COL_ACTIONS)
+    fresh.close()
+    fresh.deleteLater()
+
+
+def test_column_layout_tolerates_garbage(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    header = panel._table.horizontalHeader()
+
+    panel.set_options({"column_order": "junk"})  # not a list: ignored
+    assert header.logicalIndex(0) == COL_POLL_ENABLED
+    # unknown keys, dupes and non-strings are skipped; missing columns are
+    # appended in their default order
+    panel.set_options({"column_order": ["nope", 42, "value", "value"]})
+    assert header.logicalIndex(0) == COL_VALUE
+    assert sorted(header.logicalIndex(v) for v in range(header.count())) == list(
+        range(header.count())
+    )
+
+    panel.set_options({"hidden_columns": "junk"})  # not a list: ignored
+    panel.set_options({"hidden_columns": ["nope", "poll_enabled", "actions"]})
+    assert not header.isSectionHidden(COL_POLL_ENABLED)
+    assert not header.isSectionHidden(COL_ACTIONS)
+    # hiding every data column at once keeps one visible
+    panel.set_options({"hidden_columns": list(COLUMN_KEYS)})
+    assert any(not header.isSectionHidden(col) for col in DATA_COLUMNS)
+
+
+def test_column_widths_stay_bound_to_logical_columns(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    header = panel._table.horizontalHeader()
+    header.resizeSection(COL_VALUE, 321)
+    header.moveSection(header.visualIndex(COL_VALUE), 1)  # reorder after sizing
+
+    options = panel.options_state()
+    assert options["column_widths"][COL_VALUE] == 321  # stored per logical column
+
+    fresh = RegistersPanel(itertools.count(100).__next__)
+    fresh.set_options(options)
+    fheader = fresh._table.horizontalHeader()
+    assert fheader.logicalIndex(1) == COL_VALUE  # same visual layout
+    assert fheader.sectionSize(COL_VALUE) == 321  # width follows the column
+    fresh.close()
+    fresh.deleteLater()
 
 
 # --- quick value actions (hotkeys + context menu) ----------------------------
