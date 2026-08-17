@@ -128,7 +128,7 @@ def test_registers_panel_retranslates(qapp: QApplication) -> None:
         panel._table.horizontalHeaderItem(col).text()
         for col in range(panel._table.columnCount())
     ]
-    assert headers[:3] == ["Имя", "Тип", "Адрес"]  # headers, not kind values
+    assert headers[1:4] == ["Имя", "Тип", "Адрес"]  # headers, not kind values
     assert panel._poll_button.text() == "Начать опрос с записью"  # record default
 
     panel.start_polling(True)
@@ -139,8 +139,8 @@ def test_registers_panel_retranslates(qapp: QApplication) -> None:
 
     i18n.set_language("en")
     panel.retranslate()
-    assert headers[0] != panel._table.horizontalHeaderItem(0).text()
-    assert panel._table.horizontalHeaderItem(0).text() == "Name"
+    assert headers[1] != panel._table.horizontalHeaderItem(1).text()
+    assert panel._table.horizontalHeaderItem(1).text() == "Name"
     assert panel._poll_button.text() == "Start polling and record"
 
 

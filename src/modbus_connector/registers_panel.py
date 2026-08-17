@@ -82,9 +82,10 @@ REGISTER_KINDS = ("holding_registers", "input_registers")
 
 # English keys for the table header; display text is translated from them
 HEADER_LABELS = (
-    "Name", "Type", "Address", "Count", "Unit ID", "Poll, ms",
+    "", "Name", "Type", "Address", "Count", "Unit ID", "Poll, ms",
     "Format", "Value", "New value", "Trend", "",
 )
+POLL_ENABLED_TIP = "Poll this row"  # checkbox column: header and cell tooltip
 TABLE_TOOLTIP = (
     "Enter in 'New value' = write raw values (no scale/offset applied), "
     "Ctrl/Cmd+R = read current row, Ctrl/Cmd+Shift+R = read all rows"
@@ -96,6 +97,7 @@ POLL_BUTTON_TIP = (
 )
 
 (
+    COL_POLL_ENABLED,
     COL_NAME,
     COL_TYPE,
     COL_ADDRESS,
@@ -107,7 +109,7 @@ POLL_BUTTON_TIP = (
     COL_NEW_VALUE,
     COL_TREND,
     COL_ACTIONS,
-) = range(11)
+) = range(12)
 
 
 class SparklineWidget(QWidget):
@@ -214,12 +216,13 @@ class RegistersPanel(QWidget):
         self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
         self._translatable_tips: list[tuple[QWidget, str]] = []
 
-        self._table = QTableWidget(0, 11)
-        self._table.setHorizontalHeaderLabels([tr(text) for text in HEADER_LABELS])
+        self._table = QTableWidget(0, 12)
+        self._sync_header()
         self._table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Interactive
         )
         for col, width in (
+            (COL_POLL_ENABLED, 34),
             (COL_NAME, 160),
             (COL_TYPE, 140),
             (COL_FORMAT, 90),
@@ -417,6 +420,12 @@ class RegistersPanel(QWidget):
             widget.setToolTip(tr(tip))
             self._translatable_tips.append((widget, tip))
 
+    def _sync_header(self) -> None:
+        self._table.setHorizontalHeaderLabels([tr(text) for text in HEADER_LABELS])
+        header_item = self._table.horizontalHeaderItem(COL_POLL_ENABLED)
+        if header_item is not None:  # the checkbox column has no text, only a tip
+            header_item.setToolTip(tr(POLL_ENABLED_TIP))
+
     def retranslate(self) -> None:
         """Переприменить tr() ко всем строкам панели (по смене языка)."""
         for widget, text in self._translatable:
@@ -427,7 +436,7 @@ class RegistersPanel(QWidget):
                 widget.setAccessibleName(tr(text))
         for widget, tip in self._translatable_tips:
             widget.setToolTip(tr(tip))
-        self._table.setHorizontalHeaderLabels([tr(text) for text in HEADER_LABELS])
+        self._sync_header()
         self._table.setToolTip(tr(TABLE_TOOLTIP))
         self._filter_edit.setPlaceholderText(tr("Filter…"))
         self._csv_import_action.setText(tr("Import table…"))
@@ -464,6 +473,7 @@ class RegistersPanel(QWidget):
                     "count": count,
                     "unit_id": self._text_at(index, COL_UNIT_ID),
                     "poll_ms": self._text_at(index, COL_POLL),
+                    "poll_enabled": self._poll_enabled_at(index),
                     "format": format_combo.currentText(),
                     "order": settings.order or "",  # "" = inherit the global order
                     "scale": settings.scale,
@@ -549,6 +559,11 @@ class RegistersPanel(QWidget):
             self._row_display[self._row_token_counter].log = bool(
                 entry.get("log", True)
             )
+            # missing key (older settings files) defaults to polling enabled
+            if not bool(entry.get("poll_enabled", True)):
+                item = self._table.item(self._table.rowCount() - 1, COL_POLL_ENABLED)
+                if item is not None:
+                    item.setCheckState(Qt.CheckState.Unchecked)
         if self._table.rowCount() == 0:
             self._add_row()
 
@@ -612,6 +627,16 @@ class RegistersPanel(QWidget):
         name_item = QTableWidgetItem(row.name)
         name_item.setData(Qt.ItemDataRole.UserRole, self._row_token_counter)
         self._table.setItem(index, COL_NAME, name_item)
+
+        poll_enabled_item = QTableWidgetItem()
+        poll_enabled_item.setFlags(
+            (poll_enabled_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            & ~Qt.ItemFlag.ItemIsEditable
+        )
+        poll_enabled_item.setCheckState(Qt.CheckState.Checked)
+        poll_enabled_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        poll_enabled_item.setToolTip(tr(POLL_ENABLED_TIP))
+        self._table.setItem(index, COL_POLL_ENABLED, poll_enabled_item)
 
         type_combo = theme.FitComboBox()
         type_combo.addItems(KINDS)
@@ -1175,6 +1200,10 @@ class RegistersPanel(QWidget):
         item = self._table.item(index, col)
         return item.text().strip() if item else ""
 
+    def _poll_enabled_at(self, index: int) -> bool:
+        item = self._table.item(index, COL_POLL_ENABLED)
+        return item is None or item.checkState() == Qt.CheckState.Checked
+
     def _row_data(self, index: int) -> RegisterRow | None:
         type_combo = self._table.cellWidget(index, COL_TYPE)
         name_item = self._table.item(index, COL_NAME)
@@ -1236,7 +1265,7 @@ class RegistersPanel(QWidget):
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         if item.column() == COL_NEW_VALUE and item.text().strip():
             self._write_table_row(item.row())
-        elif item.column() == COL_POLL:
+        elif item.column() in (COL_POLL, COL_POLL_ENABLED):
             self._sync_row_timer(item.row())
 
     @Slot()
@@ -1354,12 +1383,15 @@ class RegistersPanel(QWidget):
     @Slot()
     def read_all(self) -> None:
         for index in range(self._table.rowCount()):
-            self._read_table_row(index)
+            if self._poll_enabled_at(index):  # unchecked rows are opted out
+                self._read_table_row(index)
 
     @Slot()
     def _poll_global_rows(self) -> None:
         # rows with a per-row interval have their own timer in _row_timers
         for index in range(self._table.rowCount()):
+            if not self._poll_enabled_at(index):
+                continue
             if _parse_poll_ms(self._text_at(index, COL_POLL)) is None:
                 self._read_table_row(index)
 
@@ -1367,7 +1399,9 @@ class RegistersPanel(QWidget):
         token = self._token_at(index)
         poll_ms = _parse_poll_ms(self._text_at(index, COL_POLL))
         timer = self._row_timers.get(token)
-        if poll_ms is None or not self._poll_timer.isActive():
+        if poll_ms is None or not self._poll_enabled_at(index) or (
+            not self._poll_timer.isActive()
+        ):
             if timer is not None:
                 timer.stop()
                 timer.deleteLater()

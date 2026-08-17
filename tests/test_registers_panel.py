@@ -39,6 +39,7 @@ from modbus_connector.registers_panel import (  # noqa: E402
     COL_NAME,
     COL_NEW_VALUE,
     COL_POLL,
+    COL_POLL_ENABLED,
     COL_TREND,
     COL_TYPE,
     COL_UNIT_ID,
@@ -599,6 +600,101 @@ def test_poll_ms_state_roundtrip(qapp: QApplication) -> None:
     panel.set_state(state)
     cells = [panel._table.item(i, COL_POLL).text() for i in range(4)]
     assert cells == ["5000", "", "", ""]
+
+
+# --- poll-enabled checkbox column ---------------------------------------------
+
+
+def _checked(panel: RegistersPanel, index: int) -> bool:
+    item = panel._table.item(index, COL_POLL_ENABLED)
+    return item is not None and item.checkState() == Qt.CheckState.Checked
+
+
+def test_poll_checkbox_excludes_row_from_polling(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 1},
+            {"name": "b", "kind": "holding_registers", "address": 1, "count": 1},
+        ]
+    )
+    assert _checked(panel, 0) and _checked(panel, 1)  # default: enabled
+    panel._table.item(1, COL_POLL_ENABLED).setCheckState(Qt.CheckState.Unchecked)
+
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+
+    def flush() -> None:  # resolve pending reads so re-reads are not blocked
+        for args in reads:
+            panel.handle_read_finished(args[0], True, [1], "")
+        reads.clear()
+
+    panel.read_all()  # Read all skips the unchecked row
+    assert len(reads) == 1
+    flush()
+
+    panel._poll_global_rows()  # the global poll tick skips it too
+    assert len(reads) == 1
+    flush()
+
+    panel._read_table_row(1)  # the manual Ctrl+R path is not gated
+    assert len(reads) == 1
+    flush()
+
+
+def test_poll_checkbox_gates_per_row_timer(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [{"name": "slow", "kind": "holding_registers", "address": 0, "count": 1,
+          "poll_ms": "5000"}]
+    )
+    panel._toggle_polling()
+    token = panel._token_at(0)
+    assert token in panel._row_timers
+
+    item = panel._table.item(0, COL_POLL_ENABLED)
+    item.setCheckState(Qt.CheckState.Unchecked)  # stops the row's timer
+    assert token not in panel._row_timers
+
+    item.setCheckState(Qt.CheckState.Checked)  # and restarts it with the interval
+    assert token in panel._row_timers
+    assert panel._row_timers[token].interval() == 5000
+    panel.stop_polling()
+
+
+def test_poll_enabled_state_roundtrip(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "a", "kind": "holding_registers", "address": 0, "count": 1,
+             "poll_enabled": False},
+            {"name": "b", "kind": "holding_registers", "address": 1, "count": 1},
+        ]
+    )
+    assert not _checked(panel, 0)
+    assert _checked(panel, 1)  # missing key (older settings) → enabled
+
+    state = panel.state()
+    assert [entry["poll_enabled"] for entry in state] == [False, True]
+
+    fresh = RegistersPanel(itertools.count(100).__next__)
+    fresh.set_state(state)
+    assert not _checked(fresh, 0)
+    assert _checked(fresh, 1)
+
+
+def test_csv_import_defaults_poll_enabled(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    path = tmp_path / "import.csv"
+    path.write_text(
+        "name,kind,address,count\ntemp,holding_registers,5,1\n", encoding="utf-8"
+    )
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.import_csv(path)  # the checkbox is UI-only: not a CSV column
+    assert panel._table.rowCount() == 1
+    assert _checked(panel, 0)
 
 
 # --- logging to file ---------------------------------------------------------

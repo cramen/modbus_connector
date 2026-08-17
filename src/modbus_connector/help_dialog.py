@@ -21,7 +21,10 @@ inputs, holding or input registers), <b>Address</b> (dec or 0x-hex),
 display <b>Format</b>, the last read <b>Value</b> with a trend sparkline,
 and <b>New value</b> for writes (raw values, no scale/offset).</p>
 <ul>
-<li><b>Read all</b> reads every row once; the split button starts polling
+<li>The <b>checkbox in the first column</b> includes the row in polling and
+<b>Read all</b>; unchecked rows are skipped (Ctrl+R, quick actions and
+writes still work on them).</li>
+<li><b>Read all</b> reads every checked row once; the split button starts polling
 with or without history recording (the dropdown chooses; the choice flips
 recording mid-poll without restarting timers).</li>
 <li><b>Log to file</b> records read values to CSV or JSON Lines; <b>⚙</b>
@@ -126,9 +129,12 @@ inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
 спарклайном и поле <b>Новое значение</b> для записи (сырые значения,
 без scale/offset).</p>
 <ul>
-<li><b>Прочитать все</b> читает каждую строку один раз; split-кнопка начинает
-опрос с записью истории или без (выбор в выпадающем меню; на ходу переключает
-запись без перезапуска таймеров).</li>
+<li><b>Галочка в первой колонке</b> включает строку в опрос и
+<b>Прочитать все</b>; снятые строки пропускаются (Ctrl+R, быстрые действия
+и запись на них по-прежнему работают).</li>
+<li><b>Прочитать все</b> читает каждую отмеченную строку один раз; split-кнопка
+начинает опрос с записью истории или без (выбор в выпадающем меню; на ходу
+переключает запись без перезапуска таймеров).</li>
 <li><b>Запись в файл</b> пишет значения в CSV или JSON Lines; <b>⚙</b> открывает
 настройки файла, формата, полей и строк.</li>
 <li><b>Отображение…</b> — Scale/Offset/Unit и порядок байт на строку;

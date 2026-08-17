@@ -95,6 +95,12 @@ src/modbus_connector/
                        # кнопка "Diagnostics…" — диалог диагностики (0x08):
                        # loopback, счётчики, clear counters
   registers_panel.py   # таблица регистров: чтение/запись, поллинг по QTimer,
+                       # первая колонка — чекбокс «строка в поллинге»
+                       # (по умолчанию вкл.; снятые строки пропускаются
+                       # поллингом и Read all, per-row таймер строки
+                       # останавливается; Ctrl+R по строке и запись не
+                       # затрагиваются; state-ключ "poll_enabled", default
+                       # True, в CSV не входит),
                        # кнопки тулбара — иконочные QToolButton'ы с тултипами
                        # (icons.make_button; text() сохраняет подпись),
                        # set_bus_enabled(ok) — гейтинг контролов, ходящих на

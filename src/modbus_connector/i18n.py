@@ -135,6 +135,7 @@ RU: dict[str, str] = {
     "Display format (registers only; coils/discrete show 0/1)":
         "Формат отображения (только регистры; coils/discrete показывают 0/1)",
     "Delete row": "Удалить строку",
+    "Poll this row": "Опрашивать строку",
     "Move up": "Переместить вверх",
     "Move down": "Переместить вниз",
     "Copy value": "Копировать значение",
