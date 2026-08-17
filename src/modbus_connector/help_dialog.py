@@ -37,6 +37,11 @@ opens file/format/field/row settings.</li>
 rows are skipped). The first matching rule wins and paints the Value cell
 red/yellow, outranking the change flash; activation and clearing are logged
 once per edge (if Log is set), with a beep on activation if Sound is set.</li>
+<li><b>Snapshot</b> remembers the current raw values of all rows;
+<b>Diff…</b> (enabled after a snapshot) opens a window comparing them with
+the latest reads — changed rows are highlighted, "(removed)" marks rows
+deleted after the snapshot, "Take new snapshot" accepts the current values
+as the new baseline.</li>
 <li>Right-click a row for quick actions (copy, write 0/1, increment,
 decrement, toggle, move) — they act on the selected rows.</li>
 </ul>
@@ -152,6 +157,11 @@ inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
 красит ячейку значения в красный/жёлтый (приоритет над зелёной вспышкой
 изменения); активация и снятие пишутся в лог один раз на фронт (если
 включён «Лог»), при активации — звук, если включён «Звук».</li>
+<li><b>Снапшот</b> запоминает текущие raw-значения всех строк;
+<b>Сравнение…</b> (активно после снапшота) открывает окно сравнения с
+последними чтениями — изменённые строки подсвечены, «(удалена)» помечает
+строки, удалённые после снапшота, «Снять новый снапшот» принимает текущие
+значения как новую базу.</li>
 <li>Правый клик по строке — быстрые действия (копия, запись 0/1, шаг,
 переключение, сдвиг); действуют на выбранные строки.</li>
 </ul>

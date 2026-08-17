@@ -2,6 +2,7 @@ import csv
 import io
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import get_args
@@ -72,6 +73,7 @@ from modbus_connector.models import (
     alarm_rules_from_json,
     csv_header,
     decode_register_values,
+    diff_snapshots,
     evaluate_alarm,
     format_register_values,
     format_scaled_values,
@@ -80,6 +82,7 @@ from modbus_connector.models import (
     row_to_csv_record,
     rows_from_csv,
 )
+from modbus_connector.snapshot_dialog import DiffRow, SnapshotDiffDialog
 from modbus_connector.timeseries import TimeSeries
 
 KINDS = list(get_args(RegisterKind))
@@ -195,6 +198,17 @@ def _parse_poll_ms(text: str) -> int | None:
 _CONDITION_SYMBOLS = {"gt": ">", "lt": "<", "ge": ">=", "le": "<=", "eq": "==", "ne": "!="}
 
 
+@dataclass(frozen=True)
+class _SnapshotEntry:
+    """Снимок одной строки: raw-значения (None — строку ещё не читали) и
+    подпись на момент снапшота (живёт, даже если строку потом удалили)."""
+
+    name: str
+    kind: str
+    address: str
+    values: list | None
+
+
 def _describe_rule(rule: AlarmRule) -> str:
     """Короткое условие правила для лог-строки аларма ("> 20", "in 10..30")."""
     if rule.condition in _CONDITION_SYMBOLS:
@@ -234,6 +248,9 @@ class RegistersPanel(QWidget):
         self._last_values: dict[int, list] = {}  # token -> last raw read values
         self._active_alarms: dict[int, AlarmRule] = {}  # token -> rule currently firing
         self._alarm_sound = AlarmSound()  # звук фронта аларма (monkeypatch в тестах)
+        self._snapshot: dict[int, _SnapshotEntry] | None = None  # in-memory, не persist
+        self._snapshot_at = ""  # время снятия снапшота (подпись в окне diff)
+        self._diff_dialog: SnapshotDiffDialog | None = None
         self._bus_enabled = False  # no bus access until a connection is up
         self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
         self._translatable_tips: list[tuple[QWidget, str]] = []
@@ -351,6 +368,22 @@ class RegistersPanel(QWidget):
         self._csv_export_action = csv_menu.addAction(tr("Export…"), self._on_csv_export)
         csv_button.setMenu(csv_menu)
 
+        self._snapshot_button = icons.make_button(tr("Snapshot"), "snapshot")
+        self._track(
+            self._snapshot_button,
+            "Snapshot",
+            "Remember current values of all rows for later comparison",
+        )
+        self._snapshot_button.clicked.connect(self.take_snapshot)
+        self._diff_button = icons.make_button(tr("Diff…"), "diff")
+        self._track(
+            self._diff_button,
+            "Diff…",
+            "Compare the snapshot with the current values",
+        )
+        self._diff_button.setEnabled(False)  # активируется после первого снапшота
+        self._diff_button.clicked.connect(self._on_diff)
+
         self._log_settings = LogSettings()
         self._logger = DataLogger()
         self._log_flush_timer = QTimer(self)
@@ -408,6 +441,8 @@ class RegistersPanel(QWidget):
         top.addWidget(display_button)
         top.addWidget(alarms_button)
         top.addWidget(csv_button)
+        top.addWidget(self._snapshot_button)
+        top.addWidget(self._diff_button)
         top.addWidget(self._log_button)
         top.addWidget(self._log_settings_button)
         top.addStretch(1)
@@ -1103,6 +1138,88 @@ class RegistersPanel(QWidget):
                 )
             if matched.sound:
                 self._alarm_sound.play()
+
+    # --- snapshot diff (сравнение «до/после» по raw-значениям) --------------
+
+    def take_snapshot(self) -> None:
+        """Запомнить текущие raw-значения всех строк; повторный вызов
+        перезаписывает снапшот. Локальное действие — шина не нужна."""
+        self._snapshot = {}
+        for index in range(self._table.rowCount()):
+            token = self._token_at(index)
+            values = self._last_values.get(token)
+            self._snapshot[token] = _SnapshotEntry(
+                name=self._text_at(index, COL_NAME),
+                kind=self._table.cellWidget(index, COL_TYPE).currentText(),
+                address=self._text_at(index, COL_ADDRESS),
+                values=list(values) if values is not None else None,
+            )
+        self._snapshot_at = datetime.now().strftime("%H:%M:%S")
+        self._diff_button.setEnabled(True)
+        self.logLine.emit(
+            tr("Snapshot taken: {count} rows", count=len(self._snapshot))
+        )
+
+    def snapshot_diff_data(self) -> tuple[str, list[DiffRow]]:
+        """(подпись, строки) для окна diff: снапшот против текущих _last_values.
+        Значения форматируются текущим форматом строки; строки, удалённые
+        после снапшота, идут в конец с пометкой "(removed)"."""
+        if self._snapshot is None:
+            return "", []
+        rows: list[DiffRow] = []
+        seen: set[int] = set()
+        for index in range(self._table.rowCount()):
+            token = self._token_at(index)
+            seen.add(token)
+            entry = self._snapshot.get(token)  # None — строка добавлена позже
+            old = entry.values if entry is not None else None
+            new = self._last_values.get(token)
+            rows.append(
+                DiffRow(
+                    name=self._text_at(index, COL_NAME),
+                    kind=self._table.cellWidget(index, COL_TYPE).currentText(),
+                    address=self._text_at(index, COL_ADDRESS),
+                    snapshot_text=(
+                        self._display_text(index, old) if old is not None else ""
+                    ),
+                    current_text=(
+                        self._display_text(index, new) if new is not None else ""
+                    ),
+                    changed=diff_snapshots(old, new),
+                )
+            )
+        for token, entry in self._snapshot.items():
+            if token in seen:
+                continue
+            rows.append(  # строка удалена после снапшота: raw как есть
+                DiffRow(
+                    name=entry.name,
+                    kind=entry.kind,
+                    address=entry.address,
+                    snapshot_text=(
+                        format_values(entry.values) if entry.values is not None else ""
+                    ),
+                    current_text=tr("(removed)"),
+                    changed=True,
+                    removed=True,
+                )
+            )
+        return tr("Snapshot taken at {time}", time=self._snapshot_at), rows
+
+    @Slot()
+    def _on_diff(self) -> None:
+        if self._diff_dialog is not None:  # окно одно: поднять и обновить
+            self._diff_dialog.refresh()
+            self._diff_dialog.raise_()
+            self._diff_dialog.activateWindow()
+            return
+        dialog = SnapshotDiffDialog(self.snapshot_diff_data, self.take_snapshot, self)
+        dialog.finished.connect(self._on_diff_dialog_closed)
+        self._diff_dialog = dialog
+        dialog.show()
+
+    def _on_diff_dialog_closed(self, _result: int) -> None:
+        self._diff_dialog = None
 
     @Slot()
     def _on_mask_write(self) -> None:

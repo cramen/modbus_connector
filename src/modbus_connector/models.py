@@ -576,3 +576,15 @@ def alarm_rules_from_json(data: object) -> list[AlarmRule]:
     if not isinstance(data, list):
         return []
     return [rule for item in data if (rule := alarm_rule_from_json(item)) is not None]
+
+
+def diff_snapshots(old: list | None, new: list | None) -> bool:
+    """Различаются ли два снимка RAW-значений одной строки.
+
+    None — «нет данных» (строку ещё не читали): None против None различия
+    нет, None против значений — есть. Сравнение по raw-спискам, а не по
+    отформатированному тексту, чтобы смена формата отображения не давала
+    ложных различий."""
+    if old is None or new is None:
+        return old is not new
+    return old != new

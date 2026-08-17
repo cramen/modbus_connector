@@ -58,6 +58,12 @@ def alarm_color(color: "AlarmColor") -> QColor:
     return QColor(0xF5, 0xB7, 0xB1) if color == "red" else QColor(0xF7, 0xE2, 0x8B)
 
 
+def diff_color() -> QColor:
+    """Подсветка различающихся строк в окне сравнения снапшотов (оранжевый,
+    не пересекается с зелёным flash и red/yellow алармов)."""
+    return QColor(0x8A, 0x53, 0x1B) if is_dark() else QColor(0xFD, 0xD9, 0xA8)
+
+
 def sparkline_color() -> QColor:
     """Линия спарклайна в колонке Trend: Highlight qdarktheme (#308cc6) на
     тёмном фоне ячейки почти не виден — на тёмной теме светлый синий."""

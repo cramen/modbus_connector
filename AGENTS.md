@@ -49,7 +49,10 @@ src/modbus_connector/
                   # alarm_rules_from_json — правила алармов (иммутабельные,
                   # приоритет = порядок, границы диапазонов включительные),
                   # Stats/StatsSnapshot — счётчики транзакций (ok/err, avg ms,
-                  # разбивка ошибок по видам)
+                  # разбивка ошибок по видам),
+                  # diff_snapshots(old, new) — сравнение двух RAW-снимков
+                  # значений строки (None = «нет данных», None/None = нет
+                  # различия) для snapshot diff
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
                   # mask_write_register (функция 0x16),
@@ -178,6 +181,30 @@ src/modbus_connector/
                        # QApplication.beep()); переоценка после правок в
                        # диалоге (_re_evaluate_alarm, silent=True) обновляет
                        # edge-состояние без лога/звука нового правила
+                       # снапшот/diff: кнопки "Snapshot"/"Diff…" (иконки
+                       # snapshot/diff, локальные, bus не гейтят) — сравнение
+                       # «до/после» по RAW-значениям (_last_values);
+                       # take_snapshot() перезаписывает снапшот
+                       # (dict[token, _SnapshotEntry(name/kind/address/values|
+                       # None)] + метка времени, in-memory, в session state НЕ
+                       # входит) и пишет "Snapshot taken: N rows" в лог;
+                       # Diff… (disabled до первого снапшота) открывает
+                       # немодальный SnapshotDiffDialog (один на панель,
+                       # повторное нажатие поднимает+обновляет);
+                       # snapshot_diff_data() — (подпись, list[DiffRow]) для
+                       # окна: diff по models.diff_snapshots (None = «нет
+                       # данных»), значения форматируются текущим форматом
+                       # строки (_display_text), строки, удалённые после
+                       # снапшота, идут в конец с "(removed)" (raw как есть)
+  snapshot_dialog.py  # SnapshotDiffDialog — немодальное окно сравнения
+                      # снапшота с текущими чтениями: таблица Name/Type/
+                      # Address/Snapshot/Current, изменённые строки
+                      # подсвечены theme.diff_color(), чекбокс
+                      # "Only differences" фильтрует, "Refresh" перечитывает
+                      # текущие значения, "Take new snapshot" переснимает
+                      # снапшот; данных нет — пустые ячейки; окно тянет
+                      # данные из data_provider панели (panel не импортируется,
+                      # циклического импорта нет), язык — при открытии
   datalogger.py     # без Qt: LogSettings (path/format csv|jsonl/fields —
                     # subset timestamp/name/address/kind, value всегда/
                     # append), LogSample, DataLogger — open/write/flush/close/
@@ -359,7 +386,9 @@ src/modbus_connector/
                   # pyqtgraph), crosshair_color(), flash_color(),
                   # sparkline_color() (тёмная — светло-синяя #7aa2f7, светлая —
                   # palette Highlight),
-                  # status_colors(); FitComboBox — QComboBox, чей попап
+                  # status_colors(); diff_color() — оранжевая подсветка
+                  # различающихся строк в окне snapshot diff;
+                  # FitComboBox — QComboBox, чей попап
                   # растягивается по самому длинному пункту в showPopup()
                   # (stylesheet-тема прижимает попап к ширине комбо, size-hints
                   # делегата на cocoa занижены → ширина по fontMetrics);
@@ -409,6 +438,10 @@ tests/
   test_registers_panel.py  # offscreen Qt тесты таблицы регистров
   test_alarms_dialog.py   # диалог алармов (add/edit/remove/round-trip) и
                           # алармы панели: подсветка, edge-лог, state, hex/ascii
+  test_snapshot_diff.py   # snapshot diff: гейтинг кнопок, подсветка изменённых
+                          # строк, фильтр Only differences, строки без данных,
+                          # Refresh/Take new snapshot, перезапись снапшота,
+                          # "(removed)" для удалённых строк
   test_session_widget.py   # smoke: state round-trip + shutdown сессии
   test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
                            # закрытие вкладок

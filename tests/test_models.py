@@ -11,6 +11,7 @@ from modbus_connector.models import (
     csv_header,
     decode_register_values,
     describe_exception,
+    diff_snapshots,
     evaluate_alarm,
     format_register_values,
     format_scaled_values,
@@ -555,3 +556,19 @@ class TestStatsErrorKinds:
         stats.record(False, 1.0, "timeout")
         stats.reset()
         assert stats.snapshot().error_kinds == {}
+
+
+class TestDiffSnapshots:
+    def test_equal_raw_values(self) -> None:
+        assert not diff_snapshots([1, 2], [1, 2])
+        assert not diff_snapshots([True], [True])
+
+    def test_different_raw_values(self) -> None:
+        assert diff_snapshots([1, 2], [1, 3])
+        assert diff_snapshots([1], [1, 2])
+        assert diff_snapshots([True], [False])
+
+    def test_none_means_no_data(self) -> None:
+        assert not diff_snapshots(None, None)
+        assert diff_snapshots(None, [1])
+        assert diff_snapshots([1], None)

@@ -237,6 +237,20 @@ RU: dict[str, str] = {
     "Rule value must be a number": "Значение правила должно быть числом",
     "ALARM {label}: {value} {condition}": "АЛАРМ {label}: {value} {condition}",
     "ALARM cleared {label}": "АЛАРМ снят: {label}",
+    # snapshot diff
+    "Snapshot": "Снапшот",
+    "Remember current values of all rows for later comparison":
+        "Запомнить текущие значения всех строк для последующего сравнения",
+    "Diff…": "Сравнение…",
+    "Compare the snapshot with the current values":
+        "Сравнить снапшот с текущими значениями",
+    "Snapshot taken: {count} rows": "Снапшот снят: строк: {count}",
+    "Snapshot diff": "Сравнение со снапшотом",
+    "Snapshot taken at {time}": "Снапшот снят в {time}",
+    "Only differences": "Только различия",
+    "Take new snapshot": "Снять новый снапшот",
+    "Current": "Текущее",
+    "(removed)": "(удалена)",
     # CSV dialogs
     "Export CSV": "Экспорт CSV",
     "Choose columns to export and their order":

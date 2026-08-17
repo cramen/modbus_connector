@@ -49,6 +49,10 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - System/Light/Dark theme (pyqtdarktheme) from the View menu — graphs,
   sparklines, status colors and highlights all follow the theme.
 - Filter box and one-click "Sort by address" for large tables.
+- Snapshot diff ("Snapshot"/"Diff…" buttons): remember the current raw values
+  of all rows, then compare them with later reads in a separate window —
+  changed rows are highlighted, an "Only differences" filter hides the rest,
+  and "Take new snapshot" accepts the current values as the new baseline.
 - Advanced protocol functions: Mask Write Register (0x16), Read/Write Multiple
   Registers (0x17), Read Device Identification (0x2B) and serial-line
   Diagnostics (0x08) — via dedicated dialogs.
@@ -462,7 +466,9 @@ src/modbus_connector/
                        # (gray/green/orange); Device ID…/Diagnostics… dialogs
   registers_panel.py   # register table: per-row unit/poll/format/order/scaling,
                        # change highlighting, filter/sort, Enter = write,
-                       # Mask write…/Read/Write… dialogs
+                       # Mask write…/Read/Write… dialogs, snapshot diff
+  snapshot_dialog.py   # non-modal window comparing a value snapshot with
+                       # current reads (highlighted differences)
   scanner_panel.py     # unit scanner + register address scan (separate window)
   log_panel.py         # log panel (hideable): Raw hex traffic toggle, Save…
   settings_store.py    # settings persistence in ~/.modbus_connector/settings.json

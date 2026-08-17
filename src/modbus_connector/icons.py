@@ -324,6 +324,28 @@ def _alarm(p: QPainter, _c: QColor) -> None:
     p.drawArc(QRectF(6.9, 12.5, 2.2, 2.0), 180 * 16, 180 * 16)
 
 
+@_drawer("snapshot")
+def _snapshot(p: QPainter, _c: QColor) -> None:
+    # фотоаппарат: корпус с «башенкой» и линза-круг
+    _poly(
+        p, (2.0, 12.8), (2.0, 5.2), (4.8, 5.2), (6.0, 3.0), (10.0, 3.0),
+        (11.2, 5.2), (14.0, 5.2), (14.0, 12.8), close=True,
+    )
+    p.drawEllipse(QPointF(8.0, 9.0), 2.6, 2.6)
+
+
+@_drawer("diff")
+def _diff(p: QPainter, c: QColor) -> None:
+    # два документа рядом; различающаяся строка отмечена точкой
+    p.drawRect(QRectF(1.8, 3.5, 5.6, 9.5))
+    p.drawRect(QRectF(8.6, 3.5, 5.6, 9.5))
+    for y in (6.0, 8.5, 11.0):
+        _line(p, 3.2, y, 6.0, y)
+    _line(p, 10.0, 6.0, 12.8, 6.0)
+    _line(p, 10.0, 8.5, 12.8, 8.5)
+    _dot(p, c, 11.4, 11.0, 1.1)
+
+
 ICON_NAMES: tuple[str, ...] = tuple(_DRAWERS)
 
 
