@@ -49,6 +49,13 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - System/Light/Dark theme (pyqtdarktheme) from the View menu — graphs,
   sparklines, status colors and highlights all follow the theme.
 - Filter box and one-click "Sort by address" for large tables.
+- Per-row polling checkbox (leftmost column): unchecked rows are skipped by
+  polling and "Read all" and are hidden from the graph window; manual reads
+  and writes still work.
+- Alarm rules ("Alarms…" button): per-row ordered rules (>, <, >=, <=, ==,
+  !=, in/outside range — first match wins) highlight the value cell in red
+  or yellow, write an event to the log and optionally play a siren sound
+  when a rule starts matching (including escalation to a stricter rule).
 - Snapshot diff ("Snapshot"/"Diff…" buttons): remember the current raw values
   of all rows, then compare them with later reads in a separate window —
   changed rows are highlighted, an "Only differences" filter hides the rest,
@@ -114,6 +121,11 @@ field selection and a per-row checklist (the gear icon next to "Log to file"):
 Address scanner — unit sweep with probes and the register address scan:
 
 ![Scanner](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/scanner.png)
+
+Snapshot diff — capture the current values, read again later and compare;
+changed rows are highlighted:
+
+![Snapshot diff](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/snapshot_diff.png)
 
 ## Requirements
 
@@ -466,7 +478,10 @@ src/modbus_connector/
                        # (gray/green/orange); Device ID…/Diagnostics… dialogs
   registers_panel.py   # register table: per-row unit/poll/format/order/scaling,
                        # change highlighting, filter/sort, Enter = write,
-                       # Mask write…/Read/Write… dialogs, snapshot diff
+                       # Mask write…/Read/Write… dialogs, alarm rules,
+                       # snapshot diff
+  alarms_dialog.py     # per-row alarm rule editor (condition, color, log, sound)
+  alarm_sound.py       # alarm siren: generated two-tone WAV + QSoundEffect
   snapshot_dialog.py   # non-modal window comparing a value snapshot with
                        # current reads (highlighted differences)
   scanner_panel.py     # unit scanner + register address scan (separate window)
