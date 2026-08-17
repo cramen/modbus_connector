@@ -132,7 +132,21 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 ## Требования
 
 - Python 3.11+
-- `PySide6`, `pymodbus[serial]==3.6.9`
+
+Зависимости времени выполнения (ставятся автоматически через pip, см.
+`pyproject.toml`):
+
+- `PySide6` — GUI-фреймворк Qt 6; полный метапакет, включая Addons
+  (QtMultimedia используется для звука алармов)
+- `pymodbus[serial]==3.6.9` — стек протокола Modbus TCP/RTU (синхронные
+  клиенты); extra `serial` подтягивает `pyserial` для RTU-портов
+- `pyqtgraph` — живые графики регистров (тянет за собой `numpy`)
+- `pyqtdarktheme` — темы оформления light/dark/system
+
+Опциональные extras:
+
+- `pip install -e .[dev]` — `pytest`, `pytest-asyncio`, `ruff` (тесты и линт)
+- `pip install -e .[build]` — `pyinstaller>=6` (standalone-сборки)
 
 ## Установка
 

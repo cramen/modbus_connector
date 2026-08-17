@@ -130,7 +130,20 @@ changed rows are highlighted:
 ## Requirements
 
 - Python 3.11+
-- `PySide6`, `pymodbus[serial]==3.6.9`
+
+Runtime dependencies (installed automatically by pip, see `pyproject.toml`):
+
+- `PySide6` — Qt 6 GUI framework; the full meta-package including Addons
+  (QtMultimedia is used for the alarm sound)
+- `pymodbus[serial]==3.6.9` — Modbus TCP/RTU protocol stack (synchronous
+  clients); the `serial` extra brings `pyserial` for RTU ports
+- `pyqtgraph` — live register graphs (pulls in `numpy`)
+- `pyqtdarktheme` — light/dark/system themes
+
+Optional extras:
+
+- `pip install -e .[dev]` — `pytest`, `pytest-asyncio`, `ruff` (tests & lint)
+- `pip install -e .[build]` — `pyinstaller>=6` (standalone app bundles)
 
 ## Installation
 
