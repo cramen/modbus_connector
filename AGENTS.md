@@ -20,7 +20,8 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 
 ## Стек
 
-- Python 3.11+, PySide6
+- Python 3.11+, PySide6 (полный метапакет — включает Addons; alarm_sound.py
+  использует QtMultimedia QSoundEffect, PyInstaller подхватывает импорт сам)
 - `pyqtgraph` (тянет numpy) — живые графики значений регистров
 - `pymodbus[serial]==3.6.9` — sync-клиенты; методы чтения/записи принимают
   ключевой `slave=`, результат: `.registers` (регистры) / `.bits` (coils,
@@ -165,8 +166,13 @@ src/modbus_connector/
                        # (theme.alarm_color, приоритет над flash изменений),
                        # _active_alarms по токену — edge-детекция: лог
                        # "ALARM <label>: value условие" / "ALARM cleared" один
-                       # раз на фронт (rule.log) и QApplication.beep()
-                       # (rule.sound); смена правил сбрасывает edge-состояние
+                       # раз на фронт (rule.log) и _alarm_sound.play()
+                       # (rule.sound; alarm_sound.AlarmSound — QSoundEffect
+                       # из QtMultimedia с программным WAV 880 Гц/180 мс во
+                       # временном файле, ленивая инициализация на первом
+                       # фронте; без QtMultimedia — откат на
+                       # QApplication.beep()); смена правил сбрасывает
+                       # edge-состояние
   datalogger.py     # без Qt: LogSettings (path/format csv|jsonl/fields —
                     # subset timestamp/name/address/kind, value всегда/
                     # append), LogSample, DataLogger — open/write/flush/close/
@@ -185,6 +191,12 @@ src/modbus_connector/
                     # редактирование через «черновики» (сырые тексты переживают
                     # переключение строк), парсинг в AlarmRule на OK;
                     # нечисловой Value блокирует OK, range без value2 = value
+  alarm_sound.py    # AlarmSound — звук фронта аларма: программный WAV
+                    # (_alarm_wav_bytes: синус 880 Гц, 180 мс, огибающая,
+                    # 16-bit mono PCM) во временном файле + QtMultimedia
+                    # QSoundEffect (лениво на первом play(), неблокирующе,
+                    # повторный play переигрывает); без QtMultimedia —
+                    # QApplication.beep(); тесты подменяют panel._alarm_sound
   help_dialog.py    # справка по окнам: make_help_button (иконка help,
                     # тултип "Help"/"Справка") +
                     # show_help — немодальный диалог с QTextBrowser
@@ -233,6 +245,9 @@ src/modbus_connector/
                        # колонка Trend — SparklineWidget (QPainter) по ряду
                        # _series[token] (TimeSeries; пишется primary-значение
                        # при чтении, hex/ascii не захватываются), clear_series(),
+                       # спарклайн — sizePolicy Expanding/Expanding (min 60x20):
+                       # растягивается вслед за шириной колонки, paintEvent
+                       # рисует по фактическим width()/height(),
                        # изменившееся при чтении значение подсвечивается
                        # зелёным на ~2 с (theme.flash_color(), по токену строки,
                        # с генерацией),

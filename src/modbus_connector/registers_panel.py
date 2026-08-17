@@ -27,7 +27,6 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtWidgets import (
-    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -38,6 +37,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
 )
 
 from modbus_connector import icons, theme
+from modbus_connector.alarm_sound import AlarmSound
 from modbus_connector.alarms_dialog import AlarmsDialog
 from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
 from modbus_connector.datalogger import (
@@ -126,7 +127,9 @@ class SparklineWidget(QWidget):
     def __init__(self, series: TimeSeries, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._series = series
-        self.setFixedSize(110, 28)
+        # растягивается вслед за шириной колонки Trend (paint рисует по width())
+        self.setMinimumSize(60, 20)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def refresh(self) -> None:
         values = self._series.points()[1][-self.MAX_POINTS :]
@@ -230,6 +233,7 @@ class RegistersPanel(QWidget):
         self._sparklines: dict[int, SparklineWidget] = {}
         self._last_values: dict[int, list] = {}  # token -> last raw read values
         self._active_alarms: dict[int, AlarmRule] = {}  # token -> rule currently firing
+        self._alarm_sound = AlarmSound()  # звук фронта аларма (monkeypatch в тестах)
         self._bus_enabled = False  # no bus access until a connection is up
         self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
         self._translatable_tips: list[tuple[QWidget, str]] = []
@@ -1097,7 +1101,7 @@ class RegistersPanel(QWidget):
                     )
                 )
             if matched.sound:
-                QApplication.beep()
+                self._alarm_sound.play()
 
     @Slot()
     def _on_mask_write(self) -> None:

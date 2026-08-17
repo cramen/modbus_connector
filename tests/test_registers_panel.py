@@ -19,6 +19,7 @@ try:
     from PySide6.QtWidgets import (  # noqa: E402
         QAbstractItemView,
         QApplication,
+        QSizePolicy,
         QTableWidget,
     )
 except ImportError as exc:
@@ -227,6 +228,25 @@ def test_clear_series_empties_history(qapp: QApplication) -> None:
     panel._sparklines[token].grab()
     panel._series[token].append(1.0, 2.0)  # a single point paints fine too
     panel._sparklines[token].grab()
+
+
+def test_sparkline_stretches_with_column(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.show()
+    token = panel._token_at(0)
+    sparkline = panel._sparklines[token]
+    policy = sparkline.sizePolicy()
+    assert policy.horizontalPolicy() == QSizePolicy.Policy.Expanding
+    assert policy.verticalPolicy() == QSizePolicy.Policy.Expanding
+
+    panel._table.setColumnWidth(COL_TREND, 400)
+    qapp.processEvents()
+    assert sparkline.width() > 300  # follows the column, not a fixed size
+
+    panel._series[token].append(1.0, 2.0)  # paints at the wide geometry
+    panel._series[token].append(2.0, 5.0)
+    sparkline.grab()
+    panel.close()
 
 
 def test_filter_hides_and_unhides_rows(qapp: QApplication) -> None:

@@ -17,6 +17,7 @@ except ImportError as exc:
 from PySide6.QtGui import QColor  # noqa: E402
 
 from modbus_connector import theme  # noqa: E402
+from modbus_connector.alarm_sound import _alarm_wav_bytes  # noqa: E402
 from modbus_connector.alarms_dialog import (  # noqa: E402
     COL_SOUND,
     COL_VALUE,
@@ -259,6 +260,50 @@ def test_alarm_without_log_flag_is_silent(qapp: QApplication) -> None:
     panel.handle_read_finished(_read_row(panel, 0), True, [1], "")
     assert not any("ALARM" in line for line in lines)  # clearing is silent too
     theme.apply_theme("system")
+
+
+class _SoundStub:
+    def __init__(self) -> None:
+        self.plays = 0
+
+    def play(self) -> None:
+        self.plays += 1
+
+
+def test_alarm_sound_plays_on_edge_only(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel, _token, _lines = _panel_with_rule(AlarmRule("gt", 5, sound=True))
+    stub = _SoundStub()
+    monkeypatch.setattr(panel, "_alarm_sound", stub)
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [10], "")
+    assert stub.plays == 1  # inactive -> active edge
+    panel.handle_read_finished(_read_row(panel, 0), True, [11], "")
+    assert stub.plays == 1  # still active: no replay
+    panel.handle_read_finished(_read_row(panel, 0), True, [1], "")
+    assert stub.plays == 1  # clearing is quiet
+    panel.handle_read_finished(_read_row(panel, 0), True, [10], "")
+    assert stub.plays == 2  # a fresh edge plays again
+
+
+def test_alarm_sound_flag_off_is_quiet(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel, _token, _lines = _panel_with_rule(AlarmRule("gt", 5, sound=False))
+    stub = _SoundStub()
+    monkeypatch.setattr(panel, "_alarm_sound", stub)
+    panel.handle_read_finished(_read_row(panel, 0), True, [10], "")
+    assert stub.plays == 0
+
+
+def test_alarm_wav_bytes_is_valid_pcm(qapp: QApplication) -> None:
+    data = _alarm_wav_bytes()
+    assert data[:4] == b"RIFF" and data[8:12] == b"WAVE"
+    assert data[22:24] == (1).to_bytes(2, "little")  # mono
+    assert int.from_bytes(data[24:28], "little") == 44100
+    assert int.from_bytes(data[34:36], "little") == 16  # bits per sample
+    assert len(data) == 44 + int(44100 * 0.18) * 2
 
 
 def test_alarm_state_roundtrip(qapp: QApplication) -> None:
