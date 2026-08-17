@@ -1065,9 +1065,10 @@ class RegistersPanel(QWidget):
             if item is not None:
                 item.setBackground(QBrush())
             return
-        self._update_alarm(index, values)
+        # silent: правки в диалоге обновляют edge-состояние без лога/звука
+        self._update_alarm(index, values, silent=True)
 
-    def _update_alarm(self, index: int, values: list) -> None:
+    def _update_alarm(self, index: int, values: list, *, silent: bool = False) -> None:
         """Оценить правила строки по свежему чтению: подсветка, edge-лог, звук."""
         token = self._token_at(index)
         rules = self._row_display.get(token, RowDisplaySettings()).alarms
@@ -1090,7 +1091,7 @@ class RegistersPanel(QWidget):
         self._active_alarms[token] = matched
         if item is not None:
             item.setBackground(theme.alarm_color(matched.color))
-        if previous is None:  # inactive -> active edge: log once, optional beep
+        if previous != matched and not silent:  # новый фронт: None->rule или смена правила
             if matched.log:
                 self.logLine.emit(
                     tr(

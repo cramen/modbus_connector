@@ -165,14 +165,19 @@ src/modbus_connector/
                        # пропускаются); активное правило красит ячейку Value
                        # (theme.alarm_color, приоритет над flash изменений),
                        # _active_alarms по токену — edge-детекция: лог
-                       # "ALARM <label>: value условие" / "ALARM cleared" один
-                       # раз на фронт (rule.log) и _alarm_sound.play()
+                       # "ALARM <label>: value условие" один раз на фронт
+                       # None→rule ИЛИ смену активного правила A→B (правила
+                       # сравниваются по значению, "ALARM cleared" при смене
+                       # не пишется — это не снятие) / "ALARM cleared" на
+                       # rule→None (rule.log) и _alarm_sound.play()
                        # (rule.sound; alarm_sound.AlarmSound — QSoundEffect
-                       # из QtMultimedia с программным WAV 880 Гц/180 мс во
-                       # временном файле, ленивая инициализация на первом
+                       # из QtMultimedia с программным WAV — двухтональная
+                       # сирена 880↔1175 Гц, 4 цикла, ~0.9 с — во временном
+                       # файле, ленивая инициализация на первом
                        # фронте; без QtMultimedia — откат на
-                       # QApplication.beep()); смена правил сбрасывает
-                       # edge-состояние
+                       # QApplication.beep()); переоценка после правок в
+                       # диалоге (_re_evaluate_alarm, silent=True) обновляет
+                       # edge-состояние без лога/звука нового правила
   datalogger.py     # без Qt: LogSettings (path/format csv|jsonl/fields —
                     # subset timestamp/name/address/kind, value всегда/
                     # append), LogSample, DataLogger — open/write/flush/close/
@@ -192,8 +197,10 @@ src/modbus_connector/
                     # переключение строк), парсинг в AlarmRule на OK;
                     # нечисловой Value блокирует OK, range без value2 = value
   alarm_sound.py    # AlarmSound — звук фронта аларма: программный WAV
-                    # (_alarm_wav_bytes: синус 880 Гц, 180 мс, огибающая,
-                    # 16-bit mono PCM) во временном файле + QtMultimedia
+                    # (_alarm_wav_bytes: двухтональная сирена 880↔1175 Гц,
+                    # 4 цикла по 110 мс на тон, ~0.88 с, амплитуда 0.9,
+                    # огибающая attack/release 8 мс на тоне,
+                    # 16-bit mono PCM 44.1 кГц) во временном файле + QtMultimedia
                     # QSoundEffect (лениво на первом play(), неблокирующе,
                     # повторный play переигрывает); без QtMultimedia —
                     # QApplication.beep(); тесты подменяют panel._alarm_sound

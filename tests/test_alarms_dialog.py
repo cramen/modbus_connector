@@ -17,7 +17,7 @@ except ImportError as exc:
 from PySide6.QtGui import QColor  # noqa: E402
 
 from modbus_connector import theme  # noqa: E402
-from modbus_connector.alarm_sound import _alarm_wav_bytes  # noqa: E402
+from modbus_connector.alarm_sound import ALARM_DURATION_S, _alarm_wav_bytes  # noqa: E402
 from modbus_connector.alarms_dialog import (  # noqa: E402
     COL_SOUND,
     COL_VALUE,
@@ -297,13 +297,87 @@ def test_alarm_sound_flag_off_is_quiet(
     assert stub.plays == 0
 
 
+def test_alarm_rule_switch_is_new_event(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    red = AlarmRule("lt", 200, color="red", sound=True)
+    yellow = AlarmRule("lt", 10000, color="yellow", sound=True)
+    panel, token, lines = _panel_with_rule(red)
+    panel._row_display[token].alarms = [red, yellow]
+    stub = _SoundStub()
+    monkeypatch.setattr(panel, "_alarm_sound", stub)
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [5000], "")
+    assert panel._active_alarms[token] == yellow
+    assert stub.plays == 1  # None -> rule edge
+    assert lines[-1] == "ALARM temp: 5000 < 10000"
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [150], "")
+    assert panel._active_alarms[token] == red  # rule switch: a fresh event
+    assert stub.plays == 2
+    assert lines[-1] == "ALARM temp: 150 < 200"
+    assert not any("ALARM cleared" in line for line in lines)
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [150], "")
+    assert stub.plays == 2  # same rule still active: no replay
+    assert lines[-1] == "ALARM temp: 150 < 200"
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [20000], "")
+    assert token not in panel._active_alarms
+    assert stub.plays == 2  # clearing is quiet
+    assert lines[-1] == "ALARM cleared temp"
+
+
+def test_alarm_rule_switch_without_flags_is_silent(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    red = AlarmRule("lt", 200, color="red", log=False, sound=False)
+    yellow = AlarmRule("lt", 10000, color="yellow", log=False, sound=False)
+    panel, token, lines = _panel_with_rule(red)
+    panel._row_display[token].alarms = [red, yellow]
+    stub = _SoundStub()
+    monkeypatch.setattr(panel, "_alarm_sound", stub)
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [5000], "")
+    panel.handle_read_finished(_read_row(panel, 0), True, [150], "")
+    assert panel._active_alarms[token] == red  # switch tracked...
+    assert stub.plays == 0  # ...but silent
+    assert not any("ALARM" in line for line in lines)
+
+
+def test_re_evaluate_rule_switch_is_silent(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel, token, lines = _panel_with_rule(AlarmRule("gt", 5, sound=True))
+    stub = _SoundStub()
+    monkeypatch.setattr(panel, "_alarm_sound", stub)
+    panel.handle_read_finished(_read_row(panel, 0), True, [10], "")
+    assert stub.plays == 1
+
+    # the user edits the rule in the dialog while the alarm is active:
+    # the edge state follows the new rule without log/sound spam
+    new_rule = AlarmRule("gt", 8, sound=True)
+    panel._row_display[token].alarms = [new_rule]
+    panel._re_evaluate_alarm(0)
+    assert panel._active_alarms[token] == new_rule
+    assert stub.plays == 1
+    assert len([line for line in lines if "ALARM" in line]) == 1
+
+
 def test_alarm_wav_bytes_is_valid_pcm(qapp: QApplication) -> None:
     data = _alarm_wav_bytes()
     assert data[:4] == b"RIFF" and data[8:12] == b"WAVE"
     assert data[22:24] == (1).to_bytes(2, "little")  # mono
     assert int.from_bytes(data[24:28], "little") == 44100
     assert int.from_bytes(data[34:36], "little") == 16  # bits per sample
-    assert len(data) == 44 + int(44100 * 0.18) * 2
+    # two-tone siren: 4 cycles x 2 tones x 110 ms = 0.88 s of 16-bit mono PCM
+    assert ALARM_DURATION_S == pytest.approx(0.88)
+    assert len(data) == 44 + 8 * int(44100 * 0.110) * 2
+    peak = max(
+        abs(int.from_bytes(data[i : i + 2], "little", signed=True))
+        for i in range(44, len(data), 2)
+    )
+    assert 0.8 * 32767 < peak <= 0.9 * 32767  # loud, no clipping
 
 
 def test_alarm_state_roundtrip(qapp: QApplication) -> None:
