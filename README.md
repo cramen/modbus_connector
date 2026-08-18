@@ -48,7 +48,9 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   file" button), with a configurable set of fields.
 - System/Light/Dark theme (pyqtdarktheme) from the View menu — graphs,
   sparklines, status colors and highlights all follow the theme.
-- Filter box and one-click "Sort by address" for large tables.
+- Filter box and one-click "Sort by address" for large tables. Table columns
+  can be reordered by dragging the headers and shown/hidden via the header's
+  right-click checklist; the layout persists between sessions.
 - Per-row polling checkbox (leftmost column): unchecked rows are skipped by
   polling and "Read all" and are hidden from the graph window; manual reads
   and writes still work.
@@ -71,7 +73,9 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   a given range with configurable probes and shows devices that answered at
   least one probe; double-click a found unit to select it for the connection.
   A second sweep scans the register address space of a known unit and lists
-  the addresses that respond.
+  the addresses that respond — together with the read values decoded in
+  several columns at once (Bool for coils/discrete inputs; dec, hex, s16,
+  u32, s32, f32 and ascii for registers).
 - Log panel at the bottom of the window, toggled with the "Log" button:
   human-readable requests/responses, optional raw bus traffic in hex
   ("Raw" checkbox) and export of the whole log to a file ("Save…").
