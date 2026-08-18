@@ -95,12 +95,17 @@ def test_scanner_state_roundtrip(qapp: QApplication) -> None:
     assert state["addr_to"] == 20
 
 
-def _scan_addresses(panel: ScannerPanel, addresses: list[int]) -> None:
+def _scan_addresses(
+    panel: ScannerPanel,
+    addresses: list[int],
+    kind: str = "holding_registers",
+    values: list[int | bool] | None = None,
+) -> None:
     panel._addr_unit.setValue(3)
-    panel._addr_kind.setCurrentText("holding_registers")
+    panel._addr_kind.setCurrentText(kind)
     panel._on_addr_start()  # stores the scanned unit/kind, clears old hits
     for address in addresses:
-        panel.handle_addr_scan_hit(address)
+        panel.handle_addr_scan_hit(address, list(values) if values is not None else [0, 0])
 
 
 def test_add_rows_button_gating(qapp: QApplication) -> None:
@@ -198,7 +203,7 @@ def test_add_selected_only(qapp: QApplication) -> None:
     scanner.rowsAddRequested.connect(registers.add_rows)
     scanner.set_bus_enabled(True)
     _scan_addresses(scanner, [5, 6, 7])
-    scanner._addr_results.item(1).setCheckState(Qt.CheckState.Unchecked)  # skip 6
+    scanner._addr_results.item(1, 0).setCheckState(Qt.CheckState.Unchecked)  # skip 6
     scanner._add_rows_button.click()
 
     assert [entry["address"] for entry in registers.state()] == [5, 7]
@@ -220,12 +225,12 @@ def test_space_toggles_hit_checkbox(qapp: QApplication) -> None:
     panel = ScannerPanel()
     _scan_addresses(panel, [10])
     results = panel._addr_results
-    results.setCurrentRow(0)
+    results.setCurrentCell(0, 0)
     event = QKeyEvent(
         QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier
     )
     QApplication.sendEvent(results.viewport(), event)
-    assert results.item(0).checkState() == Qt.CheckState.Unchecked
+    assert results.item(0, 0).checkState() == Qt.CheckState.Unchecked
 
 
 def test_help_button_opens_dialog(qapp: QApplication) -> None:
@@ -246,3 +251,51 @@ def test_help_button_opens_dialog(qapp: QApplication) -> None:
         not (isinstance(widget, QDialog) and widget.windowTitle() == "Scanner — Help")
         for widget in QApplication.topLevelWidgets()
     )
+
+
+def test_coil_scan_shows_bool_column(qapp: QApplication) -> None:
+    panel = ScannerPanel()
+    _scan_addresses(panel, [], kind="coils")  # just configures the columns
+    panel.handle_addr_scan_hit(0, [True])
+    panel.handle_addr_scan_hit(1, [False])
+    results = panel._addr_results
+    assert results.columnCount() == 2
+    headers = [
+        results.horizontalHeaderItem(column).text() for column in range(2)
+    ]
+    assert headers == ["Address", "Bool"]
+    assert results.item(0, 1).text() == "True"
+    assert results.item(1, 1).text() == "False"
+
+
+def test_register_scan_shows_value_columns(qapp: QApplication) -> None:
+    from modbus_connector.models import format_register_values
+
+    panel = ScannerPanel()
+    _scan_addresses(panel, [0], values=[100, 101])  # conftest hr 0..1 = 100, 101
+    results = panel._addr_results
+    assert results.columnCount() == 8
+    headers = [
+        results.horizontalHeaderItem(column).text() for column in range(8)
+    ]
+    assert headers == ["Address", "dec", "hex", "s16", "u32", "s32", "f32", "ascii"]
+    assert results.item(0, 0).text() == "0x0000 (0)"
+    assert results.item(0, 1).text() == "100"
+    assert results.item(0, 2).text() == "0x0064"
+    assert results.item(0, 3).text() == "100"
+    assert results.item(0, 4).text() == format_register_values([100, 101], "u32")
+    assert results.item(0, 4).text() == "6553701"  # ABCD: (100 << 16) | 101
+    assert results.item(0, 5).text() == format_register_values([100, 101], "s32")
+    assert results.item(0, 6).text() == format_register_values([100, 101], "f32")
+    assert results.item(0, 7).text() == format_register_values([100, 101], "ascii")
+
+
+def test_single_register_hit_shows_dashes_for_32bit(qapp: QApplication) -> None:
+    panel = ScannerPanel()
+    _scan_addresses(panel, [9], values=[109])  # count=2 read fell back to count=1
+    results = panel._addr_results
+    assert results.item(0, 1).text() == "109"  # dec still readable
+    assert results.item(0, 2).text() == "0x006D"
+    assert results.item(0, 4).text() == "—"  # u32 needs a register pair
+    assert results.item(0, 5).text() == "—"
+    assert results.item(0, 6).text() == "—"

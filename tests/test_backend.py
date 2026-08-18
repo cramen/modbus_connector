@@ -217,15 +217,29 @@ class TestTrafficHook:
 class TestScanAddresses:
     def test_holding_registers(self, backend: ModbusBackend) -> None:
         found = backend.scan_addresses(UNIT_ID, "holding_registers", 0, 14, lambda: False)
-        assert list(found) == list(range(10))
+        # registers are read in pairs (count=2); address 9 is the map edge:
+        # the pair read fails and falls back to a single register
+        expected = [(address, [100 + address, 101 + address]) for address in range(9)]
+        expected.append((9, [109]))
+        assert list(found) == expected
 
     def test_input_registers(self, backend: ModbusBackend) -> None:
         found = backend.scan_addresses(UNIT_ID, "input_registers", 0, 9, lambda: False)
-        assert list(found) == list(range(5))
+        expected = [(address, [7 + address, 8 + address]) for address in range(4)]
+        expected.append((4, [11]))
+        assert list(found) == expected
+
+    def test_coils_read_single_bits(self, backend: ModbusBackend) -> None:
+        found = backend.scan_addresses(UNIT_ID, "coils", 0, 9, lambda: False)
+        assert list(found) == [(address, [address % 2 == 0]) for address in range(8)]
+
+    def test_pair_fallback_yields_edge_address(self, backend: ModbusBackend) -> None:
+        found = dict(backend.scan_addresses(UNIT_ID, "holding_registers", 8, 9, lambda: False))
+        assert found == {8: [108, 109], 9: [109]}  # 9: pair read fails, retry count=1
 
     def test_should_stop(self, backend: ModbusBackend) -> None:
         found = []
-        for address in backend.scan_addresses(
+        for address, _values in backend.scan_addresses(
             UNIT_ID, "holding_registers", 0, 9, lambda: bool(found)
         ):
             found.append(address)

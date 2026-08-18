@@ -39,7 +39,7 @@ class ModbusWorker(QObject):
     diagLoopbackFinished = Signal(int, bool, str)
     diagCountersFinished = Signal(int, bool, dict, str)
     addrScanProgress = Signal(int, int)
-    addrScanHit = Signal(int)
+    addrScanHit = Signal(int, list)
     addrScanFinished = Signal()
     statsUpdated = Signal(object)
     aliveChanged = Signal(bool)
@@ -292,12 +292,13 @@ class ModbusWorker(QObject):
                kind=kind, unit=unit, start=start, end=end)
         )
         try:
-            for address in self._backend.scan_addresses(
+            for address, values in self._backend.scan_addresses(
                 unit, kind, start, end, lambda: self._scan_stop
             ):
-                self.addrScanHit.emit(address)
+                self.addrScanHit.emit(address, list(values))
                 self.logLine.emit(
-                    tr("← addr scan hit {kind}@{address}", kind=kind, address=address)
+                    tr("← addr scan hit {kind}@{address} = {values}",
+                       kind=kind, address=address, values=format_values(values))
                 )
                 self.addrScanProgress.emit(address - start + 1, total)
         except Exception as exc:

@@ -93,7 +93,10 @@ Add/remove probes above; <b>Stop</b> aborts the sweep.</li>
 <li><b>Double-click</b> a found unit to select it in the connection panel;
 <b>Device ID…</b> reads the selected unit's identification (0x2B/0x0E).</li>
 <li><b>Registers scan</b>: probes the address range of one unit and kind.
-Found addresses arrive checked; uncheck rows you don't need (Space toggles,
+Register areas are read in pairs, so found values show as dec/hex/s16/u32/s32/
+f32/ascii columns (a single register at the map edge shows "—" for 32-bit);
+coils/discrete inputs show a Bool column. Found addresses arrive checked;
+uncheck rows you don't need (Space toggles,
 All/None for long lists) and <b>Add selected to table</b> creates register
 rows for them — duplicates (same type and address) are skipped.</li>
 </ul>
@@ -216,6 +219,9 @@ SCANNER_HELP_RU = """
 подключения; <b>Device ID…</b> читает идентификацию выбранного unit
 (0x2B/0x0E).</li>
 <li><b>Скан регистров</b>: проверяет диапазон адресов одного unit и типа.
+Регистровые области читаются парами, поэтому найденные значения показаны
+колонками dec/hex/s16/u32/s32/f32/ascii (одиночный регистр на границе карты
+даёт «—» для 32-битных); coils/discrete inputs — колонка Bool.
 Найденные адреса отмечены; лишние можно снять (Space переключает, All/None —
 для длинных списков), а <b>Add selected to table</b> создаёт строки таблицы
 по отмеченным — дубли (тот же тип и адрес) пропускаются.</li>

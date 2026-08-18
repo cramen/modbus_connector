@@ -68,13 +68,17 @@ src/modbus_connector/
                   # (unit, hits) для каждого просканированного unit
                   # (hits пуст, если unit не ответил);
                   # scan_addresses(unit, kind, start, end, should_stop) —
-                  # генератор ответивших адресов (count=1), семантика ошибок
+                  # генератор (адрес, значения) для ответивших адресов;
+                  # регистровые области читаются по count=2 (пара для
+                  # 32-битных форматов сканера), при ошибке пары — повтор
+                  # count=1; coils/di — всегда count=1; семантика ошибок
                   # как у scan;
                   # traffic_hook — Callable[[str, bytes], None] (tx/rx),
                   # обёртка client.send/recv на время подключения
   worker.py       # Qt: ModbusWorker(QObject) над backend — сигналы
                   # connectionChanged/readFinished/writeFinished/scanProgress/
-                  # scanHit/scanFinished/addrScanProgress/addrScanHit/
+                  # scanHit/scanFinished/addrScanProgress/
+                  # addrScanHit(int адрес, list значения)/
                   # addrScanFinished/statsUpdated/aliveChanged/trafficLine/
                   # logLine;
                   # слоты connect_to/disconnect/read/write/start_scan/stop_scan/
@@ -340,6 +344,17 @@ src/modbus_connector/
                        # строками в таблицу (чек-лист, по умолчанию все
                        # отмечены, All/None; rowsAddRequested(list[dict]),
                        # дубли kind+address пропускает add_rows);
+                       # результаты Registers scan — QTableWidget с набором
+                       # колонок по kind: Address+Bool (coils/di) или
+                       # Address+dec/hex/s16/u32/s32/f32/ascii (регистровые;
+                       # dec/hex/s16 — по первому регистру, 32-битные — по
+                       # паре, откат count=1 на границе карты → «—», порядок
+                       # байт глобальный ABCD; 64-битные форматы НЕ показываем
+                       # — count=4 на адрес слишком дорого для сканера);
+                       # декодирование — _format_scan_values поверх
+                       # models.format_register_values, своих конвертеров нет;
+                       # чекбокс на Address-ячейке, значения в таблицу
+                       # регистров не переносятся (только kind+address);
                        # кнопка "Device ID…" — идентификация выбранного unit
                        # (deviceIdRequested(id, unit), немодальный диалог);
                        # state()/set_state() — диапазон, probes и параметры
@@ -463,7 +478,10 @@ tests/
   test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
                            # закрытие вкладок
   test_scanner_panel.py    # probes-таблица (текстовые ячейки, пропуск
-                           # невалидных), round-trip настроек сканера
+                           # невалидных), round-trip настроек сканера,
+                           # колонки значений результатов Registers scan
+                           # (Bool для coils/di, dec..ascii для регистров,
+                           # «—» для 32-бит при одиночном регистре)
   test_timeseries.py       # TimeSeries: буфер, вытеснение, stats
   test_theme.py            # apply_theme (stylesheet меняется), round-trip
                            # ключа "theme", меню View (эксклюзивность)

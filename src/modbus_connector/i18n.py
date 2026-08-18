@@ -333,7 +333,8 @@ RU: dict[str, str] = {
     "← scan finished": "← скан завершён",
     "→ scan addresses {kind} unit={unit} {start}..{end}":
         "→ скан адресов {kind} unit={unit} {start}..{end}",
-    "← addr scan hit {kind}@{address}": "← найден адрес {kind}@{address}",
+    "← addr scan hit {kind}@{address} = {values}":
+        "← найден адрес {kind}@{address} = {values}",
     "✗ address scan failed: {exc}": "✗ скан адресов не удался: {exc}",
     "← address scan stopped": "← скан адресов остановлен",
     "← address scan finished": "← скан адресов завершён",
@@ -371,6 +372,7 @@ RU: dict[str, str] = {
     "Registers scan:": "Скан регистров:",
     "Unit {unit} — device identification (0x2B/0x0E)":
         "Unit {unit} — идентификация устройства (0x2B/0x0E)",
+    "Bool": "Логич.",
     # graph window
     "Graph": "График",
     "Refresh rows": "Обновить строки",

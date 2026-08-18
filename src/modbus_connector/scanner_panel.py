@@ -5,6 +5,7 @@ from typing import get_args
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -23,12 +24,42 @@ from modbus_connector.connection_panel import DEVICE_ID_NAMES
 from modbus_connector.help_dialog import SCANNER_HELP, make_help_button
 from modbus_connector.i18n import tr
 from modbus_connector.icons import icon, make_button, register
-from modbus_connector.models import DEFAULT_SCAN_PROBES, RegisterKind, ScanProbe
+from modbus_connector.models import (
+    DEFAULT_SCAN_PROBES,
+    RegisterKind,
+    ScanProbe,
+    format_register_values,
+)
 from modbus_connector.theme import FitComboBox
 
 KINDS = list(get_args(RegisterKind))
 
 COL_TYPE, COL_ADDRESS, COL_COUNT, COL_ACTIONS = range(4)
+
+_BIT_KINDS = ("coils", "discrete_inputs")
+# value columns of the registers-scan result table (Address is column 0);
+# 32-bit formats need a register pair — the scanner reads count=2 per address
+SCAN_VALUE_FORMATS = ("dec", "hex", "s16", "u32", "s32", "f32", "ascii")
+
+
+def _format_scan_values(kind: RegisterKind, values: list[int | bool]) -> list[str]:
+    """Тексты колонок значений результата скана (без колонки Address).
+
+    dec/hex/s16 — по первому регистру (u16 на адресе), 32-битные форматы —
+    по паре регистров (откат до count=1 на границе карты → «—»),
+    порядок байт глобальный ABCD; ascii — все прочитанные регистры.
+    """
+    if kind in _BIT_KINDS:
+        return ["True" if values[0] else "False"] if values else [""]
+    registers = [int(v) for v in values]
+    first = registers[:1]
+    cells = [format_register_values(first, fmt) for fmt in ("dec", "hex", "s16")]
+    for fmt in ("u32", "s32", "f32"):
+        cells.append(
+            format_register_values(registers, fmt) if len(registers) >= 2 else "—"
+        )
+    cells.append(format_register_values(registers, "ascii"))
+    return cells
 
 
 class ScannerPanel(QWidget):
@@ -116,8 +147,11 @@ class ScannerPanel(QWidget):
         self._addr_stop_button.clicked.connect(self.scanStopRequested)
         self._addr_progress = QProgressBar()
         self._addr_progress.setValue(0)
-        self._addr_results = QListWidget()
+        self._addr_results = QTableWidget(0, 1)
+        self._addr_results.verticalHeader().setVisible(False)
+        self._addr_results.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._addr_results.itemChanged.connect(self._sync_add_rows_button)
+        self._configure_addr_columns(self._addr_kind.currentText())
         self._addr_all_button = make_button(tr("All"), "add")
         self._track(self._addr_all_button, "All", "All")
         self._addr_all_button.clicked.connect(
@@ -361,6 +395,12 @@ class ScannerPanel(QWidget):
         self._probes_table.setHorizontalHeaderLabels(
             [tr("Type"), tr("Address"), tr("Count"), ""]
         )
+        headers = (
+            [tr("Address"), tr("Bool")]
+            if self._addr_scan_kind in _BIT_KINDS
+            else [tr("Address"), *SCAN_VALUE_FORMATS]
+        )
+        self._addr_results.setHorizontalHeaderLabels(headers)
 
     def set_bus_enabled(self, ok: bool) -> None:
         """Включить/выключить кнопки Start по connectionChanged (Stop — всегда)."""
@@ -377,11 +417,21 @@ class ScannerPanel(QWidget):
         self._start_button.setEnabled(self._bus_enabled)
         self._stop_button.setEnabled(False)
 
+    def _configure_addr_columns(self, kind: str) -> None:
+        """Перестроить колонки результатов скана под тип области."""
+        self._addr_results.setRowCount(0)
+        if kind in _BIT_KINDS:
+            headers = [tr("Address"), tr("Bool")]
+        else:
+            headers = [tr("Address"), *SCAN_VALUE_FORMATS]
+        self._addr_results.setColumnCount(len(headers))
+        self._addr_results.setHorizontalHeaderLabels(headers)
+
     @Slot()
     def _on_addr_start(self) -> None:
         if self._addr_from.value() > self._addr_to.value():
             self._addr_from.setValue(self._addr_to.value())  # clamp inverted range
-        self._addr_results.clear()
+        self._configure_addr_columns(self._addr_kind.currentText())  # clears old hits
         self._addr_scan_unit = self._addr_unit.value()  # "Add to table" uses these
         self._addr_scan_kind = self._addr_kind.currentText()
         self._sync_add_rows_button()
@@ -402,26 +452,32 @@ class ScannerPanel(QWidget):
         self._addr_progress.setMaximum(max(1, total))
         self._addr_progress.setValue(done)
 
-    @Slot(int)
-    def handle_addr_scan_hit(self, address: int) -> None:
-        item = QListWidgetItem(f"0x{address:04X} ({address})")
+    @Slot(int, list)
+    def handle_addr_scan_hit(self, address: int, values: list) -> None:
+        row = self._addr_results.rowCount()
+        self._addr_results.insertRow(row)
+        item = QTableWidgetItem(f"0x{address:04X} ({address})")
         item.setData(Qt.ItemDataRole.UserRole, address)
         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
         item.setCheckState(Qt.CheckState.Checked)  # new hits join selected
-        self._addr_results.addItem(item)
-        self._sync_add_rows_button()  # addItem does not emit itemChanged
+        self._addr_results.setItem(row, 0, item)
+        for column, text in enumerate(
+            _format_scan_values(self._addr_scan_kind, values), start=1
+        ):
+            self._addr_results.setItem(row, column, QTableWidgetItem(text))
+        self._sync_add_rows_button()
 
     def _checked_hits(self) -> list[int]:
         hits = []
-        for row in range(self._addr_results.count()):
-            item = self._addr_results.item(row)
+        for row in range(self._addr_results.rowCount()):
+            item = self._addr_results.item(row, 0)
             if item.checkState() == Qt.CheckState.Checked:
                 hits.append(int(item.data(Qt.ItemDataRole.UserRole)))
         return hits
 
     def _set_all_hits(self, state: Qt.CheckState) -> None:
-        for row in range(self._addr_results.count()):
-            self._addr_results.item(row).setCheckState(state)
+        for row in range(self._addr_results.rowCount()):
+            self._addr_results.item(row, 0).setCheckState(state)
 
     def _sync_add_rows_button(self) -> None:
         self._add_rows_button.setEnabled(

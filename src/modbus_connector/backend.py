@@ -295,25 +295,47 @@ class ModbusBackend:
         start: int,
         end: int,
         should_stop: Callable[[], bool],
-    ) -> Iterator[int]:
-        """Читает адреса start..end по одному, отдаёт ответившие без ошибки.
+    ) -> Iterator[tuple[int, list[int | bool]]]:
+        """Читает адреса start..end по одному, отдаёт (адрес, значения).
 
+        Регистровые области читаются по count=2 (пара для 32-битных форматов
+        в сканере); если пара не читается (Illegal Address на границе карты),
+        повтор с count=1. coils/discrete_inputs — всегда count=1.
         Семантика ошибок как в scan(): ошибка уровня регистра (исключение
         устройства, нет ответа) пропускается, обрыв транспорта — ConnectionError.
         """
         self._require_client()
+        count = 1 if kind in ("coils", "discrete_inputs") else 2
         for address in range(start, end + 1):
             if should_stop():
                 return
             try:
-                self.read(unit, kind, address, 1)
+                values = self._read_scan_address(unit, kind, address, count)
             except (ConnectionException, OSError) as exc:
                 raise ConnectionError(
                     f"Соединение потеряно при сканировании адресов unit={unit}"
                 ) from exc
-            except Exception:
+            if values is None:
                 continue
-            yield address
+            yield address, values
+
+    def _read_scan_address(
+        self, unit: int, kind: RegisterKind, address: int, count: int
+    ) -> list[int | bool] | None:
+        """Прочитать адрес для скана; None — регистр не ответил/ошибка."""
+        try:
+            return self.read(unit, kind, address, count)
+        except (ConnectionException, OSError):
+            raise
+        except Exception:
+            if count == 1:
+                return None
+            try:  # pair failed (e.g. Illegal Address at the map edge): retry one
+                return self.read(unit, kind, address, 1)
+            except (ConnectionException, OSError):
+                raise
+            except Exception:
+                return None
 
     def _require_client(self) -> AnyClient:
         # pymodbus закрывает сокет после таймаута, но execute() сам переподключится;
