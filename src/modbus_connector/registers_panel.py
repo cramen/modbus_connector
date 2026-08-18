@@ -886,8 +886,12 @@ class RegistersPanel(QWidget):
 
     def _defer_move(self, delta: int) -> None:
         # the hotkey fires mid key-event; rebuilding rows synchronously inside
-        # the event corrupts the view — move after the event returns
-        QTimer.singleShot(0, lambda: self._move_selected_rows(delta))
+        # the event corrupts the view — move after the event returns;
+        # parented timer, not QTimer.singleShot(lambda) (see _flash_value_cell)
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(lambda: self._move_selected_rows(delta))
+        timer.start(0)
 
     def _move_selected_rows(self, delta: int) -> None:
         """Сдвинуть выбранные строки блоком на одну позицию (Ctrl+Up/Down)."""
@@ -1830,7 +1834,14 @@ class RegistersPanel(QWidget):
         item.setBackground(theme.flash_color())
         generation = self._flash_generations.get(token, 0) + 1
         self._flash_generations[token] = generation
-        QTimer.singleShot(2000, lambda: self._clear_flash(token, generation))
+        # parented QTimer instead of QTimer.singleShot(lambda): the static
+        # singleShot-with-callable path crashes intermittently on Windows
+        # (access violation in shiboken wrapping); an owned timer also dies
+        # with the panel instead of firing on a deleted widget.
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(lambda: self._clear_flash(token, generation))
+        timer.start(2000)
 
     def _clear_flash(self, token: int, generation: int) -> None:
         if self._flash_generations.get(token) != generation:
