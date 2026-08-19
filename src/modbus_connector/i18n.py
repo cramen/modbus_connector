@@ -369,6 +369,33 @@ RU: dict[str, str] = {
     # session widget log line
     "→ unit {unit} selected in connection panel":
         "→ unit {unit} выбран в панели подключения",
+    # slave mode / sim panel
+    "Mode:": "Режим:",
+    "Master": "Мастер",
+    "Slave": "Слейв",
+    "Simulator": "Симулятор",
+    "Start server": "Запустить сервер",
+    "Stop server": "Остановить сервер",
+    "Stopped": "Остановлен",
+    "any": "любой",
+    "Add row": "Добавить строку",
+    "Add a row to the register map": "Добавить строку в карту регистров",
+    "Template…": "Шаблон…",
+    "Add rows from a device template": "Добавить строки из шаблона устройства",
+    "clients: {count}": "клиентов: {count}",
+    "← template: added {added} rows to the map":
+        "← шаблон: добавлено строк в карту: {added}",
+    # sim worker log lines
+    "→ start simulator {desc}": "→ запуск симулятора {desc}",
+    "✗ simulator start failed: {exc}": "✗ запуск симулятора не удался: {exc}",
+    "← simulator running ({desc})": "← симулятор работает ({desc})",
+    "Simulator running ({desc})": "Симулятор работает ({desc})",
+    "✗ simulator stop failed: {exc}": "✗ остановка симулятора не удалась: {exc}",
+    "→ simulator stopped": "→ симулятор остановлен",
+    "✗ simulator set values failed: {exc}":
+        "✗ запись значений симулятора не удалась: {exc}",
+    "✗ simulator get values failed: {exc}":
+        "✗ чтение значений симулятора не удалось: {exc}",
     # scanner panel
     "Add probe": "Добавить пробу",
     "Start scan": "Начать сканирование",

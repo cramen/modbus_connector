@@ -91,6 +91,42 @@ src/modbus_connector/
                   # backend.connected, без трафика); один флаг _scan_stop на оба
                   # сканера (одновременно работает только один);
                   # read/write замеряют wall time и пишут в Stats
+  sim_backend.py  # без Qt: SimTcpParams(host, port=1502), describe_sim(params)
+                  # («sim tcp host:port» для заголовка вкладки), BLOCK_SIZE=10000;
+                  # SimBackend — Modbus slave-сервер (TCP/RTU) на pymodbus,
+                  # serve_forever в своём потоке: start(params, unit=None)/stop/
+                  # running/set_values/get_values (set_values без хука записи);
+                  # хуки on_master_write(kind, address, values) (все fc записи,
+                  # включая 0x16/0x17), on_request(line) (request_tracer),
+                  # on_client(connected) (TCP); unit=None — отвечает на любой
+  sim_worker.py   # Qt: SimWorker(QObject) над SimBackend (в отдельном QThread):
+                  # сигналы serverChanged(bool,str)/masterWrote(str,int,list)/
+                  # requestLine(str)/clientChanged(bool)/logLine(str)/ticked();
+                  # слоты start_server(params, unit) (вызывать СИГНАЛОМ —
+                  # Q_ARG не маршаллит dataclass)/stop_server/set_values/
+                  # get_values (invokeMethod BlockingQueuedConnection с
+                  # Q_RETURN_ARG("QVariantList"))/set_tick_interval/shutdown;
+                  # ticked — метроном для правил симуляции (этап 5)
+  sim_panel.py    # SimPanel — slave-режим сессии: строка параметров сервера
+                  # (тип TCP/RTU — страницы network/serial по паттерну
+                  # ConnectionPanel, BAUDRATES импортируется оттуда; Unit —
+                  # FitComboBox "any"+1..247, data None = любой), кнопка
+                  # Start/Stop server (connect/disconnect-иконки, как
+                  # ConnectionPanel._sync_button_text), статус (status_colors,
+                  # серый/зелёный + «clients: N» из clientChanged);
+                  # таблица карты Name|Type|Address|Count|Format|Value|✕
+                  # (те же KINDS/FORMATS из models, значения list[int|bool]
+                  # хранятся в UserRole ячейки Name — data() возвращает копию,
+                  # обновления пишутся назад через setData); Value — через
+                  # format_register_values/format_values, правка → parse_values
+                  # + setValuesRequested (пишется всегда: backend хранит блоки
+                  # и до старта); masterWrote → handle_master_write обновляет
+                  # покрывающие строки; кнопка Template… (csv_import, QMenu с
+                  # подменю производителей, дубли kind+address пропускаются);
+                  # сигналы startRequested(object, object)/stopRequested/
+                  # setValuesRequested(str,int,list)/logLine;
+                  # set_running(ok, message), running_description(),
+                  # state()/set_state() = {"server": {...}, "rows": [...]}
   connection_panel.py  # параметры подключения (TCP / RTU / RTU over TCP /
                        # RTU over UDP — страницы network/serial; тип в комбо
                        # лежит в itemData английским, переводится только
@@ -439,11 +475,24 @@ src/modbus_connector/
   session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
                     # RegistersPanel + LogPanel + ScannerPanel (окно) +
                     # ModbusWorker в QThread, вся проводка сигналов внутри;
+                    # режим Master/Slave: тонкая строка (QLabel "Mode:" +
+                    # FitComboBox, ключи master/slave в itemData) между панелью
+                    # подключения и центральным QStackedWidget
+                    # (registers_panel | sim_panel); в slave connection_panel и
+                    # кнопки Scanner…/Graph… скрываются, LogPanel общая;
+                    # комбо режима disabled, пока master подключён или
+                    # sim-сервер запущен (_sync_mode_lock);
+                    # SimPanel + SimWorker во втором QThread (создаются сразу,
+                    # shutdown() останавливает оба: invokeMethod shutdown
+                    # BlockingQueuedConnection);
+                    # заголовок вкладки в slave — describe_sim(params) при
+                    # запущенном сервере, иначе "Simulator";
                     # connectionChanged → set_bus_enabled(ok) панели/сканера/
                     # окна графика, при разрыве — stop_logging + stop_polling;
-                    # state()/set_state() (connection+registers+
-                    # registers_options+expressions+logging+scanner,
-                    # backward compat со старым плоским форматом),
+                    # state()/set_state() (mode+connection+registers+
+                    # registers_options+expressions+logging+scanner+sim;
+                    # mode применяется ДО панелей, старые state без mode —
+                    # master, backward compat со старым плоским форматом),
                     # shutdown() — stop_logging + корректная остановка
                     # worker/потока;
                     # сигналы statsUpdated(object) и titleChanged(str)
@@ -530,7 +579,19 @@ tests/
                           # строк, фильтр Only differences, строки без данных,
                           # Refresh/Take new snapshot, перезапись снапшота,
                           # "(removed)" для удалённых строк
-  test_session_widget.py   # smoke: state round-trip + shutdown сессии
+  test_session_widget.py   # smoke: state round-trip + shutdown сессии;
+                           # режим Master/Slave: mode+sim в state round-trip,
+                           # видимость панелей, блокировка комбо режима,
+                           # заголовок вкладки, shutdown в slave
+  test_sim_backend.py      # SimBackend: start/stop TCP/RTU, занятый порт,
+                           # записи мастера (хук), set/get_values
+  test_sim_worker.py       # SimWorker в QThread: start/stop, masterWrote,
+                           # requestLine, clientChanged, tick, set/get через
+                           # invokeMethod (маршаллинг Q_ARG/Q_RETURN_ARG)
+  test_sim_panel.py        # SimPanel: add/remove строк, state round-trip
+                           # (server+rows, толерантный разбор), шаблон в карту,
+                           # masterWrote → Value, правка Value →
+                           # setValuesRequested, start эмитит params+push строк
   test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
                            # закрытие вкладок
   test_scanner_panel.py    # probes-таблица (текстовые ячейки, пропуск

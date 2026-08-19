@@ -59,6 +59,13 @@ class SimTcpParams:
     port: int = 1502
 
 
+def describe_sim(params: "SimTcpParams | RtuParams") -> str:
+    """Короткая подпись симулятора («sim tcp host:port») для заголовка вкладки."""
+    if isinstance(params, SimTcpParams):
+        return f"sim tcp {params.host}:{params.port}"
+    return f"sim rtu {params.port}"
+
+
 def _format_request(request: ModbusPDU) -> str:
     """Человекочитаемая строка запроса: «read holding_registers unit=1 @0 x4»."""
     fc = int(request.function_code)

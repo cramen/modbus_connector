@@ -142,3 +142,88 @@ def test_bus_controls_follow_connection(qapp: QApplication, tmp_path) -> None:
     # survives into later palette/layout passes — see tests/test_graph_window
     session.deleteLater()
     qapp.processEvents()
+
+
+def test_slave_mode_state_roundtrip(qapp: QApplication) -> None:
+    session = SessionWidget()
+    assert session.state()["mode"] == "master"  # default / backward compat
+    session.set_state(
+        {
+            "mode": "slave",
+            "sim": {
+                "server": {"type": "TCP", "host": "0.0.0.0", "port": 1600, "unit": 3},
+                "rows": [
+                    {"name": "x", "kind": "coils", "address": 0, "count": 1,
+                     "values": [True]}
+                ],
+            },
+        }
+    )
+    collected = session.state()
+    assert collected["mode"] == "slave"
+    assert collected["sim"]["server"]["port"] == 1600
+    assert collected["sim"]["server"]["unit"] == 3
+    assert collected["sim"]["rows"][0]["values"] == [True]
+    # master-часть state на месте
+    assert "connection" in collected and "registers" in collected
+    session.set_state({"mode": "junk"})  # неизвестный режим игнорируется
+    assert session.state()["mode"] == "slave"
+    session.shutdown()
+
+
+def test_slave_mode_visibility(qapp: QApplication) -> None:
+    session = SessionWidget()
+    assert session._center_stack.currentWidget() is session.registers_panel
+    session.set_state({"mode": "slave"})
+    assert session._center_stack.currentWidget() is session.sim_panel
+    assert session.connection_panel.isHidden()
+    assert session._scanner_button.isHidden()
+    assert session._graph_button.isHidden()
+    session.set_state({"mode": "master"})
+    assert session._center_stack.currentWidget() is session.registers_panel
+    assert not session.connection_panel.isHidden()
+    assert not session._scanner_button.isHidden()
+    session.shutdown()
+
+
+def test_mode_combo_locking(qapp: QApplication) -> None:
+    session = SessionWidget()
+    combo = session._mode_combo
+    assert combo.isEnabled()
+    # master подключён — режим менять нельзя
+    session._on_connection_changed(True, "Connected (tcp 127.0.0.1:502)")
+    assert not combo.isEnabled()
+    session._on_connection_changed(False, "Disconnected")
+    assert combo.isEnabled()
+    # sim-сервер запущен — тоже нельзя
+    session.set_state({"mode": "slave"})
+    session._on_sim_server_changed(True, "Simulator running (tcp 127.0.0.1:1502)")
+    assert not combo.isEnabled()
+    assert session.title() == "Simulator"  # panel не знает params — общий ключ
+    session._on_sim_server_changed(False, "Stopped")
+    assert combo.isEnabled()
+    session.shutdown()
+
+
+def test_slave_title_follows_server(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state({"mode": "slave"})
+    assert session.title() == "Simulator"
+    # запуск из панели: params известны → заголовок с описанием сервера;
+    # startRequested отключён от worker'а, чтобы не поднять реальный сервер
+    session.sim_panel.startRequested.disconnect()
+    session.sim_panel._button.click()
+    session.sim_panel.set_running(True, "Simulator running (tcp 127.0.0.1:1502)")
+    session._on_sim_server_changed(True, "Simulator running (tcp 127.0.0.1:1502)")
+    assert session.title() == "sim tcp 127.0.0.1:1502"
+    session.sim_panel.set_running(False, "Stopped")
+    session._on_sim_server_changed(False, "Stopped")
+    assert session.title() == "Simulator"
+    session.shutdown()
+
+
+def test_shutdown_in_slave_mode(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state({"mode": "slave"})
+    session.shutdown()  # оба потока останавливаются без зависания
+    session.shutdown()  # идемпотентно
