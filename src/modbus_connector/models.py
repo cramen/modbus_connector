@@ -3,7 +3,7 @@ import csv
 import io
 import math
 import struct
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import CodeType
 from typing import Literal, get_args
@@ -638,24 +638,40 @@ _EXPRESSION_UNARY_OPS = (ast.UAdd, ast.USub)
 class Expression:
     """Скомпилированное выражение над значениями строк регистров.
 
-    text — исходная строка, deps — имена строк-зависимостей (ссылки [имя]).
-    evaluate(values): значения приводятся к float; математические ошибки
-    (деление на 0, выход за область определения, переполнение, неверная
-    арность функции) не бросаются, а дают float("nan"); отсутствующая
-    в values зависимость — KeyError с именем строки.
+    text — исходная строка, deps — имена строк-зависимостей (ссылки [имя]),
+    names — дополнительные голые имена (extra_names из parse_expression),
+    реально использованные в выражении (в deps НЕ входят).
+    evaluate(values, names=...): значения приводятся к float; refs ищутся
+    в values, extra-имена — в names; отсутствующая зависимость — KeyError
+    с её именем (семантика одинаковая для обоих маппингов). Математические
+    ошибки (деление на 0, выход за область определения, переполнение,
+    неверная арность функции) не бросаются, а дают float("nan").
     """
 
     text: str
     deps: frozenset[str]
     _code: CodeType = field(repr=False, compare=False)
     _refs: dict[str, str] = field(repr=False, compare=False)  # плейсхолдер -> имя строки
+    names: frozenset[str] = frozenset()
+    _functions: Mapping[str, Callable[..., float]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
-    def evaluate(self, values: Mapping[str, float]) -> float:
+    def evaluate(
+        self, values: Mapping[str, float], *, names: Mapping[str, float] | None = None
+    ) -> float:
         local_vars = {
             placeholder: float(values[name]) for placeholder, name in self._refs.items()
         }
+        if self.names:
+            extra = names if names is not None else {}
+            for name in self.names:
+                local_vars[name] = float(extra[name])
+        eval_globals: dict[str, object] = _EXPRESSION_GLOBALS
+        if self._functions:
+            eval_globals = {**_EXPRESSION_GLOBALS, **self._functions}
         try:
-            result = eval(self._code, _EXPRESSION_GLOBALS, local_vars)
+            result = eval(self._code, eval_globals, local_vars)
         except (ArithmeticError, ValueError, TypeError):
             return float("nan")
         return float(result)
@@ -684,33 +700,38 @@ def _extract_refs(text: str) -> tuple[str, list[str]]:
 
 
 def _validate_expression_node(
-    node: ast.AST, refs: dict[str, str], seen: set[str]
+    node: ast.AST,
+    refs: dict[str, str],
+    seen: set[str],
+    functions: Mapping[str, Callable[..., float]],
+    extra_names: frozenset[str],
+    used_names: set[str],
 ) -> None:
     """Строгая проверка AST: только числа, refs, pi/e, арифметика и whitelisted вызовы."""
     if isinstance(node, ast.Expression):
-        _validate_expression_node(node.body, refs, seen)
+        _validate_expression_node(node.body, refs, seen, functions, extra_names, used_names)
     elif isinstance(node, ast.BinOp):
         if not isinstance(node.op, _EXPRESSION_BIN_OPS):
             raise ValueError(f"Недопустимая операция {type(node.op).__name__} в выражении")
-        _validate_expression_node(node.left, refs, seen)
-        _validate_expression_node(node.right, refs, seen)
+        _validate_expression_node(node.left, refs, seen, functions, extra_names, used_names)
+        _validate_expression_node(node.right, refs, seen, functions, extra_names, used_names)
     elif isinstance(node, ast.UnaryOp):
         if not isinstance(node.op, _EXPRESSION_UNARY_OPS):
             raise ValueError(f"Недопустимая операция {type(node.op).__name__} в выражении")
-        _validate_expression_node(node.operand, refs, seen)
+        _validate_expression_node(node.operand, refs, seen, functions, extra_names, used_names)
     elif isinstance(node, ast.Call):
         if not isinstance(node.func, ast.Name):
             raise ValueError("Вызов не-функции не поддерживается")
         func_id = node.func.id
         if func_id in refs:
             raise ValueError(f"Ссылка [{refs[func_id]}] не является функцией")
-        if func_id not in EXPRESSION_FUNCTIONS:
-            allowed = ", ".join(sorted(EXPRESSION_FUNCTIONS))
+        if func_id not in functions:
+            allowed = ", ".join(sorted(functions))
             raise ValueError(f"Неизвестная функция {func_id!r} (доступны: {allowed})")
         if node.keywords:
             raise ValueError("Именованные аргументы не поддерживаются")
         for arg in node.args:
-            _validate_expression_node(arg, refs, seen)
+            _validate_expression_node(arg, refs, seen, functions, extra_names, used_names)
     elif isinstance(node, ast.Constant):
         if isinstance(node.value, bool) or not isinstance(node.value, int | float):
             raise ValueError(f"Недопустимый литерал {node.value!r}: только числа")
@@ -721,6 +742,8 @@ def _validate_expression_node(
             if node.id in seen:
                 raise ValueError(f"Недопустимое имя {node.id!r} в выражении")
             seen.add(node.id)
+        elif node.id in extra_names:
+            used_names.add(node.id)
         elif node.id not in EXPRESSION_CONSTANTS:
             raise ValueError(
                 f"Неизвестное имя {node.id!r}: ссылки на строки пишутся как [имя], "
@@ -730,7 +753,20 @@ def _validate_expression_node(
         raise ValueError(f"Недопустимая конструкция {type(node).__name__} в выражении")
 
 
-def parse_expression(text: str) -> Expression:
+def _check_extra_name(name: str, kind: str, taken: Mapping[str, object]) -> None:
+    """Проверить доп. имя (функция/переменная): идентификатор без конфликтов."""
+    if not name.isidentifier() or name.startswith("__ref_"):
+        raise ValueError(f"Недопустимое имя {kind} {name!r}")
+    if name in EXPRESSION_FUNCTIONS or name in EXPRESSION_CONSTANTS or name in taken:
+        raise ValueError(f"Имя {kind} {name!r} конфликтует с существующим")
+
+
+def parse_expression(
+    text: str,
+    *,
+    extra_functions: Mapping[str, Callable[..., float]] | None = None,
+    extra_names: Iterable[str] | None = None,
+) -> Expression:
     """Разобрать выражение вида ([temperature] + [flow rate]) / 2.
 
     Ссылки на строки — [имя] (имена могут содержать пробелы и юникод).
@@ -738,17 +774,33 @@ def parse_expression(text: str) -> Expression:
     константы pi/e и функции из EXPRESSION_FUNCTIONS. Всё остальное
     (атрибуты, подзапросы, присваивания, лямбды, произвольные имена) —
     ValueError с читаемым сообщением.
+
+    extra_functions — дополнительные разрешённые функции поверх
+    EXPRESSION_FUNCTIONS (глобальный whitelist не меняется); конфликт имён
+    с существующими функциями/константами — ValueError. extra_names —
+    дополнительные разрешённые голые имена (значения подаются в evaluate
+    отдельным маппингом names=); в deps не входят.
     """
+    functions: dict[str, Callable[..., float]] = dict(extra_functions or {})
+    for func_name in functions:
+        _check_extra_name(func_name, "функции", {})
+    names_allowed = frozenset(extra_names or ())
+    for extra_name in names_allowed:
+        _check_extra_name(extra_name, "переменной", functions)
     substituted, ref_names = _extract_refs(text)
     try:
         tree = ast.parse(substituted, mode="eval")
     except SyntaxError as exc:
         raise ValueError(f"Некорректный синтаксис выражения: {text!r}") from exc
     refs = {f"__ref_{i}": name for i, name in enumerate(ref_names)}
-    _validate_expression_node(tree, refs, set())
+    used_names: set[str] = set()
+    all_functions: dict[str, Callable[..., float]] = {**EXPRESSION_FUNCTIONS, **functions}
+    _validate_expression_node(tree, refs, set(), all_functions, names_allowed, used_names)
     return Expression(
         text=text,
         deps=frozenset(ref_names),
         _code=compile(tree, "<expression>", "eval"),
         _refs=refs,
+        names=frozenset(used_names),
+        _functions=functions,
     )

@@ -739,3 +739,108 @@ class TestExpressionParseErrors:
         # плейсхолдер, подставленный за [a], нельзя «переиспользовать» руками
         with pytest.raises(ValueError):
             parse_expression("[a] + __ref_0")
+
+
+class TestExpressionExtensions:
+    @staticmethod
+    def _rand() -> float:
+        # детерминированный «rand» для тестов
+        return 0.25
+
+    @staticmethod
+    def _randint(lo: float, hi: float) -> float:
+        return float(int((lo + hi) // 2))
+
+    def test_extra_function_accepted_and_evaluated(self) -> None:
+        expr = parse_expression("rand() + [a]", extra_functions={"rand": self._rand})
+        assert expr.evaluate({"a": 1.0}) == 1.25
+
+    def test_extra_function_with_args(self) -> None:
+        expr = parse_expression(
+            "randint(0, 10) * 2",
+            extra_functions={"randint": self._randint},
+        )
+        assert expr.evaluate({}) == 10.0
+
+    def test_extra_function_math_error_gives_nan(self) -> None:
+        def bad() -> float:
+            raise ArithmeticError
+
+        expr = parse_expression("bad()", extra_functions={"bad": bad})
+        assert math.isnan(expr.evaluate({}))
+
+    def test_extra_functions_do_not_leak_into_plain_parse(self) -> None:
+        with pytest.raises(ValueError, match="Неизвестная функция 'rand'"):
+            parse_expression("rand()")
+
+    def test_extra_function_name_conflict_rejected(self) -> None:
+        with pytest.raises(ValueError, match="конфликтует"):
+            parse_expression("sqrt(4)", extra_functions={"sqrt": lambda x: x})
+        with pytest.raises(ValueError, match="конфликтует"):
+            parse_expression("pi", extra_functions={"pi": self._rand})
+
+    def test_extra_function_invalid_name_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Недопустимое имя"):
+            parse_expression("1", extra_functions={"__ref_0": self._rand})
+
+    def test_extra_names_accepted_and_evaluated(self) -> None:
+        expr = parse_expression("t * 2 + prev", extra_names={"t", "prev"})
+        assert expr.evaluate({}, names={"t": 3.0, "prev": 0.5}) == 6.5
+
+    def test_extra_names_mixed_with_refs(self) -> None:
+        expr = parse_expression("[base] + t", extra_names={"t"})
+        assert expr.deps == frozenset({"base"})
+        assert expr.evaluate({"base": 10.0}, names={"t": 1.5}) == 11.5
+
+    def test_extra_names_not_in_deps(self) -> None:
+        expr = parse_expression("[a] + t + prev", extra_names={"t", "prev"})
+        assert expr.deps == frozenset({"a"})
+        assert expr.names == frozenset({"t", "prev"})
+
+    def test_unused_extra_names_not_stored(self) -> None:
+        expr = parse_expression("t + 1", extra_names={"t", "prev"})
+        assert expr.names == frozenset({"t"})
+
+    def test_missing_extra_name_raises_key_error(self) -> None:
+        expr = parse_expression("t + 1", extra_names={"t"})
+        with pytest.raises(KeyError):
+            expr.evaluate({}, names={})
+        with pytest.raises(KeyError):
+            expr.evaluate({})
+
+    def test_extra_names_do_not_leak_into_plain_parse(self) -> None:
+        with pytest.raises(ValueError, match="Неизвестное имя 't'"):
+            parse_expression("t + 1")
+
+    def test_extra_name_conflict_rejected(self) -> None:
+        with pytest.raises(ValueError, match="конфликтует"):
+            parse_expression("pi + 1", extra_names={"pi"})
+        with pytest.raises(ValueError, match="конфликтует"):
+            parse_expression("1", extra_names={"sqrt"})
+        with pytest.raises(ValueError, match="конфликтует"):
+            parse_expression(
+                "1", extra_functions={"rand": self._rand}, extra_names={"rand"}
+            )
+
+    def test_extra_name_placeholder_like_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Недопустимое имя"):
+            parse_expression("1", extra_names={"__ref_0"})
+
+    def test_plain_expression_unchanged(self) -> None:
+        expr = parse_expression("[a] + pi")
+        assert expr.names == frozenset()
+        assert expr.evaluate({"a": 1.0}) == pytest.approx(1.0 + math.pi)
+
+    def test_injections_still_rejected_with_extensions(self) -> None:
+        with pytest.raises(ValueError):
+            parse_expression(
+                "__import__('os').system('echo pwned')",
+                extra_functions={"rand": self._rand},
+                extra_names={"t"},
+            )
+        with pytest.raises(ValueError):
+            parse_expression("t.__class__", extra_names={"t"})
+        with pytest.raises(ValueError):
+            parse_expression("rand.__globals__", extra_functions={"rand": self._rand})
+        with pytest.raises(ValueError):
+            parse_expression("t(1)", extra_names={"t"})
