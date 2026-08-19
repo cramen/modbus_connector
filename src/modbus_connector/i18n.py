@@ -199,6 +199,7 @@ RU: dict[str, str] = {
     "✗ failed to read {path}: {exc}": "✗ не удалось прочитать {path}: {exc}",
     "✗ failed to import {path}: {exc}": "✗ не удалось импортировать {path}: {exc}",
     "✗ failed to write {path}: {exc}": "✗ не удалось записать {path}: {exc}",
+    "✗ failed to load template {name}: {exc}": "✗ не удалось загрузить шаблон {name}: {exc}",
     "← imported {count} rows from {path}":
         "← импортировано строк: {count} из {path}",
     "→ exported {count} rows to {path}": "→ экспортировано строк: {count} в {path}",
@@ -298,6 +299,7 @@ RU: dict[str, str] = {
     "Choose a log file": "Выберите файл записи",
     # log panel
     "Clear": "Очистить",
+    "Raw": "Raw",
     "Save…": "Сохранить…",
     "Save Log": "Сохранить лог",
     "✗ failed to save log to {path}: {exc}":
@@ -385,10 +387,12 @@ RU: dict[str, str] = {
     "Unit range:": "Диапазон unit:",
     "Type:": "Тип:",
     "Addresses:": "Адреса:",
+    "Address:": "Адрес:",
     "Results:": "Результаты:",
     "Registers scan:": "Скан регистров:",
     "Unit {unit} — device identification (0x2B/0x0E)":
         "Unit {unit} — идентификация устройства (0x2B/0x0E)",
+    "Unit {unit}: {labels}": "Unit {unit}: {labels}",
     "Bool": "Логич.",
     # graph window
     "Graph": "График",

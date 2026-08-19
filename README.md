@@ -65,7 +65,9 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Expressions (the fx toolbar button): a block of computed rows under the
   table — "[name]" references a row's scaled value, arithmetic, pi/e and
   functions (abs, sqrt, sin, min, max, clamp, …) are allowed; each expression
-  has a trend sparkline and joins the graph window as an "fx name" series.
+  has a trend sparkline, joins the graph window as an "fx name" series, can
+  carry alarm rules like a regular row, and offers autocompletion (register
+  names and functions) while typing.
 - Advanced protocol functions: Mask Write Register (0x16), Read/Write Multiple
   Registers (0x17), Read Device Identification (0x2B) and serial-line
   Diagnostics (0x08) — via dedicated dialogs.
@@ -134,6 +136,11 @@ Snapshot diff — capture the current values, read again later and compare;
 changed rows are highlighted:
 
 ![Snapshot diff](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/snapshot_diff.png)
+
+Expressions — computed rows over register values, with trend sparklines
+(the fx toolbar button):
+
+![Expressions](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/expressions.png)
 
 ## Requirements
 
