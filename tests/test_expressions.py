@@ -14,11 +14,24 @@ try:
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
+from PySide6.QtCore import QModelIndex  # noqa: E402
+from PySide6.QtGui import QColor  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
+    QCompleter,
+    QDialog,
+    QStyleOptionViewItem,
+    QWidget,
+)
+
+from modbus_connector import theme  # noqa: E402
+from modbus_connector.alarms_dialog import COL_VALUE, AlarmsDialog  # noqa: E402
+from modbus_connector.models import AlarmRule, alarm_rule_to_json  # noqa: E402
 from modbus_connector.registers_panel import (  # noqa: E402
     COL_NAME,
     EXPR_COL_EXPR,
     EXPR_COL_NAME,
     EXPR_COL_VALUE,
+    ExpressionDelegate,
     RegistersPanel,
 )
 
@@ -175,14 +188,17 @@ def test_state_round_trip_expressions(qapp: QApplication) -> None:
     panel._add_expression("broken", "[temp] +")  # invalid, loads back as ⚠
     state = panel.expressions_state()
     assert state == [
-        {"name": "t2", "expr": "[temp] * 2"},
-        {"name": "broken", "expr": "[temp] +"},
+        {"name": "t2", "expr": "[temp] * 2", "alarms": []},
+        {"name": "broken", "expr": "[temp] +", "alarms": []},
     ]
 
     other = _panel()
     other.set_expressions_state(state + ["garbage", {"name": 1}, {}])
     # tolerant parse: junk entries are skipped, {"name": 1} loads as name "1"
-    assert other.expressions_state() == [*state, {"name": "1", "expr": ""}]
+    assert other.expressions_state() == [
+        *state,
+        {"name": "1", "expr": "", "alarms": []},
+    ]
     assert _expr_value(other, 1) == "⚠"  # invalid expr loads with a warning
     item = other._expr_table.item(1, EXPR_COL_VALUE)
     assert item is not None and item.toolTip()
@@ -251,3 +267,261 @@ def test_graph_checklist_lists_expressions(qapp: QApplication) -> None:
     finally:
         window.close()
         window.deleteLater()
+
+
+# --- history clearing ---------------------------------------------------------
+
+
+def test_graph_clear_clears_expression_history(qapp: QApplication) -> None:
+    pytest.importorskip("pyqtgraph")
+    from modbus_connector.graph_window import GraphWindow
+
+    panel = _panel()
+    panel._add_expression("t2", "[temp] * 2")
+    expr_token = panel.expr_tokens()[0]
+    window = GraphWindow(panel)
+    try:
+        panel.start_polling(True)  # record mode: history is captured
+        panel.handle_read_finished(_read_row(panel, 0), True, [3], "")
+        assert len(panel.expr_series(expr_token)) == 1
+        assert len(panel.series(panel._token_at(0))) == 1
+
+        window._on_clear()  # Clear of the graph window wipes everything
+        assert len(panel.expr_series(expr_token)) == 0
+        assert len(panel.series(panel._token_at(0))) == 0
+    finally:
+        panel.stop_polling()
+        window.close()
+        window.deleteLater()
+
+
+def test_register_history_clear_keeps_expression_history(qapp: QApplication) -> None:
+    panel = _panel()
+    panel._add_expression("t2", "[temp] * 2")
+    expr_token = panel.expr_tokens()[0]
+    panel.start_polling(True)
+    panel.handle_read_finished(_read_row(panel, 0), True, [3], "")
+
+    panel._clear_register_series()  # the table's "Clear history" context action
+    assert len(panel.series(panel._token_at(0))) == 0
+    assert len(panel.expr_series(expr_token)) == 1  # expressions stay
+
+    panel.clear_series()  # the graph's global Clear wipes expressions too
+    assert len(panel.expr_series(expr_token)) == 0
+    panel.stop_polling()
+
+
+# --- help ---------------------------------------------------------------------
+
+
+def test_expressions_help_button_opens_dialog(qapp: QApplication) -> None:
+    from PySide6.QtWidgets import QTextBrowser
+
+    panel = _panel()
+    panel._expr_help_button.click()
+    dialog = next(
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if isinstance(widget, QDialog) and widget.windowTitle() == "Expressions — Help"
+    )
+    text = dialog.findChild(QTextBrowser).toPlainText()
+    assert "[name]" in text
+    assert "clamp" in text
+    dialog.close()
+    qapp.processEvents()  # WA_DeleteOnClose
+    assert all(
+        not (
+            isinstance(widget, QDialog)
+            and widget.windowTitle() == "Expressions — Help"
+        )
+        for widget in QApplication.topLevelWidgets()
+    )
+
+
+# --- alarms on expressions -----------------------------------------------------
+
+
+def _expr_panel_with_rule(
+    rule: AlarmRule, expr_text: str = "[temp] * 2"
+) -> tuple[RegistersPanel, int, list[str]]:
+    panel = _panel()
+    token = panel._add_expression("t2", expr_text)
+    panel._expr_alarms[token] = [rule]
+    lines: list[str] = []
+    panel.logLine.connect(lines.append)
+    return panel, token, lines
+
+
+def test_alarms_dialog_lists_and_applies_expression_rules(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel = _panel()
+    expr_token = panel._add_expression("t2", "[temp] * 2")
+    seen_labels: list[str] = []
+
+    def fake_exec(dialog: AlarmsDialog) -> QDialog.DialogCode:
+        seen_labels.extend(
+            dialog._rows_list.item(i).text() for i in range(dialog._rows_list.count())
+        )
+        dialog._rows_list.setCurrentRow(1)  # the expression entry
+        dialog._add_rule()
+        dialog._table.item(0, COL_VALUE).setText("5")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(AlarmsDialog, "exec", fake_exec)
+    panel._on_alarms()
+    assert seen_labels == ["temp", "fx t2"]  # expressions listed with fx prefix
+    assert panel._expr_alarms[expr_token] == [AlarmRule("gt", 5)]
+    assert panel._row_display[panel._token_at(0)].alarms == []  # registers untouched
+
+
+def test_expression_alarm_state_round_trip(qapp: QApplication) -> None:
+    rules = [
+        AlarmRule("gt", 5, color="yellow"),
+        AlarmRule("in_range", 1, 2, sound=True),
+    ]
+    panel = _panel()
+    token = panel._add_expression("t2", "[temp] * 2")
+    panel._expr_alarms[token] = rules
+    state = panel.expressions_state()
+    assert state[0]["alarms"] == [alarm_rule_to_json(rule) for rule in rules]
+
+    other = _panel()
+    other.set_expressions_state(state)
+    assert other._expr_alarms[other.expr_tokens()[0]] == rules
+
+    other.set_expressions_state(  # tolerant: junk rules are skipped
+        [{"name": "x", "expr": "1",
+          "alarms": [{"condition": "gt", "value": 1}, "junk"]}]
+    )
+    assert other._expr_alarms[other.expr_tokens()[0]] == [AlarmRule("gt", 1)]
+
+
+def test_expression_alarm_highlight_and_edge_log(qapp: QApplication) -> None:
+    theme.apply_theme("light")  # the alarm color is theme-dependent: pin it
+    panel, token, lines = _expr_panel_with_rule(AlarmRule("gt", 5))
+    item = panel._expr_table.item(0, EXPR_COL_VALUE)
+    assert item is not None
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [3], "")  # expr = 6
+    assert item.background().color() == QColor(0xF5, 0xB7, 0xB1)  # light red
+    alarm_lines = [line for line in lines if "ALARM" in line]
+    assert alarm_lines == ["ALARM fx t2: 6 > 5"]  # logged once on the edge
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [10], "")  # 20: still on
+    alarm_lines = [line for line in lines if "ALARM" in line]
+    assert alarm_lines == ["ALARM fx t2: 6 > 5"]  # no new line
+
+    panel.handle_read_finished(_read_row(panel, 0), True, [1], "")  # 2: cleared
+    assert item.background().style() == Qt.BrushStyle.NoBrush
+    assert token not in panel._active_alarms
+    alarm_lines = [line for line in lines if "ALARM" in line]
+    assert alarm_lines[-1] == "ALARM cleared fx t2"
+    theme.apply_theme("system")  # restore the app-global theme
+
+
+def test_expression_dash_never_alarms(qapp: QApplication) -> None:
+    panel, token, lines = _expr_panel_with_rule(AlarmRule("gt", 0), "[ghost] + 1")
+    panel.handle_read_finished(_read_row(panel, 0), True, [3], "")
+    assert _expr_value(panel, 0) == "—"  # KeyError: no such row
+    assert token not in panel._active_alarms
+    assert not any("ALARM" in line for line in lines)
+
+    _set_expr(panel, 0, "1 / 0")  # nan: math error
+    panel.handle_read_finished(_read_row(panel, 0), True, [4], "")
+    assert _expr_value(panel, 0) == "—"
+    assert token not in panel._active_alarms
+    assert not any("ALARM" in line for line in lines)
+
+
+def test_expression_warning_clears_active_alarm(qapp: QApplication) -> None:
+    panel, token, lines = _expr_panel_with_rule(AlarmRule("gt", 5))
+    panel.handle_read_finished(_read_row(panel, 0), True, [3], "")  # 6: alarm on
+    assert token in panel._active_alarms
+
+    _set_expr(panel, 0, "[temp] +")  # commit garbage: ⚠ has no number
+    item = panel._expr_table.item(0, EXPR_COL_VALUE)
+    assert item is not None
+    assert item.text() == "⚠"
+    assert token not in panel._active_alarms  # cleared per the usual semantics
+    assert item.background().color() == theme.alarm_color("red")  # error paint stays
+    assert "ALARM cleared fx t2" in lines
+
+    _set_expr(panel, 0, "[temp] - 4")  # valid again, 3 - 4 = -1: below the rule
+    assert token not in panel._active_alarms
+    panel.handle_read_finished(_read_row(panel, 0), True, [10], "")  # 6: fresh edge
+    assert token in panel._active_alarms
+    assert lines[-1] == "ALARM fx t2: 6 > 5"
+
+
+# --- expression cell autocompletion --------------------------------------------
+
+
+def _expr_editor(panel: RegistersPanel) -> tuple[QWidget, QCompleter]:
+    delegate = panel._expr_table.itemDelegateForColumn(EXPR_COL_EXPR)
+    assert isinstance(delegate, ExpressionDelegate)
+    editor = delegate.createEditor(
+        panel._expr_table, QStyleOptionViewItem(), QModelIndex()
+    )
+    completer = editor.findChild(QCompleter)
+    assert completer is not None
+    return editor, completer
+
+
+def test_expression_completer_offers_names_functions_constants(
+    qapp: QApplication,
+) -> None:
+    panel = _panel()
+    editor, completer = _expr_editor(panel)
+    model = completer.model()
+
+    editor.setText("[t")  # inside a reference: register row names, closed
+    assert "temp]" in model.stringList()
+
+    editor.setText("sq")  # a word start: functions with an opening paren
+    assert "sqrt(" in model.stringList()
+
+    editor.setText("p")
+    words = model.stringList()
+    assert "pi" in words  # constants are offered too
+    assert "pow(" in words
+    assert "e" in words
+
+
+def test_expression_completer_follows_row_renames(qapp: QApplication) -> None:
+    panel = _panel()
+    editor, completer = _expr_editor(panel)
+    model = completer.model()
+
+    editor.setText("[t")
+    assert model.stringList() == ["temp]"]
+
+    name_item = panel._table.item(0, COL_NAME)
+    assert name_item is not None
+    name_item.setText("renamed")
+    editor.setText("[r")
+    assert model.stringList() == ["renamed]"]
+
+
+def test_expression_completer_inserts_completion(qapp: QApplication) -> None:
+    from PySide6.QtTest import QTest
+
+    panel = _panel()
+    editor, completer = _expr_editor(panel)
+    editor.show()  # the popup opens only for a visible editor
+    try:
+        editor.setText("[te")
+        popup = completer.popup()
+        assert popup.isVisible()
+        popup.setCurrentIndex(completer.completionModel().index(0, 0))
+        QTest.keyClick(popup, Qt.Key.Key_Return)  # inserts, does not commit a cell
+        assert editor.text() == "[temp]"
+
+        editor.setText("sq")
+        assert popup.isVisible()
+        popup.setCurrentIndex(completer.completionModel().index(0, 0))
+        QTest.keyClick(popup, Qt.Key.Key_Return)
+        assert editor.text() == "sqrt("
+    finally:
+        editor.close()
+        editor.deleteLater()

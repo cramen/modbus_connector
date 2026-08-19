@@ -43,7 +43,8 @@ arithmetic (+ - * / // % **), parentheses, pi/e and functions
 (abs, sqrt, sin, cos, log, min, max, clamp, …) are allowed. Each expression
 has a trend sparkline and appears in the graph window as "fx name"; history
 is recorded in poll-and-record mode only. An invalid expression shows ⚠
-with the error in the tooltip.</li>
+with the error in the tooltip. Alarm rules apply to expressions as well —
+they appear in the Alarms… dialog as "fx name".</li>
 <li><b>Snapshot</b> remembers the current raw values of all rows;
 <b>Diff…</b> (enabled after a snapshot) opens a window comparing them with
 the latest reads — changed rows are highlighted, "(removed)" marks rows
@@ -88,6 +89,55 @@ readout with every series' value at that time (nearest sample).</li>
 <li><b>Clear</b> wipes the recorded history and restarts the time axis.</li>
 <li><b>Start polling and record</b> drives the register table's polling from
 here; while it records, the button stops it.</li>
+</ul>
+"""
+
+EXPRESSIONS_HELP = """
+<h3>Expressions</h3>
+<p>The expressions block (the <b>Expressions</b> toolbar button) holds computed
+rows over register values. Every expression is re-evaluated after each read,
+using the <b>scaled</b> primary values of the referenced rows (scale/offset
+applied; hex/ascii rows are not numeric and cannot be referenced).</p>
+<h4>Syntax</h4>
+<ul>
+<li><b>[name]</b> — reference to a register row by its Name (spaces and
+unicode are allowed): <code>([temp] + [flow rate]) / 2</code></li>
+<li>Numbers (incl. <code>1e3</code>), parentheses, operators
+<code>+ - * / // % **</code>, unary <code>+/-</code></li>
+<li>Constants: <b>pi</b>, <b>e</b></li>
+<li>The Expression cell auto-completes: typing <b>[</b> offers register row
+names, a word start offers functions and constants (Enter inserts, Esc
+closes the popup).</li>
+</ul>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Function</th><th>Meaning</th></tr>
+<tr><td>abs(x)</td><td>absolute value</td></tr>
+<tr><td>sqrt(x)</td><td>square root</td></tr>
+<tr><td>exp(x)</td><td>e raised to x</td></tr>
+<tr><td>log(x) / log2(x) / log10(x)</td><td>natural / base-2 / base-10
+logarithm</td></tr>
+<tr><td>sin(x) / cos(x) / tan(x)</td><td>trigonometry (radians)</td></tr>
+<tr><td>asin(x) / acos(x) / atan(x)</td><td>inverse trigonometry
+(radians)</td></tr>
+<tr><td>floor(x) / ceil(x) / round(x)</td><td>round down / up / to
+nearest</td></tr>
+<tr><td>min(a, b, …) / max(a, b, …)</td><td>smallest / largest of the
+arguments</td></tr>
+<tr><td>pow(x, y)</td><td>x to the power y (same as x**y)</td></tr>
+<tr><td>clamp(x, lo, hi)</td><td>limit x to the range [lo, hi]</td></tr>
+</table>
+<h4>Behavior</h4>
+<ul>
+<li><b>—</b> — no value: a referenced row is missing or not read yet, or the
+evaluation failed (division by zero, out-of-domain, overflow).</li>
+<li><b>⚠</b> — syntax error; the cell tooltip shows the error text. Fix the
+expression to recover.</li>
+<li>Each expression has a trend sparkline and appears in the graph window as
+"fx name"; history is recorded in poll-and-record mode only and is wiped by
+the graph's <b>Clear</b>.</li>
+<li>Alarm rules apply to expressions too: they are listed in the
+<b>Alarms…</b> dialog as "fx name" and paint the expression's Value cell
+(the computed value is compared, "—" and "⚠" never match).</li>
 </ul>
 """
 
@@ -175,7 +225,8 @@ inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
 (abs, sqrt, sin, cos, log, min, max, clamp, …). У каждого выражения свой
 спарклайн, а в окне графика оно видно как «fx имя»; история пишется только
 в режиме опроса с записью. Невалидное выражение показывает ⚠, текст ошибки —
-в подсказке ячейки.</li>
+в подсказке ячейки. Алармы работают и на выражения — в диалоге «Алармы…»
+они показаны как «fx имя».</li>
 <li><b>Снапшот</b> запоминает текущие raw-значения всех строк;
 <b>Сравнение…</b> (активно после снапшота) открывает окно сравнения с
 последними чтениями — изменённые строки подсвечены, «(удалена)» помечает
@@ -223,6 +274,57 @@ GRAPH_HELP_RU = """
 </ul>
 """
 
+EXPRESSIONS_HELP_RU = """
+<h3>Выражения</h3>
+<p>Блок выражений (кнопка <b>Выражения</b> в тулбаре) — вычисляемые строки
+над значениями регистров. Каждое выражение пересчитывается после каждого
+чтения по <b>масштабированным</b> primary-значениям строк-зависимостей
+(применены scale/offset; строки hex/ascii не числовые и ссылаться на них
+нельзя).</p>
+<h4>Синтаксис</h4>
+<ul>
+<li><b>[имя]</b> — ссылка на строку регистров по имени (можно пробелы и
+юникод): <code>([temp] + [flow rate]) / 2</code></li>
+<li>Числа (в т.ч. <code>1e3</code>), скобки, операторы
+<code>+ - * / // % **</code>, унарные <code>+/-</code></li>
+<li>Константы: <b>pi</b>, <b>e</b></li>
+<li>Ячейка Expression автодополняет ввод: <b>[</b> предлагает имена строк
+регистров, начало слова — функции и константы (Enter вставляет, Esc
+закрывает попап).</li>
+</ul>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Функция</th><th>Значение</th></tr>
+<tr><td>abs(x)</td><td>модуль</td></tr>
+<tr><td>sqrt(x)</td><td>квадратный корень</td></tr>
+<tr><td>exp(x)</td><td>e в степени x</td></tr>
+<tr><td>log(x) / log2(x) / log10(x)</td><td>натуральный / по основанию 2 /
+по основанию 10 логарифм</td></tr>
+<tr><td>sin(x) / cos(x) / tan(x)</td><td>тригонометрия (радианы)</td></tr>
+<tr><td>asin(x) / acos(x) / atan(x)</td><td>обратная тригонометрия
+(радианы)</td></tr>
+<tr><td>floor(x) / ceil(x) / round(x)</td><td>округление вниз / вверх /
+до ближайшего</td></tr>
+<tr><td>min(a, b, …) / max(a, b, …)</td><td>минимум / максимум из
+аргументов</td></tr>
+<tr><td>pow(x, y)</td><td>x в степени y (то же, что x**y)</td></tr>
+<tr><td>clamp(x, lo, hi)</td><td>ограничить x диапазоном [lo, hi]</td></tr>
+</table>
+<h4>Поведение</h4>
+<ul>
+<li><b>—</b> — значения нет: строка-зависимость отсутствует или ещё не
+читалась, либо ошибка вычисления (деление на ноль, область определения,
+переполнение).</li>
+<li><b>⚠</b> — ошибка синтаксиса; текст ошибки — в подсказке ячейки.
+Исправьте выражение, чтобы восстановить значение.</li>
+<li>У каждого выражения свой спарклайн, а в окне графика оно видно как
+«fx имя»; история пишется только в режиме опроса с записью и сбрасывается
+кнопкой <b>Clear</b> графика.</li>
+<li>Алармы работают и на выражения: они показаны в диалоге <b>Алармы…</b>
+как «fx имя» и красят ячейку Value выражения (сравнивается вычисленное
+значение; «—» и «⚠» не срабатывают).</li>
+</ul>
+"""
+
 SCANNER_HELP_RU = """
 <h3>Сканер</h3>
 <ul>
@@ -246,4 +348,5 @@ HELP_RU = {
     REGISTERS_HELP: REGISTERS_HELP_RU,
     GRAPH_HELP: GRAPH_HELP_RU,
     SCANNER_HELP: SCANNER_HELP_RU,
+    EXPRESSIONS_HELP: EXPRESSIONS_HELP_RU,
 }

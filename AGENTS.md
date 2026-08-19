@@ -186,7 +186,9 @@ src/modbus_connector/
                        # logging_state()/set_logging_state() — настройки в
                        # session state (как registers_options), без on/off
                        # алармы: кнопка "Alarms…" (иконка alarm, локальная)
-                       # открывает AlarmsDialog; правила хранятся в
+                       # открывает AlarmsDialog (в список попадают и строки
+                       # выражений — «fx имя», см. блок выражений ниже);
+                       # правила хранятся в
                        # RowDisplaySettings.alarms (state-ключ "alarms" через
                        # alarm_rule_to_json/alarm_rules_from_json, default [],
                        # в CSV не входят); оценка в _update_alarm по
@@ -242,7 +244,26 @@ src/modbus_connector/
                        # expr_label(token)/expr_series(token), rowsChanged
                        # при add/remove/переименовании выражения; state:
                        # expressions_state()/set_expressions_state()
-                       # (толерантный разбор, невалидные expr грузятся как «⚠»)
+                       # (толерантный разбор, невалидные expr грузятся как «⚠»);
+                       # алармы на выражения: правила в _expr_alarms по токену
+                       # (в state — ключ "alarms" записи выражения, толерантный
+                       # разбор), в AlarmsDialog показаны как «fx имя»
+                       # (_expr_alarm_label); оценка в _recalc_expression →
+                       # _update_expr_alarm по вычисленному значению
+                       # (_expr_last — последнее число, для переоценки после
+                       # диалога: _re_evaluate_expr_alarm); «—»/«⚠» не
+                       # алармят и снимают активный (семантика снятия как у
+                       # регистров: лог "ALARM cleared", подсветка
+                       # Value-ячейки выражения);
+                       # автодополнение ячейки Expression — ExpressionDelegate
+                       # (QStyledItemDelegate, createEditor: QLineEdit +
+                       # QCompleter; два режима: внутри [… — имена строк с «]»
+                       # на конце, снаружи — функции с «(» и константы pi/e;
+                       # модель пересобирается на каждый ввод из
+                       # _expression_row_names; ВСТАВКУ по activated делает
+                       # сам делегат — QCompleter текст в QLineEdit НЕ
+                       # подставляет, он только эмитит сигнал); help-кнопка
+                       # в тулбаре блока — EXPRESSIONS_HELP
   snapshot_dialog.py  # SnapshotDiffDialog — немодальное окно сравнения
                       # снапшота с текущими чтениями: таблица Name/Type/
                       # Address/Snapshot/Current, изменённые строки
@@ -263,7 +284,8 @@ src/modbus_connector/
                         # чек-лист логируемых строк (group box "Rows to log",
                         # Select all/none, Space/Enter)
   alarms_dialog.py  # AlarmsDialog — модальный диалог правил алармов: слева
-                    # список строк (label по токену), справа таблица правил
+                    # список строк регистров и выражений (label по токену,
+                    # у выражений — «fx имя»), справа таблица правил
                     # (Condition-комбо с ключом в itemData, Value, Value2 —
                     # только для диапазонов, Color red/yellow, чекбоксы
                     # Log/Sound), Add/Remove/Up/Down (порядок = приоритет);
@@ -282,9 +304,11 @@ src/modbus_connector/
                     # тултип "Help"/"Справка") +
                     # show_help — немодальный диалог с QTextBrowser
                     # (WA_DeleteOnClose); тексты REGISTERS_HELP/GRAPH_HELP/
-                    # SCANNER_HELP — HTML со списком хоткеев, русские версии
+                    # SCANNER_HELP/EXPRESSIONS_HELP — HTML со списком хоткеев,
+                    # русские версии
                     # в HELP_RU (выбор по текущему языку при открытии);
-                    # кнопки стоят в панели регистров, окне графика и сканере
+                    # кнопки стоят в панели регистров, окне графика, сканере
+                    # и тулбаре блока выражений
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)
@@ -313,7 +337,8 @@ src/modbus_connector/
                     # точки на кривых; скрывается вне области графика;
                     # TextItem — GraphicsObject без anchor-миксина легенды,
                     # поэтому _pin_readout переставляет его в угол view по
-                    # sigRangeChanged (иначе сдвигался при панорамировании)), Clear — сброс истории и оси времени,
+                    # sigRangeChanged (иначе сдвигался при панорамировании)), Clear — сброс истории
+                    # (panel.clear_series: регистры И выражения) и оси времени,
                     # кнопка-дублёр "Start polling and record"/"Stop polling"
                     # (управляет панелью, следит за pollStateChanged),
                     # set_bus_enabled(ok) — гейтинг этой кнопки,
@@ -327,7 +352,9 @@ src/modbus_connector/
                        # колонки таблицы ресайзятся (Interactive),
                        # колонка Trend — SparklineWidget (QPainter) по ряду
                        # _series[token] (TimeSeries; пишется primary-значение
-                       # при чтении, hex/ascii не захватываются), clear_series(),
+                       # при чтении, hex/ascii не захватываются),
+                       # clear_series() — регистры + выражения (Clear графика),
+                       # _clear_register_series() — только регистры,
                        # спарклайн — sizePolicy Expanding/Expanding (min 60x20):
                        # растягивается вслед за шириной колонки, paintEvent
                        # рисует по фактическим width()/height(),
@@ -359,7 +386,8 @@ src/modbus_connector/
                        # logLine "read-only area"; общий emit — _emit_write)
                        # и контекстное меню таблицы с теми же действиями
                        # (правый клик сначала выбирает строку; "Clear history"
-                       # — только на колонке Trend),
+                       # — только на колонке Trend, чистит историю регистров
+                       # через _clear_register_series, выражения не трогает),
   scanner_panel.py     # сканер unit-адресов и адресов регистров (секция
                        # Registers scan); открывается отдельным окном; кнопки —
                        # иконочные с тултипами (icons.make_button);
@@ -531,9 +559,15 @@ tests/
   test_expressions.py      # блок выражений: add/edit/delete, пересчёт по
                            # scaled primary зависимости, «—» при нет dep и
                            # nan, «⚠» + tooltip при невалидном, series только
-                           # в record-режиме, state round-trip, видимость в
+                           # в record-режиме, state round-trip (с "alarms"),
+                           # видимость в
                            # options, "fx …" в чек-листе графика,
-                           # переименование строки-зависимости
+                           # переименование строки-зависимости,
+                           # Clear графика чистит expr series (а "Clear
+                           # history" таблицы — нет), справка блока, алармы
+                           # на выражения (fx-строки в диалоге, подсветка,
+                           # edge-лог, «—»/«⚠» не алармят), completer
+                           # (модель, переименование, вставка)
 ```
 
 ## Команды

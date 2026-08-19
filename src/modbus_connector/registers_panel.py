@@ -1,6 +1,7 @@
 import csv
 import io
 import math
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,8 +12,10 @@ from typing import get_args
 from PySide6.QtCore import (
     QItemSelection,
     QItemSelectionModel,
+    QModelIndex,
     QPoint,
     QSize,
+    QStringListModel,
     Qt,
     QTimer,
     Signal,
@@ -30,6 +33,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QComboBox,
+    QCompleter,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -41,6 +45,8 @@ from PySide6.QtWidgets import (
     QMenu,
     QSizePolicy,
     QSpinBox,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTableWidget,
     QTableWidgetItem,
     QToolButton,
@@ -60,10 +66,16 @@ from modbus_connector.datalogger import (
     LogSettings,
 )
 from modbus_connector.datalogger_dialog import LoggingSettingsDialog
-from modbus_connector.help_dialog import REGISTERS_HELP, make_help_button
+from modbus_connector.help_dialog import (
+    EXPRESSIONS_HELP,
+    REGISTERS_HELP,
+    make_help_button,
+)
 from modbus_connector.i18n import tr
 from modbus_connector.models import (
     CSV_COLUMNS,
+    EXPRESSION_CONSTANTS,
+    EXPRESSION_FUNCTIONS,
     AlarmRule,
     ByteOrder,
     DisplayFormat,
@@ -196,6 +208,88 @@ class SparklineWidget(QWidget):
         painter.end()
 
 
+class ExpressionDelegate(QStyledItemDelegate):
+    """Редактор ячейки Expression с автодополнением (QCompleter в popup).
+
+    Два режима по позиции курсора: внутри ссылки [… — имена строк регистров
+    (кандидаты с закрывающей скобкой: "temp]"), снаружи — функции (со
+    скобкой: "sqrt(") и константы pi/e. Модель пересобирается на каждое
+    изменение текста из names_provider, поэтому переименование строки
+    подхватывается сразу. Enter в попапе вставляет кандидата, не коммитя
+    ячейку, Esc закрывает попап (стандарт QCompleter). Вставку по activated
+    делает сам делегат: QCompleter только эмитит сигнал, текст в QLineEdit
+    он не подставляет (см. qcompleter.cpp).
+    """
+
+    def __init__(
+        self, names_provider: Callable[[], list[str]], parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._names_provider = names_provider
+
+    def createEditor(
+        self,
+        parent: QWidget | None,
+        option: QStyleOptionViewItem,
+        index: QModelIndex,
+    ) -> QWidget:
+        del option, index
+        editor = QLineEdit(parent)
+        model = QStringListModel(editor)
+        completer = QCompleter(model, editor)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setWidget(editor)
+        editor.textChanged.connect(
+            lambda _text, e=editor, c=completer, m=model:
+                self._refresh_completion(e, c, m)
+        )
+        completer.activated[str].connect(
+            lambda completion, e=editor, c=completer:
+                self._insert_completion(e, c, completion)
+        )
+        return editor
+
+    @staticmethod
+    def _insert_completion(
+        editor: QLineEdit, completer: QCompleter, completion: str
+    ) -> None:
+        """Вставить выбранный кандидат вместо префикса перед курсором."""
+        prefix = completer.completionPrefix()
+        pos = editor.cursorPosition()
+        text = editor.text()
+        editor.setText(text[: pos - len(prefix)] + completion + text[pos:])
+        editor.setCursorPosition(pos - len(prefix) + len(completion))
+
+    def _refresh_completion(
+        self, editor: QLineEdit, completer: QCompleter, model: QStringListModel
+    ) -> None:
+        prefix, words = self._completions(editor.text(), editor.cursorPosition())
+        matches = [w for w in words if w.lower().startswith(prefix.lower())]
+        # ровно одно точное совпадение = текст только что вставлен completer'ом:
+        # без этого фильтра попап переоткрывался бы после каждой вставки
+        if not matches or (len(matches) == 1 and matches[0].lower() == prefix.lower()):
+            completer.popup().hide()
+            return
+        model.setStringList(words)
+        completer.setCompletionPrefix(prefix)
+        completer.complete()
+
+    def _completions(self, text: str, pos: int) -> tuple[str, list[str]]:
+        """(префикс перед курсором, кандидаты); пустой список — попап не нужен."""
+        before = text[:pos]
+        open_at = before.rfind("[")
+        if open_at > before.rfind("]"):  # внутри ссылки: имена строк
+            return before[open_at + 1 :], [
+                f"{name}]" for name in self._names_provider()
+            ]
+        match = re.search(r"[A-Za-z_][A-Za-z0-9_]*$", before)
+        if match is None:
+            return "", []
+        words = [f"{name}(" for name in EXPRESSION_FUNCTIONS]
+        words += list(EXPRESSION_CONSTANTS)
+        return match.group(0), words
+
+
 def _entry_float(value: object, default: float) -> float:
     try:
         return float(value)  # type: ignore[arg-type]
@@ -280,6 +374,8 @@ class RegistersPanel(QWidget):
         self._expr_parsed: dict[int, Expression | None] = {}  # None = невалидное
         self._expr_series: dict[int, TimeSeries] = {}  # expr token -> history
         self._expr_sparklines: dict[int, SparklineWidget] = {}
+        self._expr_alarms: dict[int, list[AlarmRule]] = {}  # expr token -> правила
+        self._expr_last: dict[int, float | None] = {}  # expr token -> last value
         self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
         self._translatable_tips: list[tuple[QWidget, str]] = []
 
@@ -528,6 +624,10 @@ class RegistersPanel(QWidget):
         expr_add_button.clicked.connect(self._on_add_expression)
         expr_bar.addWidget(expr_add_button)
         expr_bar.addStretch(1)
+        self._expr_help_button = make_help_button(
+            self, "Expressions — Help", EXPRESSIONS_HELP
+        )
+        expr_bar.addWidget(self._expr_help_button)
 
         self._expr_table = QTableWidget(0, 5)
         self._sync_expr_header()
@@ -548,6 +648,11 @@ class RegistersPanel(QWidget):
             )
         )
         self._expr_table.itemChanged.connect(self._on_expr_item_changed)
+        # автодополнение в ячейке Expression: [ — имена строк, слово — функции
+        self._expr_table.setItemDelegateForColumn(
+            EXPR_COL_EXPR,
+            ExpressionDelegate(self._expression_row_names, self._expr_table),
+        )
 
         box = QVBoxLayout(widget)
         box.setContentsMargins(0, 0, 0, 0)
@@ -1210,15 +1315,21 @@ class RegistersPanel(QWidget):
         rules_by_token = dialog.rules()
         if rules_by_token is None:  # the dialog validates before accepting
             return
+        expr_tokens = set(self.expr_tokens())
         for token, rules in rules_by_token.items():
-            self._row_display.setdefault(token, RowDisplaySettings()).alarms = rules
+            if token in expr_tokens:
+                self._expr_alarms[token] = rules
+            else:
+                self._row_display.setdefault(token, RowDisplaySettings()).alarms = rules
         # re-evaluate against the last reads: _update_alarm resolves the
         # transitions (cleared highlight, new color) from the kept edge state
         for index in range(self._table.rowCount()):
             self._re_evaluate_alarm(index)
+        for index in range(self._expr_table.rowCount()):
+            self._re_evaluate_expr_alarm(index)
 
     def _alarm_row_entries(self) -> list[tuple[int, str, list[AlarmRule]]]:
-        """(token, label, rules) per table row for the alarms dialog."""
+        """(token, label, rules) per table row and expression for the dialog."""
         entries = []
         for index in range(self._table.rowCount()):
             token = self._token_at(index)
@@ -1229,7 +1340,19 @@ class RegistersPanel(QWidget):
                     list(self._row_display.get(token, RowDisplaySettings()).alarms),
                 )
             )
+        for token in self.expr_tokens():
+            entries.append(
+                (
+                    token,
+                    self._expr_alarm_label(token),
+                    list(self._expr_alarms.get(token, [])),
+                )
+            )
         return entries
+
+    def _expr_alarm_label(self, token: int) -> str:
+        """Подпись выражения для диалога алармов и лога: «fx имя»."""
+        return f"fx {self.expr_label(token)}"
 
     def _re_evaluate_alarm(self, index: int) -> None:
         """Переоценить аларм строки по последнему прочитанному значению."""
@@ -1274,6 +1397,50 @@ class RegistersPanel(QWidget):
                         "ALARM {label}: {value} {condition}",
                         label=self.row_label(token),
                         value=f"{primary:g}",
+                        condition=_describe_rule(matched),
+                    )
+                )
+            if matched.sound:
+                self._alarm_sound.play()
+
+    def _re_evaluate_expr_alarm(self, index: int) -> None:
+        """Переоценить аларм выражения по последнему вычисленному значению."""
+        token = self._expr_token_at(index)
+        # silent: правки в диалоге обновляют edge-состояние без лога/звука
+        self._update_expr_alarm(index, self._expr_last.get(token), silent=True)
+
+    def _update_expr_alarm(
+        self, index: int, result: float | None, *, silent: bool = False
+    ) -> None:
+        """Оценить правила выражения: подсветка Value, edge-лог, звук.
+        result=None («—»/«⚠» — числа нет) никогда не матчит и снимает
+        активный аларм по обычной семантике снятия."""
+        token = self._expr_token_at(index)
+        rules = self._expr_alarms.get(token, [])
+        previous = self._active_alarms.get(token)
+        matched = evaluate_alarm(result, rules) if result is not None and rules else None
+        if matched is None and previous is None:
+            return
+        item = self._expr_table.item(index, EXPR_COL_VALUE)
+        if matched is None:  # active -> cleared edge
+            cleared = self._active_alarms.pop(token)
+            if item is not None:
+                item.setBackground(QBrush())
+            if cleared.log:
+                self.logLine.emit(
+                    tr("ALARM cleared {label}", label=self._expr_alarm_label(token))
+                )
+            return
+        self._active_alarms[token] = matched
+        if item is not None:
+            item.setBackground(theme.alarm_color(matched.color))
+        if previous != matched and not silent:  # новый фронт: None->rule или смена правила
+            if matched.log:
+                self.logLine.emit(
+                    tr(
+                        "ALARM {label}: {value} {condition}",
+                        label=self._expr_alarm_label(token),
+                        value=f"{result:g}",
                         condition=_describe_rule(matched),
                     )
                 )
@@ -1543,13 +1710,18 @@ class RegistersPanel(QWidget):
         return self._series.get(token)
 
     def clear_series(self) -> None:
-        for series in self._series.values():
-            series.clear()
-        for sparkline in self._sparklines.values():
-            sparkline.refresh()
+        """Сбросить историю значений и регистров, и выражений (Clear графика)."""
+        self._clear_register_series()
         for series in self._expr_series.values():
             series.clear()
         for sparkline in self._expr_sparklines.values():
+            sparkline.refresh()
+
+    def _clear_register_series(self) -> None:
+        """Сбросить историю только строк регистров (контекстное меню таблицы)."""
+        for series in self._series.values():
+            series.clear()
+        for sparkline in self._sparklines.values():
             sparkline.refresh()
 
     # --- expressions (вычисляемые строки над значениями регистров) ----------
@@ -1563,6 +1735,10 @@ class RegistersPanel(QWidget):
             {
                 "name": self._expr_text_at(index, EXPR_COL_NAME),
                 "expr": self._expr_text_at(index, EXPR_COL_EXPR),
+                "alarms": [
+                    alarm_rule_to_json(rule)
+                    for rule in self._expr_alarms.get(self._expr_token_at(index), [])
+                ],
             }
             for index in range(self._expr_table.rowCount())
         ]
@@ -1575,6 +1751,9 @@ class RegistersPanel(QWidget):
             self._expr_parsed.pop(token, None)
             self._expr_series.pop(token, None)
             self._expr_sparklines.pop(token, None)
+            self._expr_alarms.pop(token, None)
+            self._expr_last.pop(token, None)
+            self._active_alarms.pop(token, None)
             self._expr_table.removeRow(0)
         if not isinstance(entries, list):
             return
@@ -1585,7 +1764,8 @@ class RegistersPanel(QWidget):
             expr_text = str(entry.get("expr") or "")
             if not name and not expr_text:
                 continue
-            self._add_expression(name, expr_text)
+            token = self._add_expression(name, expr_text)
+            self._expr_alarms[token] = alarm_rules_from_json(entry.get("alarms"))
 
     def expr_tokens(self) -> list[int]:
         return [self._expr_token_at(i) for i in range(self._expr_table.rowCount())]
@@ -1625,7 +1805,8 @@ class RegistersPanel(QWidget):
             self._expr_table.setCurrentItem(item)
             self._expr_table.editItem(item)
 
-    def _add_expression(self, name: str = "", expr_text: str = "") -> None:
+    def _add_expression(self, name: str = "", expr_text: str = "") -> int:
+        """Добавить строку выражения; возвращает её токен."""
         index = self._expr_table.rowCount()
         self._expr_table.blockSignals(True)
         self._expr_table.insertRow(index)
@@ -1666,6 +1847,7 @@ class RegistersPanel(QWidget):
         if expr_text:  # текст из state: разобрать (невалидное → «⚠»)
             self._parse_expression_row(index)
         self.rowsChanged.emit()  # окно графика перечитывает чек-лист
+        return token
 
     def _on_expr_delete_clicked(self) -> None:
         button = self.sender()
@@ -1678,6 +1860,9 @@ class RegistersPanel(QWidget):
                 self._expr_parsed.pop(token, None)
                 self._expr_series.pop(token, None)
                 self._expr_sparklines.pop(token, None)
+                self._expr_alarms.pop(token, None)
+                self._expr_last.pop(token, None)
+                self._active_alarms.pop(token, None)
                 self._expr_table.removeRow(index)
                 self.rowsChanged.emit()
                 return
@@ -1697,6 +1882,8 @@ class RegistersPanel(QWidget):
         text = self._expr_text_at(index, EXPR_COL_EXPR)
         if not text:
             self._expr_parsed[token] = None
+            self._expr_last[token] = None
+            self._update_expr_alarm(index, None)  # нет числа: аларм снимается
             if value_item is not None:
                 value_item.setText("")
                 value_item.setToolTip("")
@@ -1706,6 +1893,8 @@ class RegistersPanel(QWidget):
             self._expr_parsed[token] = parse_expression(text)
         except ValueError as exc:
             self._expr_parsed[token] = None
+            self._expr_last[token] = None
+            self._update_expr_alarm(index, None)  # ⚠ не алармит, активный снимается
             if value_item is not None:
                 value_item.setText("⚠")
                 value_item.setToolTip(str(exc))
@@ -1715,6 +1904,15 @@ class RegistersPanel(QWidget):
             value_item.setToolTip("")
             value_item.setBackground(QBrush())
         self._recalc_expression(index)
+
+    def _expression_row_names(self) -> list[str]:
+        """Имена строк регистров для автодополнения ссылок [name]."""
+        names = []
+        for index in range(self._table.rowCount()):
+            name = self._text_at(index, COL_NAME)
+            if name:
+                names.append(name)
+        return names
 
     def _row_values_by_name(self) -> dict[str, float]:
         """Имя строки → масштабированное primary-значение (для ссылок [name])."""
@@ -1748,9 +1946,13 @@ class RegistersPanel(QWidget):
         except KeyError:
             result = float("nan")  # строка-зависимость отсутствует/не читалась
         if math.isnan(result):
+            self._expr_last[token] = None
             value_item.setText("—")
+            self._update_expr_alarm(index, None)  # «—» не алармит
             return
+        self._expr_last[token] = result
         value_item.setText(f"{result:g}")  # ~6 значащих цифр, как у primary
+        self._update_expr_alarm(index, result)
         if self._recording:  # история — только в режиме poll+record
             self._expr_series[token].append(time.monotonic(), result)
             self._expr_sparklines[token].refresh()
@@ -1778,7 +1980,8 @@ class RegistersPanel(QWidget):
             action.setShortcut(QKeySequence(key))  # shown next to the item
         if self._table.columnAt(pos.x()) == COL_TREND:
             menu.addSeparator()
-            menu.addAction(tr("Clear history"), self.clear_series)
+            # история выражений сбрасывается только глобальным Clear графика
+            menu.addAction(tr("Clear history"), self._clear_register_series)
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
     def _on_header_context_menu(self, pos: QPoint) -> None:

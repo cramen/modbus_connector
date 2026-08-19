@@ -417,6 +417,7 @@ RU: dict[str, str] = {
     "Registers — Help": "Таблица регистров — справка",
     "Graph — Help": "График — справка",
     "Scanner — Help": "Сканер — справка",
+    "Expressions — Help": "Выражения — справка",
 }
 
 
