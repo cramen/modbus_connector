@@ -3,7 +3,7 @@ import io
 import math
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -218,14 +218,23 @@ class ExpressionDelegate(QStyledItemDelegate):
     подхватывается сразу. Enter в попапе вставляет кандидата, не коммитя
     ячейку, Esc закрывает попап (стандарт QCompleter). Вставку по activated
     делает сам делегат: QCompleter только эмитит сигнал, текст в QLineEdit
-    он не подставляет (см. qcompleter.cpp).
+    он не подставляет (см. qcompleter.cpp). extra_functions/extra_names —
+    дополнительные кандидаты поверх EXPRESSION_FUNCTIONS/EXPRESSION_CONSTANTS
+    (правила симулятора: rand(/randint( и t/prev).
     """
 
     def __init__(
-        self, names_provider: Callable[[], list[str]], parent: QWidget | None = None
+        self,
+        names_provider: Callable[[], list[str]],
+        parent: QWidget | None = None,
+        *,
+        extra_functions: Iterable[str] = (),
+        extra_names: Iterable[str] = (),
     ) -> None:
         super().__init__(parent)
         self._names_provider = names_provider
+        self._extra_functions = tuple(extra_functions)
+        self._extra_names = tuple(extra_names)
 
     def createEditor(
         self,
@@ -286,7 +295,9 @@ class ExpressionDelegate(QStyledItemDelegate):
         if match is None:
             return "", []
         words = [f"{name}(" for name in EXPRESSION_FUNCTIONS]
+        words += [f"{name}(" for name in self._extra_functions]
         words += list(EXPRESSION_CONSTANTS)
+        words += list(self._extra_names)
         return match.group(0), words
 
 

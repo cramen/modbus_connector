@@ -1,5 +1,9 @@
 """Панель slave-режима: параметры симулятора (Modbus slave-сервер) и карта значений."""
 
+import math
+import random
+import time
+from collections.abc import Callable
 from typing import Any, get_args
 
 from PySide6.QtCore import QSize, Qt, Signal, Slot
@@ -26,12 +30,17 @@ from modbus_connector.connection_panel import BAUDRATES
 from modbus_connector.i18n import tr
 from modbus_connector.models import (
     DisplayFormat,
+    Expression,
     RegisterKind,
     RtuParams,
+    decode_register_values,
+    encode_register_values,
     format_register_values,
     format_values,
+    parse_expression,
     parse_values,
 )
+from modbus_connector.registers_panel import ExpressionDelegate
 from modbus_connector.sim_backend import BLOCK_SIZE, SimTcpParams, describe_sim
 from modbus_connector.templates import TemplateInfo, list_templates, load_template
 
@@ -47,9 +56,26 @@ SERVER_TYPES = ("TCP", "RTU")  # never translated
     COL_COUNT,
     COL_FORMAT,
     COL_VALUE,
+    COL_RULE,
+    COL_RULE_TEXT,
     COL_ACTIONS,
-) = range(7)
-HEADER_LABELS = ("Name", "Type", "Address", "Count", "Format", "Value", "")
+) = range(9)
+HEADER_LABELS = ("Name", "Type", "Address", "Count", "Format", "Value", "Rule", "Rule text", "")
+RULE_MODES = ("manual", "expression")  # ключи в itemData, переводится только отображение
+
+# роли данных ячейки Name: значения строки + кэш и предыдущий результат правила
+_VALUES_ROLE = Qt.ItemDataRole.UserRole
+_RULE_CACHE_ROLE = Qt.ItemDataRole.UserRole + 1  # (text, Expression | None, error)
+_RULE_PREV_ROLE = Qt.ItemDataRole.UserRole + 2  # float — предыдущий результат
+
+# расширения движка выражений для правил симулятора
+SIM_RULE_FUNCTIONS: dict[str, Callable[..., float]] = {
+    "rand": random.random,
+    "randint": lambda a, b: float(random.randint(int(a), int(b))),
+}
+SIM_RULE_NAMES = ("t", "prev")
+
+TICK_MS_MIN, TICK_MS_MAX, TICK_MS_DEFAULT = 100, 10000, 1000
 
 
 class SimPanel(QWidget):
@@ -59,18 +85,26 @@ class SimPanel(QWidget):
     Value показывает их через format_register_values (регистры) / format_values
     (битовые области). Запись в backend — сигналом setValuesRequested: backend
     хранит блоки и до старта сервера, поэтому правки применяются всегда.
+
+    Колонка Rule — режим строки: "manual" (Value редактируется вручную) или
+    "expression" (Value readonly, пересчитывается по тикеру из Rule text).
+    Правила — движок выражений models.parse_expression с доп. функциями
+    rand()/randint(a,b) и именами t (секунды от старта сервера) / prev
+    (предыдущий результат строки); apply_rules() зовётся по SimWorker.ticked.
     """
 
     startRequested = Signal(object, object)  # params, unit (int | None)
     # dataclass-параметры не маршаллятся через Q_ARG — только сигналом
     stopRequested = Signal()
     setValuesRequested = Signal(str, int, list)  # kind, address, values
+    setTickIntervalRequested = Signal(int)  # период тикера правил, мс
     logLine = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._running = False
         self._clients = 0
+        self._started_at: float | None = None  # monotonic момента старта сервера
         self._status_message = "Stopped"
         self._status_is_error = False
         self._last_params: SimTcpParams | RtuParams | None = None
@@ -141,6 +175,8 @@ class SimPanel(QWidget):
         self._track(self._template_button, "Template…", "Add rows from a device template")
         self._template_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._template_button.setMenu(self._build_templates_menu())
+        self._tick_spin = QSpinBox(minimum=TICK_MS_MIN, maximum=TICK_MS_MAX, value=TICK_MS_DEFAULT)
+        self._tick_spin.valueChanged.connect(self.setTickIntervalRequested.emit)
         self._status = QLabel()
         # длинный статус не должен расширять окно (как в ConnectionPanel)
         self._status.setSizePolicy(
@@ -160,9 +196,20 @@ class SimPanel(QWidget):
         controls_row.addWidget(self._button)
         controls_row.addWidget(self._add_button)
         controls_row.addWidget(self._template_button)
+        controls_row.addWidget(self._label("Tick, ms"))
+        controls_row.addWidget(self._tick_spin)
         controls_row.addWidget(self._status, 1)
 
         self._table = QTableWidget(0, len(HEADER_LABELS))
+        self._table.setItemDelegateForColumn(
+            COL_RULE_TEXT,
+            ExpressionDelegate(
+                self._row_names,
+                self._table,
+                extra_functions=SIM_RULE_FUNCTIONS,
+                extra_names=SIM_RULE_NAMES,
+            ),
+        )
         self._sync_header()
         header = self._table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
@@ -265,12 +312,15 @@ class SimPanel(QWidget):
             count = 1
         fmt = entry.get("format") if entry.get("format") in FORMATS else "dec"
         values = self._coerce_values(kind, entry.get("values"), count)
+        rule = entry.get("rule") if entry.get("rule") in RULE_MODES else "manual"
+        # текст правила хранится только у expression-строк (у manual пусто)
+        rule_text = str(entry.get("rule_text", "")) if rule == "expression" else ""
 
         index = self._table.rowCount()
         self._table.blockSignals(True)
         self._table.insertRow(index)
         name_item = QTableWidgetItem(str(entry.get("name", "")))
-        name_item.setData(Qt.ItemDataRole.UserRole, values)
+        name_item.setData(_VALUES_ROLE, values)
         self._table.setItem(index, COL_NAME, name_item)
 
         type_combo = theme.FitComboBox()
@@ -293,6 +343,16 @@ class SimPanel(QWidget):
 
         self._table.setItem(index, COL_VALUE, QTableWidgetItem(""))
 
+        rule_combo = theme.FitComboBox()
+        rule_combo.addItem(tr("Manual"), "manual")
+        rule_combo.addItem(tr("Expression"), "expression")
+        rule_index = rule_combo.findData(rule)
+        rule_combo.setCurrentIndex(rule_index if rule_index >= 0 else 0)
+        rule_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self._table.setCellWidget(index, COL_RULE, rule_combo)
+
+        self._table.setItem(index, COL_RULE_TEXT, QTableWidgetItem(rule_text))
+
         delete_button = QToolButton()
         delete_button.setIcon(icons.icon("close_tab"))
         delete_button.setIconSize(QSize(icons.ICON_SIZE, icons.ICON_SIZE))
@@ -306,13 +366,17 @@ class SimPanel(QWidget):
         actions_layout.addWidget(delete_button)
         self._table.setCellWidget(index, COL_ACTIONS, actions)
         self._table.blockSignals(False)
-        self._render_value(index)
+        self._sync_rule_cells(index)
+        self._refresh_rule_display(index)  # невалидное правило — сразу «⚠»
 
         type_combo.currentTextChanged.connect(
             lambda _text, combo=type_combo: self._on_kind_changed(combo)
         )
         format_combo.currentTextChanged.connect(
             lambda _text, combo=format_combo: self._on_format_changed(combo)
+        )
+        rule_combo.currentIndexChanged.connect(
+            lambda _i, combo=rule_combo: self._on_rule_changed(combo)
         )
 
     def _row_of(self, widget: QWidget, col: int) -> int | None:
@@ -331,7 +395,7 @@ class SimPanel(QWidget):
 
     def _values_at(self, index: int) -> list[int | bool]:
         item = self._table.item(index, COL_NAME)
-        values = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        values = item.data(_VALUES_ROLE) if item is not None else None
         return values if isinstance(values, list) else []
 
     def _address_at(self, index: int) -> int | None:
@@ -364,17 +428,192 @@ class SimPanel(QWidget):
             return
         self.setValuesRequested.emit(self._kind_at(index), address, list(values))
 
+    # --- правила значений (Rule = expression) ---
+
+    def _rule_at(self, index: int) -> str:
+        combo = self._table.cellWidget(index, COL_RULE)
+        data = combo.currentData() if combo is not None else None
+        return data if data in RULE_MODES else "manual"
+
+    def _row_names(self) -> list[str]:
+        """Имена строк карты для автодополнения ссылок [name] в правилах."""
+        names = []
+        for index in range(self._table.rowCount()):
+            name = self._text_at(index, COL_NAME)
+            if name:
+                names.append(name)
+        return names
+
+    def _sync_rule_cells(self, index: int) -> None:
+        """Expression: Value readonly + Rule text редактируемый; manual — наоборот."""
+        expression = self._rule_at(index) == "expression"
+        for item, editable in (
+            (self._table.item(index, COL_VALUE), not expression),
+            (self._table.item(index, COL_RULE_TEXT), expression),
+        ):
+            if item is None:
+                continue
+            flags = item.flags()
+            if editable:
+                item.setFlags(
+                    flags | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
+                )
+            else:
+                item.setFlags(
+                    flags & ~Qt.ItemFlag.ItemIsEnabled & ~Qt.ItemFlag.ItemIsEditable
+                )
+
+    def _compiled_rule(self, index: int) -> tuple[Expression | None, str]:
+        """(Expression, "") или (None, текст ошибки); кэш по тексту правила."""
+        name_item = self._table.item(index, COL_NAME)
+        text = self._text_at(index, COL_RULE_TEXT)
+        cache = name_item.data(_RULE_CACHE_ROLE) if name_item is not None else None
+        if isinstance(cache, tuple) and len(cache) == 3 and cache[0] == text:
+            return cache[1], cache[2]
+        try:
+            expr: Expression | None = parse_expression(
+                text, extra_functions=SIM_RULE_FUNCTIONS, extra_names=SIM_RULE_NAMES
+            )
+            error = ""
+        except ValueError as exc:
+            expr, error = None, str(exc)
+        if name_item is not None:
+            name_item.setData(_RULE_CACHE_ROLE, (text, expr, error))
+        return expr, error
+
+    def _refresh_rule_display(self, index: int) -> None:
+        """«⚠»+tooltip при невалидном правиле, иначе — текущее значение строки."""
+        value_item = self._table.item(index, COL_VALUE)
+        if value_item is None:
+            return
+        error = ""
+        if self._rule_at(index) == "expression":
+            expr, error = self._compiled_rule(index)
+            if expr is not None:
+                error = ""
+            else:
+                # сигналы блокируем: setToolTip/setText эмитят itemChanged и
+                # вызвали бы реентерабельный _commit_value
+                self._table.blockSignals(True)
+                value_item.setText("⚠")
+                value_item.setToolTip(error)
+                self._table.blockSignals(False)
+                return
+        self._table.blockSignals(True)
+        value_item.setToolTip("")
+        self._table.blockSignals(False)
+        self._render_value(index)
+
+    @Slot(object)
+    def _on_rule_changed(self, combo: QComboBox) -> None:
+        index = self._row_of(combo, COL_RULE)
+        if index is None:
+            return
+        if combo.currentData() != "expression":
+            self._table.item(index, COL_RULE_TEXT).setText("")
+        self._sync_rule_cells(index)
+        self._refresh_rule_display(index)
+
+    def _primary_number(self, index: int) -> float | None:
+        """Числовое primary-значение строки: биты 1.0/0.0, регистры — decode[0]."""
+        values = self._values_at(index)
+        if not values:
+            return None
+        if self._kind_at(index) not in REGISTER_KINDS:
+            return float(int(values[0]))
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt in ("hex", "ascii"):
+            return None  # нечисловые форматы в ссылках не участвуют
+        decoded = decode_register_values([int(v) for v in values], fmt)
+        return float(decoded[0]) if decoded else None
+
+    def _row_numbers_by_name(self) -> dict[str, float]:
+        """Имя строки карты → primary-число (для ссылок [name] в правилах)."""
+        values: dict[str, float] = {}
+        for index in range(self._table.rowCount()):
+            name = self._text_at(index, COL_NAME)
+            if not name:
+                continue
+            number = self._primary_number(index)
+            if number is not None:
+                values[name] = number
+        return values
+
+    def _encode_row_value(self, index: int, x: float) -> list[int | bool] | None:
+        """Число → значения строки по её формату (порядок ABCD фиксирован).
+
+        None — переполнение float-формата (struct.pack), тик пропускается."""
+        count = len(self._values_at(index)) or 1
+        if self._kind_at(index) not in REGISTER_KINDS:
+            return [bool(round(x))] * count
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt in ("hex", "ascii"):
+            fmt = "dec"  # строковые форматы отображения кодируем как dec
+        try:
+            encoded = encode_register_values(x, fmt)
+        except OverflowError:
+            return None
+        return (encoded + [0] * count)[:count]
+
+    @Slot()
+    def apply_rules(self) -> None:
+        """Тик тикера (SimWorker.ticked): пересчитать строки с rule=expression.
+
+        values — primary-значения всех строк карты по именам (снимок до записей
+        этого тика); names: t — секунды от старта сервера, prev — предыдущий
+        результат строки (на первом тике — её текущее значение). nan (ошибка
+        вычисления или нет строки-зависимости) — «—»: в datastore не пишем,
+        prev не обновляем; невалидное выражение пропускается (уже «⚠»)."""
+        values = self._row_numbers_by_name()
+        started = self._started_at
+        t = time.monotonic() - started if started is not None else 0.0
+        for index in range(self._table.rowCount()):
+            if self._rule_at(index) == "expression":
+                self._apply_rule(index, values, t)
+
+    def _apply_rule(self, index: int, values: dict[str, float], t: float) -> None:
+        expr, _error = self._compiled_rule(index)
+        name_item = self._table.item(index, COL_NAME)
+        value_item = self._table.item(index, COL_VALUE)
+        if expr is None or name_item is None or value_item is None:
+            return
+        prev = name_item.data(_RULE_PREV_ROLE)
+        if not isinstance(prev, int | float):
+            prev = self._primary_number(index) or 0.0  # первый тик — текущее значение
+        try:
+            result = expr.evaluate(values, names={"t": t, "prev": float(prev)})
+        except KeyError:
+            result = float("nan")  # нет строки-зависимости
+        if math.isnan(result):
+            self._table.blockSignals(True)
+            value_item.setText("—")
+            self._table.blockSignals(False)
+            return
+        encoded = self._encode_row_value(index, result)
+        if encoded is None:  # непредставимое в формате строки число
+            self._table.blockSignals(True)
+            value_item.setText("—")
+            self._table.blockSignals(False)
+            return
+        name_item.setData(_RULE_PREV_ROLE, result)
+        name_item.setData(_VALUES_ROLE, encoded)
+        self._render_value(index)
+        self._push_row(index)
     # --- слоты таблицы ---
 
     @Slot(QTableWidgetItem)
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         index, col = item.row(), item.column()
         if col == COL_VALUE:
+            if self._rule_at(index) == "expression":
+                return  # значение вычисляется правилом (текст ставим мы сами)
             self._commit_value(index)
         elif col == COL_COUNT:
             self._commit_count(index)
         elif col == COL_ADDRESS:
             self._push_row(index)  # валидный адрес — значения уезжают на новое место
+        elif col == COL_RULE_TEXT:
+            self._refresh_rule_display(index)
 
     def _commit_value(self, index: int) -> None:
         kind = self._kind_at(index)
@@ -385,7 +624,7 @@ class SimPanel(QWidget):
             self.logLine.emit(tr("✗ parse error: {exc}", exc=exc))
             self._render_value(index)  # откат к сохранённым значениям
             return
-        self._table.item(index, COL_NAME).setData(Qt.ItemDataRole.UserRole, values)
+        self._table.item(index, COL_NAME).setData(_VALUES_ROLE, values)
         self._render_value(index)
         self._push_row(index)
 
@@ -402,7 +641,7 @@ class SimPanel(QWidget):
             return
         default: int | bool = 0 if self._kind_at(index) in REGISTER_KINDS else False
         values = (values + [default] * count)[:count]
-        self._table.item(index, COL_NAME).setData(Qt.ItemDataRole.UserRole, values)
+        self._table.item(index, COL_NAME).setData(_VALUES_ROLE, values)
         self._render_value(index)
         self._push_row(index)
 
@@ -414,7 +653,7 @@ class SimPanel(QWidget):
         count = len(self._values_at(index)) or 1
         default: int | bool = 0 if combo.currentText() in REGISTER_KINDS else False
         self._table.item(index, COL_NAME).setData(
-            Qt.ItemDataRole.UserRole, [default] * count
+            _VALUES_ROLE, [default] * count
         )
         self._render_value(index)
         self._push_row(index)
@@ -511,7 +750,10 @@ class SimPanel(QWidget):
     def set_running(self, ok: bool, message: str) -> None:
         """Слот на SimWorker.serverChanged: кнопка, статус, гейтинг параметров."""
         self._running = ok
-        if not ok:
+        if ok:
+            self._started_at = time.monotonic()  # отсчёт t для правил
+        else:
+            self._started_at = None
             self._clients = 0
         self._status_message = message
         self._status_is_error = not ok and message != "Stopped"
@@ -557,7 +799,7 @@ class SimPanel(QWidget):
             for pos in range(start, end):
                 raw = values[pos - address]
                 updated[pos - row_address] = int(raw) if registers else bool(raw)
-            self._table.item(index, COL_NAME).setData(Qt.ItemDataRole.UserRole, updated)
+            self._table.item(index, COL_NAME).setData(_VALUES_ROLE, updated)
             self._render_value(index)
 
     def running_description(self) -> str | None:
@@ -615,6 +857,8 @@ class SimPanel(QWidget):
                     "count": len(self._values_at(index)),
                     "format": self._table.cellWidget(index, COL_FORMAT).currentText(),
                     "values": list(self._values_at(index)),
+                    "rule": self._rule_at(index),
+                    "rule_text": self._text_at(index, COL_RULE_TEXT),
                 }
             )
         unit = self._unit_combo.currentData()
@@ -631,11 +875,17 @@ class SimPanel(QWidget):
                 "unit": "any" if unit is None else unit,
             },
             "rows": rows,
+            "tick_ms": self._tick_spin.value(),
         }
 
     def set_state(self, state: dict) -> None:
         if not isinstance(state, dict):
             return
+        try:
+            tick_ms = int(state.get("tick_ms", self._tick_spin.value()))
+        except (TypeError, ValueError):
+            tick_ms = self._tick_spin.value()
+        self._tick_spin.setValue(tick_ms)  # spinbox сам обрежет до диапазона
         server = state.get("server")
         if isinstance(server, dict):
             type_index = self._type_combo.findData(str(server.get("type", "")))
@@ -689,5 +939,10 @@ class SimPanel(QWidget):
             widget.setToolTip(tr(tip))
         self._sync_header()
         self._unit_combo.setItemText(0, tr("any"))
+        for index in range(self._table.rowCount()):
+            rule_combo = self._table.cellWidget(index, COL_RULE)
+            if rule_combo is not None:
+                rule_combo.setItemText(0, tr("Manual"))
+                rule_combo.setItemText(1, tr("Expression"))
         self._sync_button()
         self._render_status()

@@ -41,6 +41,10 @@ src/modbus_connector/
                   # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
                   # ByteOrder, parse_values(kind, text), format_values(values),
                   # decode_register_values(values, fmt, order) — decode до чисел,
+                  # encode_register_values(value, fmt, order) — обратный encode
+                  # числа в регистры (round+clamp для целых, f32/f64 через
+                  # struct.pack, OverflowError на непредставимом; hex/ascii —
+                  # ValueError), для правил симулятора,
                   # format_register_values (поверх decode),
                   # format_scaled_values (x*scale+offset по decoded),
                   # rows_to_csv/rows_from_csv/row_to_csv_record/CSV_COLUMNS —
@@ -106,7 +110,8 @@ src/modbus_connector/
                   # Q_ARG не маршаллит dataclass)/stop_server/set_values/
                   # get_values (invokeMethod BlockingQueuedConnection с
                   # Q_RETURN_ARG("QVariantList"))/set_tick_interval/shutdown;
-                  # ticked — метроном для правил симуляции (этап 5)
+                  # ticked — метроном правил симуляции (в session_widget
+                  # подключён к sim_panel.apply_rules)
   sim_panel.py    # SimPanel — slave-режим сессии: строка параметров сервера
                   # (тип TCP/RTU — страницы network/serial по паттерну
                   # ConnectionPanel, BAUDRATES импортируется оттуда; Unit —
@@ -114,7 +119,8 @@ src/modbus_connector/
                   # Start/Stop server (connect/disconnect-иконки, как
                   # ConnectionPanel._sync_button_text), статус (status_colors,
                   # серый/зелёный + «clients: N» из clientChanged);
-                  # таблица карты Name|Type|Address|Count|Format|Value|✕
+                  # таблица карты Name|Type|Address|Count|Format|Value|Rule|
+                  # Rule text|✕
                   # (те же KINDS/FORMATS из models, значения list[int|bool]
                   # хранятся в UserRole ячейки Name — data() возвращает копию,
                   # обновления пишутся назад через setData); Value — через
@@ -123,10 +129,33 @@ src/modbus_connector/
                   # и до старта); masterWrote → handle_master_write обновляет
                   # покрывающие строки; кнопка Template… (csv_import, QMenu с
                   # подменю производителей, дубли kind+address пропускаются);
+                  # правила значений (Rule = manual/expression, ключи в
+                  # itemData, отображение переводится): expression — Value
+                  # readonly, Rule text редактируемый (ExpressionDelegate из
+                  # registers_panel с extra_functions/extra_names); движок —
+                  # parse_expression с SIM_RULE_FUNCTIONS (rand/randint) и
+                  # именами t (секунды от старта сервера, _started_at в
+                  # set_running) / prev (предыдущий результат строки, на
+                  # первом тике — текущее значение); кэш Expression и prev —
+                  # в data-ролях ячейки Name (UserRole+1/+2); apply_rules()
+                  # зовётся по SimWorker.ticked: values — primary-числа строк
+                  # по именам (decode_register_values[0], биты 1.0/0.0,
+                  # hex/ascii не участвуют), результат кодируется обратно
+                  # encode_register_values (порядок ABCD фиксирован, dec-clamp,
+                  # биты bool(round)) → setValuesRequested + перерисовка;
+                  # невалидный текст — «⚠»+tooltip (строка пропускается),
+                  # nan/нет dep/OverflowError — «—», в datastore не пишем,
+                  # prev не обновляем; тик-интервал — spin "Tick, ms"
+                  # (100..10000, default 1000) → setTickIntervalRequested(int)
+                  # → sim_worker.set_tick_interval (проводка в session_widget,
+                  # там же ticked → apply_rules);
                   # сигналы startRequested(object, object)/stopRequested/
-                  # setValuesRequested(str,int,list)/logLine;
+                  # setValuesRequested(str,int,list)/setTickIntervalRequested(int)/logLine;
                   # set_running(ok, message), running_description(),
-                  # state()/set_state() = {"server": {...}, "rows": [...]}
+                  # state()/set_state() = {"server": {...}, "rows": [...],
+                  # "tick_ms": int}; строки += "rule"/"rule_text" (толерантный
+                  # разбор, default manual, текст хранится только у expression,
+                  # невалидный expr грузится как «⚠»)
   connection_panel.py  # параметры подключения (TCP / RTU / RTU over TCP /
                        # RTU over UDP — страницы network/serial; тип в комбо
                        # лежит в itemData английским, переводится только
@@ -592,6 +621,10 @@ tests/
                            # (server+rows, толерантный разбор), шаблон в карту,
                            # masterWrote → Value, правка Value →
                            # setValuesRequested, start эмитит params+push строк
+  test_sim_rules.py        # правила SimPanel: rule/rule_text/tick_ms в state,
+                           # «⚠» при невалидном, гейтинг редактируемости ячеек,
+                           # apply_rules ([a]*2, prev-счётчик, t, rand/randint),
+                           # nan/нет dep → «—» без записи, encode f32/u32/s16/coils
   test_main_window_tabs.py # вкладки: round-trip настроек, старый формат,
                            # закрытие вкладок
   test_scanner_panel.py    # probes-таблица (текстовые ячейки, пропуск

@@ -349,6 +349,41 @@ def decode_register_values(
     return decoded
 
 
+def encode_register_values(
+    value: float, fmt: DisplayFormat, order: ByteOrder = "ABCD"
+) -> list[int]:
+    """Encode a number into raw registers (inverse of decode_register_values).
+
+    dec/s16 — один регистр (round + clamp в диапазон формата), 32/64-битные
+    форматы — группа из 2/4 регистров с учётом порядка байт; для f32/f64
+    clamp нет — непредставимое значение даёт OverflowError из struct.pack.
+    hex/ascii — строковые форматы отображения, кодированию не подлежат
+    (ValueError). Используется симулятором, чтобы писать вычисленные
+    правилами числа обратно в карту регистров.
+    """
+    if fmt == "dec":
+        return [round(_clamp(value, 0, 0xFFFF))]
+    if fmt == "s16":
+        return [round(_clamp(value, -0x8000, 0x7FFF)) & 0xFFFF]
+    if fmt not in _GROUP_SIZES:
+        raise ValueError(f"Формат {fmt!r} не кодируется в регистры")
+    group = _GROUP_SIZES[fmt]
+    bits = 16 * group
+    if fmt in ("u32", "u64"):
+        data = round(_clamp(value, 0, 2**bits - 1)).to_bytes(2 * group, "big")
+    elif fmt in ("s32", "s64"):
+        half = 2 ** (bits - 1)
+        data = round(_clamp(value, -half, half - 1)).to_bytes(2 * group, "big", signed=True)
+    elif fmt == "f32":
+        data = struct.pack(">f", value)
+    else:  # f64
+        data = struct.pack(">d", value)
+    # обратная перестановка: канонические байты раскладываем по местам прибытия
+    perm = _order_permutation(order, len(data))
+    raw = bytes(data[perm[j]] for j in range(len(data)))
+    return [int.from_bytes(raw[i : i + 2], "big") for i in range(0, len(raw), 2)]
+
+
 def format_register_values(
     values: list[int], fmt: DisplayFormat, order: ByteOrder = "ABCD"
 ) -> str:

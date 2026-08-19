@@ -385,6 +385,9 @@ RU: dict[str, str] = {
     "clients: {count}": "клиентов: {count}",
     "← template: added {added} rows to the map":
         "← шаблон: добавлено строк в карту: {added}",
+    "Rule": "Правило",
+    "Rule text": "Текст правила",
+    "Tick, ms": "Тик, мс",
     # sim worker log lines
     "→ start simulator {desc}": "→ запуск симулятора {desc}",
     "✗ simulator start failed: {exc}": "✗ запуск симулятора не удался: {exc}",

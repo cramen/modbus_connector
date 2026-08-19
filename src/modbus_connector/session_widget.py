@@ -163,6 +163,8 @@ class SessionWidget(QWidget):
         self._sim_worker.clientChanged.connect(self.sim_panel.handle_client_changed)
         self._sim_worker.requestLine.connect(self.log_panel.append)
         self._sim_worker.logLine.connect(self.log_panel.append)
+        self._sim_worker.ticked.connect(self.sim_panel.apply_rules)
+        self.sim_panel.setTickIntervalRequested.connect(self._sim_worker.set_tick_interval)
         self.sim_panel.logLine.connect(self.log_panel.append)
 
         self._worker.aliveChanged.connect(self.connection_panel.set_alive)

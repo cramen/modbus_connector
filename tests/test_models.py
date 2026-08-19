@@ -4,6 +4,8 @@ import pytest
 
 from modbus_connector.models import (
     AlarmRule,
+    ByteOrder,
+    DisplayFormat,
     RegisterRow,
     RowDisplaySettings,
     Stats,
@@ -14,6 +16,7 @@ from modbus_connector.models import (
     decode_register_values,
     describe_exception,
     diff_snapshots,
+    encode_register_values,
     evaluate_alarm,
     format_register_values,
     format_scaled_values,
@@ -264,6 +267,46 @@ class TestDecodeComposeWithScaling:
         assert decode_register_values([0x0102, 0x0304, 0x0506, 0x0708], "u64") == [
             0x0102030405060708
         ]
+
+
+class TestEncodeRegisterValues:
+    def test_dec_round_and_clamp(self) -> None:
+        assert encode_register_values(42.4, "dec") == [42]
+        assert encode_register_values(70000, "dec") == [0xFFFF]
+        assert encode_register_values(-5, "dec") == [0]
+
+    def test_s16_clamp_and_sign(self) -> None:
+        assert encode_register_values(-1, "s16") == [0xFFFF]
+        assert encode_register_values(40000, "s16") == [0x7FFF]
+        assert encode_register_values(-40000, "s16") == [0x8000]
+
+    def test_string_formats_rejected(self) -> None:
+        for fmt in ("hex", "ascii"):
+            with pytest.raises(ValueError):
+                encode_register_values(1.0, fmt)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize("order", ["ABCD", "CDAB", "BADC", "DCBA"])
+    @pytest.mark.parametrize(
+        "fmt, value",
+        [
+            ("u32", 0x01020304),
+            ("s32", -123456),
+            ("f32", 1.5),
+            ("f32", -2.25),
+            ("u64", 0x0102030405060708),
+            ("s64", -1234567890123),
+            ("f64", 3.141592653589793),
+        ],
+    )
+    def test_roundtrip_decode(self, fmt: DisplayFormat, value: float, order: ByteOrder) -> None:
+        registers = encode_register_values(value, fmt, order)
+        decoded = decode_register_values(registers, fmt, order)
+        assert len(registers) == (4 if fmt in ("u64", "s64", "f64") else 2)
+        assert decoded[0] == pytest.approx(value)
+
+    def test_f32_overflow_raises(self) -> None:
+        with pytest.raises(OverflowError):
+            encode_register_values(1e300, "f32")
 
 
 class TestStats:

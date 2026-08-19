@@ -72,7 +72,8 @@ def test_state_roundtrip(panel: SimPanel) -> None:
     assert server["unit"] == 5
     rows = collected["rows"]
     assert rows[0] == {"name": "temp", "kind": "holding_registers", "address": 5,
-                       "count": 2, "format": "f32", "values": [100, 200]}
+                       "count": 2, "format": "f32", "values": [100, 200],
+                       "rule": "manual", "rule_text": ""}
     assert rows[1]["values"] == [True]
 
 
