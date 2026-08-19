@@ -273,3 +273,11 @@ def test_edit_value_bad_float_keeps_old_values(panel: SimPanel) -> None:
     panel._table.item(0, COL_VALUE).setText("abc")
     assert panel._values_at(0) == before  # откат к сохранённым
     assert any("parse error" in line for line in lines)
+
+
+def test_edit_value_accepts_text_for_ascii(panel: SimPanel) -> None:
+    panel._add_row({"name": "dev", "kind": "holding_registers", "address": 16,
+                    "count": 4, "format": "ascii", "values": [0, 0, 0, 0]})
+    panel._table.item(0, COL_VALUE).setText("MC-42")
+    assert panel._table.item(0, COL_VALUE).text() == "MC-42"
+    assert panel._values_at(0)[:3] == [0x4D43, 0x2D34, 0x3200]

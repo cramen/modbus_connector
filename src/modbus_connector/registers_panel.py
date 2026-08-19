@@ -88,6 +88,7 @@ from modbus_connector.models import (
     csv_header,
     decode_register_values,
     diff_snapshots,
+    encode_ascii_values,
     evaluate_alarm,
     format_register_values,
     format_scaled_values,
@@ -2132,6 +2133,8 @@ class RegistersPanel(QWidget):
         try:
             if row.kind in REGISTER_KINDS and fmt and fmt not in ("dec", "hex", "ascii"):
                 values = parse_formatted_values(text, fmt, row.count)
+            elif row.kind in REGISTER_KINDS and fmt == "ascii":
+                values = encode_ascii_values(text, row.count)
             else:
                 values = parse_values(row.kind, text)
         except (ValueError, OverflowError) as exc:

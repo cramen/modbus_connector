@@ -395,9 +395,9 @@ def parse_formatted_values(text: str, fmt: DisplayFormat, count: int) -> list[in
 
     Каждое число кодируется encode_register_values в свою группу регистров
     (ширина группы — register_width(fmt)); результат дополняется нулями/
-    обрезается до count регистров. Для dec/hex/ascii ввода — parse_values.
-    ValueError на пустом вводе и нечисловых токенах, OverflowError на
-    непредставимом float."""
+    обрезается до count регистров. Для dec/hex ввода — parse_values, для
+    ascii — encode_ascii_values. ValueError на пустом вводе и нечисловых
+    токенах, OverflowError на непредставимом float."""
     parts = [p for p in re.split(r"[,\s]+", text.strip()) if p]
     if not parts:
         raise ValueError("Пустой ввод: введите значения через запятую или пробел")
@@ -409,6 +409,21 @@ def parse_formatted_values(text: str, fmt: DisplayFormat, count: int) -> list[in
             raise ValueError(f"Недопустимое число: {part!r}") from None
         encoded.extend(encode_register_values(number, fmt))
     return (encoded + [0] * count)[:count]
+
+
+def encode_ascii_values(text: str, count: int) -> list[int]:
+    """Текст → регистры для ascii-формата: 2 символа на регистр (high byte
+    first), нечётная длина и хвост добиваются NUL; непечатные/не-ASCII
+    символы заменяются на '?'. Результат — ровно count регистров (pad/truncate).
+    Зеркало ascii-ветки format_register_values."""
+    raw = bytearray()
+    for ch in text:
+        code = ord(ch)
+        raw.append(code if 0x20 <= code <= 0x7E else 0x3F)
+    if len(raw) % 2:
+        raw.append(0)
+    values = [int.from_bytes(raw[i : i + 2], "big") for i in range(0, len(raw), 2)]
+    return (values + [0] * count)[:count]
 
 
 def format_register_values(

@@ -1422,3 +1422,17 @@ def test_write_accepts_display_format_numbers(qapp: QApplication) -> None:
     panel._table.item(0, COL_NEW_VALUE).setText("0.1")
     assert writes == []
     assert any("parse error" in line for line in lines)
+
+
+def test_write_accepts_text_for_ascii(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "dev", "kind": "holding_registers", "address": 16,
+          "count": 4, "format": "ascii"}]
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel._table.item(0, COL_NEW_VALUE).setText("qwe")
+    assert writes, "write must be emitted"
+    assert writes[-1][3] == [0x7177, 0x6500, 0, 0]

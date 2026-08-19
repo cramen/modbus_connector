@@ -16,6 +16,7 @@ from modbus_connector.models import (
     decode_register_values,
     describe_exception,
     diff_snapshots,
+    encode_ascii_values,
     encode_register_values,
     evaluate_alarm,
     format_register_values,
@@ -918,3 +919,23 @@ class TestParseFormattedValues:
             parse_formatted_values("", "f32", 2)
         with pytest.raises(ValueError):
             parse_formatted_values("abc", "f32", 2)
+
+
+class TestEncodeAsciiValues:
+    def test_roundtrip(self) -> None:
+        values = encode_ascii_values("MC-42", 4)
+        assert format_register_values(values, "ascii") == "MC-42"
+        assert len(values) == 4  # pad до count
+
+    def test_two_chars_per_register_high_first(self) -> None:
+        assert encode_ascii_values("qwe", 2) == [0x7177, 0x6500]
+
+    def test_truncate_to_count(self) -> None:
+        assert encode_ascii_values("abcdef", 2) == [0x6162, 0x6364]
+
+    def test_non_ascii_replaced_with_question_mark(self) -> None:
+        values = encode_ascii_values("aж", 1)
+        assert format_register_values(values, "ascii") == "a?"
+
+    def test_empty(self) -> None:
+        assert encode_ascii_values("", 2) == [0, 0]

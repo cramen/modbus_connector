@@ -51,6 +51,8 @@ src/modbus_connector/
                   # register_width(fmt) — регистров на значение (1/2/4),
                   # parse_formatted_values(text, fmt, count) — ввод чисел в
                   # формате отображения (поверх encode),
+                  # encode_ascii_values(text, count) — текст → регистры
+                  # (2 символа на регистр, NUL-pad, не-ASCII → «?»),
                   # format_register_values (поверх decode),
                   # format_scaled_values (x*scale+offset по decoded),
                   # rows_to_csv/rows_from_csv/row_to_csv_record/CSV_COLUMNS —
@@ -452,7 +454,8 @@ src/modbus_connector/
                        # прочитанные значения пишутся в лог,
                        # Enter в колонке New value = запись (числовые форматы —
                        # ввод в формате отображения через parse_formatted_values,
-                       # dec/hex/ascii и биты — сырые значения), Ctrl/Cmd+R =
+                       # ascii — обычный текст через encode_ascii_values,
+                       # dec/hex и биты — сырые значения), Ctrl/Cmd+R =
                        # чтение
                        # текущей строки, Ctrl/Cmd+Shift+R = Read all, удаление строки — иконка-крестик,
                        # быстрые действия над текущей строкой (Ctrl+C копия

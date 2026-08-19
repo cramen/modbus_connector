@@ -35,6 +35,7 @@ from modbus_connector.models import (
     RegisterKind,
     RtuParams,
     decode_register_values,
+    encode_ascii_values,
     encode_register_values,
     format_register_values,
     format_values,
@@ -640,6 +641,9 @@ class SimPanel(QWidget):
             if kind in REGISTER_KINDS and fmt not in ("dec", "hex", "ascii"):
                 count = len(self._values_at(index)) or 1
                 values = parse_formatted_values(item.text(), fmt, count)
+            elif kind in REGISTER_KINDS and fmt == "ascii":
+                count = len(self._values_at(index)) or 1
+                values = encode_ascii_values(item.text(), count)
             else:
                 values = parse_values(kind, item.text())
         except (ValueError, OverflowError) as exc:
