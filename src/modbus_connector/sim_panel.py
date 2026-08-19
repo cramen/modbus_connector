@@ -2,6 +2,7 @@
 
 import math
 import random
+import re
 import time
 from collections.abc import Callable
 from typing import Any, get_args
@@ -631,15 +632,40 @@ class SimPanel(QWidget):
     def _commit_value(self, index: int) -> None:
         kind = self._kind_at(index)
         item = self._table.item(index, COL_VALUE)
+        # ввод принимается в формате ОТОБРАЖЕНИЯ строки: для числовых форматов
+        # (s16/u32/f32/...) — десятичные числа, кодируемые encode_register_values;
+        # dec/hex/ascii и битовые области — сырые значения через parse_values
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
         try:
-            values = parse_values(kind, item.text())
-        except ValueError as exc:
+            if kind in REGISTER_KINDS and fmt not in ("dec", "hex", "ascii"):
+                values = self._parse_formatted_numbers(index, item.text(), fmt)
+            else:
+                values = parse_values(kind, item.text())
+        except (ValueError, OverflowError) as exc:
             self.logLine.emit(tr("✗ parse error: {exc}", exc=exc))
             self._render_value(index)  # откат к сохранённым значениям
             return
         self._table.item(index, COL_NAME).setData(_VALUES_ROLE, values)
         self._render_value(index)
         self._push_row(index)
+
+    def _parse_formatted_numbers(
+        self, index: int, text: str, fmt: DisplayFormat
+    ) -> list[int]:
+        """Разбор ввода Value для числовых форматов: числа через запятую/пробел,
+        каждое кодируется в свою группу регистров (по ширине формата)."""
+        parts = [p for p in re.split(r"[,\s]+", text.strip()) if p]
+        if not parts:
+            raise ValueError("Пустой ввод: введите значения через запятую или пробел")
+        encoded: list[int] = []
+        for part in parts:
+            try:
+                number = float(part)
+            except ValueError:
+                raise ValueError(f"Недопустимое число: {part!r}") from None
+            encoded.extend(encode_register_values(number, fmt))
+        count = len(self._values_at(index)) or 1
+        return (encoded + [0] * count)[:count]
 
     def _commit_count(self, index: int) -> None:
         values = self._values_at(index)

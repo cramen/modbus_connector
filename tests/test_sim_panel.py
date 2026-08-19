@@ -237,3 +237,39 @@ def test_state_normalizes_count_to_format_width(panel: SimPanel) -> None:
     })
     assert panel._table.item(0, COL_COUNT).text() == "2"
     assert panel._values_at(0) == [16215, 0]
+
+
+def test_edit_value_accepts_float_for_f32(panel: SimPanel) -> None:
+    # ввод в формате отображения: "0.1" кодируется в пару регистров f32
+    payloads: list = []
+    panel.setValuesRequested.connect(lambda *args: payloads.append(args))
+    panel._add_row({"name": "h", "kind": "input_registers", "address": 5,
+                    "count": 2, "format": "f32", "values": [0, 0]})
+    panel._table.item(0, COL_VALUE).setText("0.1")
+    values = panel._values_at(0)
+    assert len(values) == 2
+    assert abs(panel._primary_number(0) - 0.1) < 1e-6
+    assert panel._table.item(0, COL_VALUE).text() == "0.1"
+    assert payloads and payloads[-1][1:] == (5, values)
+
+
+def test_edit_value_multiple_numbers_per_groups(panel: SimPanel) -> None:
+    # count=4 = два значения f32: "0.5, 2.5" → 4 регистра
+    panel._add_row({"name": "h", "kind": "input_registers", "address": 5,
+                    "count": 4, "format": "f32", "values": [0, 0, 0, 0]})
+    panel._table.item(0, COL_VALUE).setText("0.5, 2.5")
+    values = panel._values_at(0)
+    assert len(values) == 4
+    decoded = panel._primary_number(0)
+    assert abs(decoded - 0.5) < 1e-6
+
+
+def test_edit_value_bad_float_keeps_old_values(panel: SimPanel) -> None:
+    lines: list[str] = []
+    panel.logLine.connect(lines.append)
+    panel._add_row({"name": "h", "kind": "input_registers", "address": 5,
+                    "count": 2, "format": "f32", "values": [16215, 46602]})
+    before = panel._values_at(0)
+    panel._table.item(0, COL_VALUE).setText("abc")
+    assert panel._values_at(0) == before  # откат к сохранённым
+    assert any("parse error" in line for line in lines)
