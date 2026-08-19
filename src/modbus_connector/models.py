@@ -317,6 +317,11 @@ def _order_permutation(order: ByteOrder, n_bytes: int) -> list[int]:
 _GROUP_SIZES = {"u32": 2, "s32": 2, "f32": 2, "u64": 4, "s64": 4, "f64": 4}
 
 
+def register_width(fmt: DisplayFormat) -> int:
+    """Число 16-битных регистров на одно значение формата (1/2/4)."""
+    return _GROUP_SIZES.get(fmt, 1)
+
+
 def decode_register_values(
     values: list[int], fmt: DisplayFormat, order: ByteOrder = "ABCD"
 ) -> list[int | float]:

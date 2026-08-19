@@ -15,6 +15,8 @@ except ImportError as exc:
 from modbus_connector.sim_backend import SimTcpParams  # noqa: E402
 from modbus_connector.sim_panel import (  # noqa: E402
     COL_ACTIONS,
+    COL_COUNT,
+    COL_FORMAT,
     COL_VALUE,
     SimPanel,
 )
@@ -208,3 +210,30 @@ def test_help_button_opens_simulator_help(panel: SimPanel) -> None:
     assert len(dialogs) == 1
     assert dialogs[0].windowTitle() == tr("Simulator — Help")
     dialogs[0].close()
+
+
+def test_wider_format_bumps_count(panel: SimPanel) -> None:
+    # f32 требует 2 регистра: выбор формата поднимает count 1 → 2, значения сохраняются
+    panel._add_row({"name": "h", "kind": "input_registers", "address": 5,
+                    "count": 1, "format": "s16", "values": [22]})
+    panel._table.cellWidget(0, COL_FORMAT).setCurrentText("f32")
+    assert panel._table.item(0, COL_COUNT).text() == "2"
+    assert panel._values_at(0) == [22, 0]
+
+
+def test_count_edit_below_format_width_clamps(panel: SimPanel) -> None:
+    panel._add_row({"name": "h", "kind": "input_registers", "address": 5,
+                    "count": 2, "format": "f32", "values": [16215, 46602]})
+    panel._table.item(0, COL_COUNT).setText("1")  # commit через itemChanged
+    assert panel._table.item(0, COL_COUNT).text() == "2"
+    assert panel._values_at(0) == [16215, 46602]
+
+
+def test_state_normalizes_count_to_format_width(panel: SimPanel) -> None:
+    panel.set_state({
+        "server": {},
+        "rows": [{"name": "h", "kind": "input_registers", "address": 5,
+                  "count": 1, "format": "f32", "values": [16215]}],
+    })
+    assert panel._table.item(0, COL_COUNT).text() == "2"
+    assert panel._values_at(0) == [16215, 0]

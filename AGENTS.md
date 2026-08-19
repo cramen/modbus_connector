@@ -126,7 +126,9 @@ src/modbus_connector/
                   # Rule text|✕
                   # (те же KINDS/FORMATS из models, значения list[int|bool]
                   # хранятся в UserRole ячейки Name — data() возвращает копию,
-                  # обновления пишутся назад через setData); Value — через
+                  # обновления пишутся назад через setData; count не может быть
+                  # меньше ширины значения формата — register_width, автоподъём
+                  # при смене формата/правке count/загрузке state); Value — через
                   # format_register_values/format_values, правка → parse_values
                   # + setValuesRequested (пишется всегда: backend хранит блоки
                   # и до старта); masterWrote → handle_master_write обновляет

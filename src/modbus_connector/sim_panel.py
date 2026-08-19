@@ -40,6 +40,7 @@ from modbus_connector.models import (
     format_values,
     parse_expression,
     parse_values,
+    register_width,
 )
 from modbus_connector.registers_panel import ExpressionDelegate
 from modbus_connector.sim_backend import BLOCK_SIZE, SimTcpParams, describe_sim
@@ -314,6 +315,9 @@ class SimPanel(QWidget):
         except (TypeError, ValueError):
             count = 1
         fmt = entry.get("format") if entry.get("format") in FORMATS else "dec"
+        # 32/64-битные форматы требуют count, кратного ширине значения
+        if kind in REGISTER_KINDS:
+            count = max(count, register_width(fmt))
         values = self._coerce_values(kind, entry.get("values"), count)
         rule = entry.get("rule") if entry.get("rule") in RULE_MODES else "manual"
         # текст правила хранится только у expression-строк (у manual пусто)
@@ -643,9 +647,10 @@ class SimPanel(QWidget):
             count = int(self._text_at(index, COL_COUNT), 0)
         except ValueError:
             count = 0
-        if not 1 <= count <= BLOCK_SIZE:
+        width = self._format_width(index)
+        if not width <= count <= BLOCK_SIZE:
             self._table.blockSignals(True)
-            self._table.item(index, COL_COUNT).setText(str(len(values)))
+            self._table.item(index, COL_COUNT).setText(str(max(len(values), width)))
             self._table.blockSignals(False)
             return
         default: int | bool = 0 if self._kind_at(index) in REGISTER_KINDS else False
@@ -653,6 +658,12 @@ class SimPanel(QWidget):
         self._table.item(index, COL_NAME).setData(_VALUES_ROLE, values)
         self._render_value(index)
         self._push_row(index)
+
+    def _format_width(self, index: int) -> int:
+        """Минимально допустимый count строки: ширина значения её формата."""
+        if self._kind_at(index) not in REGISTER_KINDS:
+            return 1
+        return register_width(self._table.cellWidget(index, COL_FORMAT).currentText())
 
     @Slot(object)
     def _on_kind_changed(self, combo: QComboBox) -> None:
@@ -670,8 +681,21 @@ class SimPanel(QWidget):
     @Slot(object)
     def _on_format_changed(self, combo: QComboBox) -> None:
         index = self._row_of(combo, COL_FORMAT)
-        if index is not None:
-            self._render_value(index)
+        if index is None:
+            return
+        # смена формата на более широкий поднимает count до ширины значения
+        width = self._format_width(index)
+        values = self._values_at(index)
+        if len(values) < width:
+            default: int | bool = 0 if self._kind_at(index) in REGISTER_KINDS else False
+            self._table.item(index, COL_NAME).setData(
+                _VALUES_ROLE, values + [default] * (width - len(values))
+            )
+            self._table.blockSignals(True)
+            self._table.item(index, COL_COUNT).setText(str(width))
+            self._table.blockSignals(False)
+            self._push_row(index)
+        self._render_value(index)
 
     @Slot()
     def _on_delete_clicked(self) -> None:
