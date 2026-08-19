@@ -3,6 +3,9 @@
 ## Назначение
 
 GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
+Каждая вкладка — сессия в режиме Master (опрос устройства) или Slave
+(встроенный симулятор устройства: Modbus TCP/RTU сервер на pymodbus с
+редактируемой картой значений и правилами-выражениями).
 Подключение к устройствам по Modbus TCP и RTU (по умолчанию RTU), чтение/запись
 регистров из таблицы, поллинг с интервалом, сканер unit-адресов в отдельном окне.
 Настройки соединений (вкладки), списки регистров и состояния сканеров
@@ -129,6 +132,8 @@ src/modbus_connector/
                   # и до старта); masterWrote → handle_master_write обновляет
                   # покрывающие строки; кнопка Template… (csv_import, QMenu с
                   # подменю производителей, дубли kind+address пропускаются);
+                  # help-кнопка (make_help_button → SIMULATOR_HELP) рядом с
+                  # Template…;
                   # правила значений (Rule = manual/expression, ключи в
                   # itemData, отображение переводится): expression — Value
                   # readonly, Rule text редактируемый (ExpressionDelegate из
@@ -369,11 +374,11 @@ src/modbus_connector/
                     # тултип "Help"/"Справка") +
                     # show_help — немодальный диалог с QTextBrowser
                     # (WA_DeleteOnClose); тексты REGISTERS_HELP/GRAPH_HELP/
-                    # SCANNER_HELP/EXPRESSIONS_HELP — HTML со списком хоткеев,
-                    # русские версии
+                    # SCANNER_HELP/EXPRESSIONS_HELP/SIMULATOR_HELP — HTML со
+                    # списком хоткеев, русские версии
                     # в HELP_RU (выбор по текущему языку при открытии);
-                    # кнопки стоят в панели регистров, окне графика, сканере
-                    # и тулбаре блока выражений
+                    # кнопки стоят в панели регистров, окне графика, сканере,
+                    # тулбаре блока выражений и панели симулятора
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)

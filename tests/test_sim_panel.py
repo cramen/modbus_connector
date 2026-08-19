@@ -185,3 +185,26 @@ def test_stop_requested_when_running(panel: SimPanel) -> None:
     spy = QSignalSpy(panel.stopRequested)
     panel._button.click()
     assert spy.count() == 1
+
+
+def test_add_manual_row_logs_no_parse_error(panel: SimPanel) -> None:
+    # setFlags в _sync_rule_cells эмитит itemChanged — не должен доходить
+    # до _commit_value (ложный «parse error» на ещё пустой ячейке Value)
+    lines: list[str] = []
+    panel.logLine.connect(lines.append)
+    panel._add_row({"name": "t", "kind": "holding_registers", "address": 0,
+                    "count": 1, "format": "dec", "values": [5], "rule": "manual"})
+    assert lines == []
+    assert panel._table.item(0, COL_VALUE).text() == "5"
+
+
+def test_help_button_opens_simulator_help(panel: SimPanel) -> None:
+    from PySide6.QtWidgets import QDialog
+
+    from modbus_connector.i18n import tr
+
+    panel._help_button.click()
+    dialogs = [d for d in panel.findChildren(QDialog) if d.isVisible()]
+    assert len(dialogs) == 1
+    assert dialogs[0].windowTitle() == tr("Simulator — Help")
+    dialogs[0].close()

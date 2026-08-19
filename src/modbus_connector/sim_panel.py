@@ -27,6 +27,7 @@ from serial.tools import list_ports
 
 from modbus_connector import icons, theme
 from modbus_connector.connection_panel import BAUDRATES
+from modbus_connector.help_dialog import SIMULATOR_HELP, make_help_button
 from modbus_connector.i18n import tr
 from modbus_connector.models import (
     DisplayFormat,
@@ -196,6 +197,8 @@ class SimPanel(QWidget):
         controls_row.addWidget(self._button)
         controls_row.addWidget(self._add_button)
         controls_row.addWidget(self._template_button)
+        self._help_button = make_help_button(self, "Simulator — Help", SIMULATOR_HELP)
+        controls_row.addWidget(self._help_button)
         controls_row.addWidget(self._label("Tick, ms"))
         controls_row.addWidget(self._tick_spin)
         controls_row.addWidget(self._status, 1)
@@ -445,8 +448,13 @@ class SimPanel(QWidget):
         return names
 
     def _sync_rule_cells(self, index: int) -> None:
-        """Expression: Value readonly + Rule text редактируемый; manual — наоборот."""
+        """Expression: Value readonly + Rule text редактируемый; manual — наоборот.
+
+        setFlags эмитит itemChanged — глушим сигналы, иначе при добавлении
+        manual-строки ещё пустая ячейка Value улетала бы в _commit_value
+        (ложный «parse error» в логе)."""
         expression = self._rule_at(index) == "expression"
+        self._table.blockSignals(True)
         for item, editable in (
             (self._table.item(index, COL_VALUE), not expression),
             (self._table.item(index, COL_RULE_TEXT), expression),
@@ -462,6 +470,7 @@ class SimPanel(QWidget):
                 item.setFlags(
                     flags & ~Qt.ItemFlag.ItemIsEnabled & ~Qt.ItemFlag.ItemIsEditable
                 )
+        self._table.blockSignals(False)
 
     def _compiled_rule(self, index: int) -> tuple[Expression | None, str]:
         """(Expression, "") или (None, текст ошибки); кэш по тексту правила."""

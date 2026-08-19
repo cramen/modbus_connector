@@ -160,6 +160,61 @@ rows for them — duplicates (same type and address) are skipped.</li>
 """
 
 
+SIMULATOR_HELP = """
+<h3>Simulator (slave mode)</h3>
+<p>The <b>Mode</b> combo above switches the tab between <b>Master</b> (poll a
+device) and <b>Slave</b> (this panel) — a Modbus device emulator for
+debugging masters, clients and gateways without real hardware. The combo is
+locked while the master side is connected or the server is running.</p>
+<h4>Server</h4>
+<ul>
+<li><b>TCP</b> (host, port — 1502 by default, so no admin rights are needed)
+or <b>RTU</b> (serial port, baudrate, parity); <b>Unit</b> picks the unit id
+to answer, <b>any</b> answers every unit id.</li>
+<li><b>Start server</b> pushes the whole map into the datastore and starts
+listening; the status line shows the bound address and the number of
+connected clients. Every master request goes to the log, and master writes
+update the matching map rows.</li>
+</ul>
+<h4>Map</h4>
+<ul>
+<li>Each row is a value range: <b>Name</b>, <b>Type</b> (coils, discrete
+inputs, holding or input registers), <b>Address</b> (0..9999, dec or 0x-hex),
+<b>Count</b>, display <b>Format</b> and <b>Value</b>. Editing a manual value
+writes it to the datastore immediately — even before the server starts.</li>
+<li><b>Template…</b> adds rows from a bundled device template (duplicates by
+type+address are skipped); <b>Add row</b> appends an empty row, ✕ deletes
+one.</li>
+</ul>
+<h4>Rules</h4>
+<p>The <b>Rule</b> column picks <b>Manual</b> (edit the Value yourself) or
+<b>Expression</b> — the value is recomputed every <b>Tick, ms</b> from the
+<b>Rule text</b>. The syntax is the same as in the master table's expressions
+block: <code>[name]</code> references another row's value, arithmetic
+(+ - * / // % **), parentheses, pi/e and functions (abs, sqrt, sin, min, max,
+clamp, …) are allowed, plus simulator-specific extras:</p>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Extra</th><th>Meaning</th></tr>
+<tr><td>rand()</td><td>random float in [0, 1)</td></tr>
+<tr><td>randint(a, b)</td><td>random integer in [a, b]</td></tr>
+<tr><td>t</td><td>seconds since the server started</td></tr>
+<tr><td>prev</td><td>the row's previous result (first tick: its current
+value)</td></tr>
+</table>
+<p>Examples: <code>20+5*sin(2*pi*t/60)</code> — a slow sine;
+<code>prev+1</code> — a counter; <code>min(prev+0.5, 100)</code> — a capped
+ramp.</p>
+<ul>
+<li><b>⚠</b> — syntax error; the tooltip shows the error text. <b>—</b> — no
+value this tick: a referenced row is missing, the evaluation failed or the
+result does not fit the row's format; such ticks are skipped and the
+datastore keeps the old value.</li>
+<li>Results are encoded back into registers with the fixed <b>ABCD</b> byte
+order (hex/ascii rows encode as dec).</li>
+</ul>
+"""
+
+
 def make_help_button(parent: QWidget, title: str, html: str) -> QToolButton:
     """Маленькая квадратная иконочная кнопка, открывающая справку по окну."""
     button = icons.make_button(tr("Help"), "help")
@@ -344,9 +399,64 @@ SCANNER_HELP_RU = """
 </ul>
 """
 
+SIMULATOR_HELP_RU = """
+<h3>Симулятор (slave-режим)</h3>
+<p>Комбо <b>Режим</b> выше переключает вкладку между <b>Мастером</b> (опрос
+устройства) и <b>Слейвом</b> (эта панель) — эмулятором Modbus-устройства для
+отладки мастеров, клиентов и шлюзов без реального железа. Комбо заблокировано,
+пока master-сторона подключена или сервер запущен.</p>
+<h4>Сервер</h4>
+<ul>
+<li><b>TCP</b> (хост, порт — по умолчанию 1502, права администратора не
+нужны) или <b>RTU</b> (порт, скорость, чётность); <b>Unit</b> задаёт
+unit id для ответов, <b>любой</b> — отвечать на любой unit id.</li>
+<li><b>Запустить сервер</b> пишет всю карту в datastore и начинает слушать
+порт; строка статуса показывает адрес и число подключённых клиентов. Каждый
+запрос мастера попадает в лог, а записи мастера обновляют покрывающие строки
+карты.</li>
+</ul>
+<h4>Карта</h4>
+<ul>
+<li>Каждая строка — диапазон значений: <b>имя</b>, <b>тип</b> (coils,
+discrete inputs, holding или input registers), <b>адрес</b> (0..9999, dec или
+0x-hex), <b>кол-во</b>, <b>формат</b> отображения и <b>значение</b>. Правка
+ручного значения пишется в datastore сразу — даже до старта сервера.</li>
+<li><b>Шаблон…</b> добавляет строки из встроенного шаблона устройства (дубли
+по типу+адресу пропускаются); <b>Добавить строку</b> — пустую строку,
+✕ удаляет строку.</li>
+</ul>
+<h4>Правила</h4>
+<p>Колонка <b>Правило</b> выбирает <b>Вручную</b> (значение правите вы) или
+<b>Выражение</b> — значение пересчитывается каждые <b>Тик, мс</b> из
+<b>текста правила</b>. Синтаксис как у блока выражений master-таблицы:
+<code>[имя]</code> — ссылка на значение другой строки, арифметика
+(+ - * / // % **), скобки, pi/e и функции (abs, sqrt, sin, min, max,
+clamp, …), плюс дополнения симулятора:</p>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Дополнение</th><th>Значение</th></tr>
+<tr><td>rand()</td><td>случайное число из [0, 1)</td></tr>
+<tr><td>randint(a, b)</td><td>случайное целое из [a, b]</td></tr>
+<tr><td>t</td><td>секунды с момента старта сервера</td></tr>
+<tr><td>prev</td><td>предыдущий результат строки (на первом тике — её текущее
+значение)</td></tr>
+</table>
+<p>Примеры: <code>20+5*sin(2*pi*t/60)</code> — медленный синус;
+<code>prev+1</code> — счётчик; <code>min(prev+0.5, 100)</code> — пила с
+ограничением.</p>
+<ul>
+<li><b>⚠</b> — ошибка синтаксиса (текст — в подсказке ячейки). <b>—</b> — на
+этом тике значения нет: строка-зависимость отсутствует, ошибка вычисления или
+результат не помещается в формат строки; такие тики пропускаются, datastore
+хранит старое значение.</li>
+<li>Результаты кодируются обратно в регистры с фиксированным порядком байт
+<b>ABCD</b> (строки hex/ascii кодируются как dec).</li>
+</ul>
+"""
+
 HELP_RU = {
     REGISTERS_HELP: REGISTERS_HELP_RU,
     GRAPH_HELP: GRAPH_HELP_RU,
     SCANNER_HELP: SCANNER_HELP_RU,
     EXPRESSIONS_HELP: EXPRESSIONS_HELP_RU,
+    SIMULATOR_HELP: SIMULATOR_HELP_RU,
 }

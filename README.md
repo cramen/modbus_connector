@@ -23,6 +23,14 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Connection types: TCP (host, port, timeout), RTU (serial port, baudrate,
   parity, etc.; RTU by default) and **RTU over TCP / RTU over UDP** for
   RS-485↔Ethernet converters — all configured in the GUI.
+- Slave mode / device simulator (the **Mode** combo in each tab): the tab
+  turns into a Modbus server — TCP or RTU, answering one unit id or **any** —
+  with an editable register map. Set values manually (they land in the
+  datastore instantly), watch master writes update the table and every
+  request hit the log, or drive rows with expression rules recomputed on a
+  configurable tick (`[name]` references, `t` seconds since start, `prev`
+  previous value, `rand()`/`randint(a,b)`). Device templates fill the map in
+  one click — handy for debugging masters and gateways without real hardware.
 - Device templates (the **Templates** menu): ready-made register maps and
   default connection settings for popular devices — Eastron SDM120/SDM630,
   EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 and
@@ -141,6 +149,12 @@ Expressions — computed rows over register values, with trend sparklines
 (the fx toolbar button):
 
 ![Expressions](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/expressions.png)
+
+Slave mode — the tab as a Modbus device emulator: server parameters and an
+editable register map with manual values and expression rules (the "Mode"
+combo above the table):
+
+![Slave mode simulator](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/simulator.png)
 
 ## Requirements
 
@@ -501,6 +515,13 @@ src/modbus_connector/
                   # unit scan, register address scan, raw traffic hook
   worker.py       # ModbusWorker (QObject) — signals/slots over backend, QThread;
                   # timing statistics, liveness checks, traffic forwarding
+  sim_backend.py  # SimBackend — pymodbus Modbus slave server (TCP/RTU) for
+                  # the slave mode: value blocks, master-write/request/client
+                  # hooks
+  sim_worker.py   # SimWorker (QObject) — signals/slots over SimBackend in a
+                  # QThread; rule ticker for the simulator
+  sim_panel.py    # slave-mode panel: server parameters, editable register
+                  # map with manual values and expression rules
   connection_panel.py  # connection panel (TCP/RTU/RTU over TCP/RTU over UDP,
                        # state/set_state) with a live status indicator
                        # (gray/green/orange); Device ID…/Diagnostics… dialogs
