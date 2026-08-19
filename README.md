@@ -62,6 +62,10 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   of all rows, then compare them with later reads in a separate window —
   changed rows are highlighted, an "Only differences" filter hides the rest,
   and "Take new snapshot" accepts the current values as the new baseline.
+- Expressions (the fx toolbar button): a block of computed rows under the
+  table — "[name]" references a row's scaled value, arithmetic, pi/e and
+  functions (abs, sqrt, sin, min, max, clamp, …) are allowed; each expression
+  has a trend sparkline and joins the graph window as an "fx name" series.
 - Advanced protocol functions: Mask Write Register (0x16), Read/Write Multiple
   Registers (0x17), Read Device Identification (0x2B) and serial-line
   Diagnostics (0x08) — via dedicated dialogs.

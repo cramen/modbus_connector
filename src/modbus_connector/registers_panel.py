@@ -1,5 +1,6 @@
 import csv
 import io
+import math
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -66,6 +67,7 @@ from modbus_connector.models import (
     AlarmRule,
     ByteOrder,
     DisplayFormat,
+    Expression,
     RegisterKind,
     RegisterRow,
     RowDisplaySettings,
@@ -78,6 +80,7 @@ from modbus_connector.models import (
     format_register_values,
     format_scaled_values,
     format_values,
+    parse_expression,
     parse_values,
     row_to_csv_record,
     rows_from_csv,
@@ -131,6 +134,16 @@ KEY_TO_COL = {key: col for col, key in enumerate(COLUMN_KEYS)}
 # data columns the user may hide via the header context menu; the two control
 # columns (poll checkbox, delete button) always stay visible
 DATA_COLUMNS = tuple(range(COL_NAME, COL_TREND + 1))
+
+# Expressions block: computed rows over register values, under the main table
+EXPR_HEADER_LABELS = ("Name", "Expression", "Value", "Trend", "")
+(
+    EXPR_COL_NAME,
+    EXPR_COL_EXPR,
+    EXPR_COL_VALUE,
+    EXPR_COL_TREND,
+    EXPR_COL_ACTIONS,
+) = range(5)
 
 
 class SparklineWidget(QWidget):
@@ -263,6 +276,10 @@ class RegistersPanel(QWidget):
         self._snapshot_at = ""  # время снятия снапшота (подпись в окне diff)
         self._diff_dialog: SnapshotDiffDialog | None = None
         self._bus_enabled = False  # no bus access until a connection is up
+        self._expr_token_counter = 0
+        self._expr_parsed: dict[int, Expression | None] = {}  # None = невалидное
+        self._expr_series: dict[int, TimeSeries] = {}  # expr token -> history
+        self._expr_sparklines: dict[int, SparklineWidget] = {}
         self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
         self._translatable_tips: list[tuple[QWidget, str]] = []
 
@@ -367,6 +384,15 @@ class RegistersPanel(QWidget):
             "value matches a condition",
         )
         alarms_button.clicked.connect(self._on_alarms)
+        self._expr_button = icons.make_button(tr("Expressions"), "expression",
+                                              checkable=True)
+        self._track(
+            self._expr_button,
+            "Expressions",
+            "Computed rows over register values ([name] references), "
+            "with their own sparklines and graph series",
+        )
+        self._expr_button.toggled.connect(self._on_expressions_toggled)
         csv_button = QToolButton()  # menu button: icon registered manually
         csv_button.setIcon(icons.icon("csv_export"))
         csv_button.setIconSize(QSize(icons.ICON_SIZE, icons.ICON_SIZE))
@@ -453,6 +479,7 @@ class RegistersPanel(QWidget):
         top.addWidget(self._filter_edit)
         top.addWidget(display_button)
         top.addWidget(alarms_button)
+        top.addWidget(self._expr_button)
         top.addWidget(csv_button)
         top.addWidget(self._snapshot_button)
         top.addWidget(self._diff_button)
@@ -475,10 +502,60 @@ class RegistersPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addLayout(top)
-        layout.addWidget(self._table)
+        layout.addWidget(self._table, 1)
+        layout.addWidget(self._expressions_widget())
 
         self._add_row()
         self.set_bus_enabled(False)  # the app starts disconnected
+
+    def _expressions_widget(self) -> QWidget:
+        """Скрываемый блок выражений под таблицей: тулбар (+) и таблица
+        Name/Expression/Value/Trend/✕. Видимость — чекабельной кнопкой
+        Expressions в основном тулбаре (state "expressions_visible")."""
+        widget = QWidget()
+        expr_bar = QHBoxLayout()
+        expr_bar.setContentsMargins(0, 0, 0, 0)
+        expr_label = QLabel()
+        self._track(expr_label, "Expressions")
+        expr_bar.addWidget(expr_label)
+        expr_add_button = icons.make_button(tr("Add expression"), "add")
+        self._track(
+            expr_add_button,
+            "Add expression",
+            "Add a computed row; [name] references a register row's "
+            "scaled value, e.g. ([temp] + [flow]) / 2",
+        )
+        expr_add_button.clicked.connect(self._on_add_expression)
+        expr_bar.addWidget(expr_add_button)
+        expr_bar.addStretch(1)
+
+        self._expr_table = QTableWidget(0, 5)
+        self._sync_expr_header()
+        header = self._expr_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for col, width in (
+            (EXPR_COL_NAME, 160),
+            (EXPR_COL_EXPR, 260),
+            (EXPR_COL_VALUE, 120),
+            (EXPR_COL_TREND, 118),
+        ):
+            self._expr_table.setColumnWidth(col, width)
+        self._expr_table.verticalHeader().setVisible(False)
+        self._expr_table.setToolTip(
+            tr(
+                "Expressions compute over scaled row values: [name] is a row "
+                "reference, functions abs/sqrt/sin/… and pi/e are available"
+            )
+        )
+        self._expr_table.itemChanged.connect(self._on_expr_item_changed)
+
+        box = QVBoxLayout(widget)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.addLayout(expr_bar)
+        box.addWidget(self._expr_table)
+        widget.hide()  # скрыт по умолчанию; открывает кнопка Expressions
+        self._expr_widget = widget
+        return widget
 
     def set_bus_enabled(self, ok: bool) -> None:
         """Включить/выключить контролы, ходящие на шину (по connectionChanged)."""
@@ -505,6 +582,11 @@ class RegistersPanel(QWidget):
         if header_item is not None:  # the checkbox column has no text, only a tip
             header_item.setToolTip(tr(POLL_ENABLED_TIP))
 
+    def _sync_expr_header(self) -> None:
+        self._expr_table.setHorizontalHeaderLabels(
+            [tr(text) for text in EXPR_HEADER_LABELS]
+        )
+
     def retranslate(self) -> None:
         """Переприменить tr() ко всем строкам панели (по смене языка)."""
         for widget, text in self._translatable:
@@ -516,7 +598,14 @@ class RegistersPanel(QWidget):
         for widget, tip in self._translatable_tips:
             widget.setToolTip(tr(tip))
         self._sync_header()
+        self._sync_expr_header()
         self._table.setToolTip(tr(TABLE_TOOLTIP))
+        self._expr_table.setToolTip(
+            tr(
+                "Expressions compute over scaled row values: [name] is a row "
+                "reference, functions abs/sqrt/sin/… and pi/e are available"
+            )
+        )
         self._filter_edit.setPlaceholderText(tr("Filter…"))
         self._csv_import_action.setText(tr("Import table…"))
         self._csv_export_action.setText(tr("Export…"))
@@ -581,6 +670,7 @@ class RegistersPanel(QWidget):
             "hidden_columns": [
                 COLUMN_KEYS[col] for col in DATA_COLUMNS if header.isSectionHidden(col)
             ],
+            "expressions_visible": self._expr_button.isChecked(),
         }
 
     def set_options(self, options: dict) -> None:
@@ -588,6 +678,9 @@ class RegistersPanel(QWidget):
             return
         if options.get("order") in ORDERS:
             self._global_order_combo.setCurrentText(str(options["order"]))
+        visible = options.get("expressions_visible")
+        if isinstance(visible, bool):
+            self._expr_button.setChecked(visible)  # toggled → setVisible
         header = self._table.horizontalHeader()
         order = options.get("column_order")
         if isinstance(order, list):
@@ -1454,6 +1547,213 @@ class RegistersPanel(QWidget):
             series.clear()
         for sparkline in self._sparklines.values():
             sparkline.refresh()
+        for series in self._expr_series.values():
+            series.clear()
+        for sparkline in self._expr_sparklines.values():
+            sparkline.refresh()
+
+    # --- expressions (вычисляемые строки над значениями регистров) ----------
+
+    @Slot(bool)
+    def _on_expressions_toggled(self, on: bool) -> None:
+        self._expr_widget.setVisible(on)
+
+    def expressions_state(self) -> list[dict]:
+        return [
+            {
+                "name": self._expr_text_at(index, EXPR_COL_NAME),
+                "expr": self._expr_text_at(index, EXPR_COL_EXPR),
+            }
+            for index in range(self._expr_table.rowCount())
+        ]
+
+    def set_expressions_state(self, entries: list) -> None:
+        """Загрузить выражения из session state; толерантный разбор, невалидные
+        выражения показываются как «⚠», а не отбрасываются."""
+        while self._expr_table.rowCount():
+            token = self._expr_token_at(0)
+            self._expr_parsed.pop(token, None)
+            self._expr_series.pop(token, None)
+            self._expr_sparklines.pop(token, None)
+            self._expr_table.removeRow(0)
+        if not isinstance(entries, list):
+            return
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "")
+            expr_text = str(entry.get("expr") or "")
+            if not name and not expr_text:
+                continue
+            self._add_expression(name, expr_text)
+
+    def expr_tokens(self) -> list[int]:
+        return [self._expr_token_at(i) for i in range(self._expr_table.rowCount())]
+
+    def expr_label(self, token: int) -> str:
+        index = self._find_expr_row(token)
+        if index is None:
+            return "?"
+        return (
+            self._expr_text_at(index, EXPR_COL_NAME)
+            or self._expr_text_at(index, EXPR_COL_EXPR)
+            or "?"
+        )
+
+    def expr_series(self, token: int) -> TimeSeries | None:
+        return self._expr_series.get(token)
+
+    def _expr_token_at(self, index: int) -> int:
+        item = self._expr_table.item(index, EXPR_COL_NAME)
+        return int(item.data(Qt.ItemDataRole.UserRole)) if item else -1
+
+    def _find_expr_row(self, token: int) -> int | None:
+        for index in range(self._expr_table.rowCount()):
+            if self._expr_token_at(index) == token:
+                return index
+        return None
+
+    def _expr_text_at(self, index: int, col: int) -> str:
+        item = self._expr_table.item(index, col)
+        return item.text().strip() if item else ""
+
+    @Slot()
+    def _on_add_expression(self) -> None:
+        self._add_expression()
+        item = self._expr_table.item(self._expr_table.rowCount() - 1, EXPR_COL_NAME)
+        if item is not None:  # новая строка сразу в редактировании имени
+            self._expr_table.setCurrentItem(item)
+            self._expr_table.editItem(item)
+
+    def _add_expression(self, name: str = "", expr_text: str = "") -> None:
+        index = self._expr_table.rowCount()
+        self._expr_table.blockSignals(True)
+        self._expr_table.insertRow(index)
+        # общий со строками регистров счётчик: токены уникальны в обеих
+        # таблицах, окну графика не нужно различать источники
+        self._row_token_counter += 1
+        token = self._row_token_counter
+
+        name_item = QTableWidgetItem(name)
+        name_item.setData(Qt.ItemDataRole.UserRole, token)
+        self._expr_table.setItem(index, EXPR_COL_NAME, name_item)
+        self._expr_table.setItem(index, EXPR_COL_EXPR, QTableWidgetItem(expr_text))
+
+        value_item = QTableWidgetItem("")
+        value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self._expr_table.setItem(index, EXPR_COL_VALUE, value_item)
+
+        series = TimeSeries()
+        sparkline = SparklineWidget(series)
+        self._expr_series[token] = series
+        self._expr_sparklines[token] = sparkline
+        self._expr_table.setCellWidget(index, EXPR_COL_TREND, sparkline)
+
+        delete_button = QToolButton()
+        delete_button.setIcon(icons.icon("close_tab"))
+        delete_button.setIconSize(QSize(icons.ICON_SIZE, icons.ICON_SIZE))
+        icons.register(delete_button, "close_tab")
+        delete_button.setFixedSize(26, 26)
+        delete_button.setToolTip(tr("Delete expression"))
+        delete_button.clicked.connect(self._on_expr_delete_clicked)
+        actions = QWidget()
+        actions_layout = QHBoxLayout(actions)
+        actions_layout.setContentsMargins(2, 2, 2, 2)
+        actions_layout.addWidget(delete_button)
+        self._expr_table.setCellWidget(index, EXPR_COL_ACTIONS, actions)
+        self._expr_table.blockSignals(False)
+
+        if expr_text:  # текст из state: разобрать (невалидное → «⚠»)
+            self._parse_expression_row(index)
+        self.rowsChanged.emit()  # окно графика перечитывает чек-лист
+
+    def _on_expr_delete_clicked(self) -> None:
+        button = self.sender()
+        if button is None:
+            return
+        actions = button.parentWidget()
+        for index in range(self._expr_table.rowCount()):
+            if self._expr_table.cellWidget(index, EXPR_COL_ACTIONS) is actions:
+                token = self._expr_token_at(index)
+                self._expr_parsed.pop(token, None)
+                self._expr_series.pop(token, None)
+                self._expr_sparklines.pop(token, None)
+                self._expr_table.removeRow(index)
+                self.rowsChanged.emit()
+                return
+
+    @Slot(QTableWidgetItem)
+    def _on_expr_item_changed(self, item: QTableWidgetItem) -> None:
+        if item.column() == EXPR_COL_EXPR:
+            self._parse_expression_row(item.row())  # commit: разбор + пересчёт
+        elif item.column() == EXPR_COL_NAME:
+            self.rowsChanged.emit()  # подпись в чек-листе графика
+
+    def _parse_expression_row(self, index: int) -> None:
+        """Разобрать текст ячейки Expression; невалидное — «⚠» + тултип
+        с ошибкой, предыдущее валидное выражение сбрасывается."""
+        token = self._expr_token_at(index)
+        value_item = self._expr_table.item(index, EXPR_COL_VALUE)
+        text = self._expr_text_at(index, EXPR_COL_EXPR)
+        if not text:
+            self._expr_parsed[token] = None
+            if value_item is not None:
+                value_item.setText("")
+                value_item.setToolTip("")
+                value_item.setBackground(QBrush())
+            return
+        try:
+            self._expr_parsed[token] = parse_expression(text)
+        except ValueError as exc:
+            self._expr_parsed[token] = None
+            if value_item is not None:
+                value_item.setText("⚠")
+                value_item.setToolTip(str(exc))
+                value_item.setBackground(theme.alarm_color("red"))
+            return
+        if value_item is not None:
+            value_item.setToolTip("")
+            value_item.setBackground(QBrush())
+        self._recalc_expression(index)
+
+    def _row_values_by_name(self) -> dict[str, float]:
+        """Имя строки → масштабированное primary-значение (для ссылок [name])."""
+        values: dict[str, float] = {}
+        for index in range(self._table.rowCount()):
+            name = self._text_at(index, COL_NAME)
+            if not name:
+                continue
+            row_values = self._last_values.get(self._token_at(index))
+            if row_values is None:
+                continue
+            primary = self._primary_value(index, row_values)
+            if primary is not None:
+                values[name] = primary
+        return values
+
+    def _recalc_expressions(self) -> None:
+        # выражений мало: пересчитываем все при любом чтении/переименовании —
+        # dep мог появиться или исчезнуть вместе с именем строки
+        for index in range(self._expr_table.rowCount()):
+            self._recalc_expression(index)
+
+    def _recalc_expression(self, index: int) -> None:
+        token = self._expr_token_at(index)
+        expr = self._expr_parsed.get(token)
+        value_item = self._expr_table.item(index, EXPR_COL_VALUE)
+        if expr is None or value_item is None:
+            return  # невалидное выражение: ячейка уже показывает «⚠»
+        try:
+            result = expr.evaluate(self._row_values_by_name())
+        except KeyError:
+            result = float("nan")  # строка-зависимость отсутствует/не читалась
+        if math.isnan(result):
+            value_item.setText("—")
+            return
+        value_item.setText(f"{result:g}")  # ~6 значащих цифр, как у primary
+        if self._recording:  # история — только в режиме poll+record
+            self._expr_series[token].append(time.monotonic(), result)
+            self._expr_sparklines[token].refresh()
 
     def _on_table_context_menu(self, pos: QPoint) -> None:
         row = self._table.rowAt(pos.y())
@@ -1578,6 +1878,9 @@ class RegistersPanel(QWidget):
             self._sync_row_timer(item.row())
             if item.column() == COL_POLL_ENABLED:
                 self.rowsChanged.emit()  # the graph window hides/shows the row
+        if item.column() == COL_NAME:
+            # имя — ключ ссылок [name]: dep мог появиться или исчезнуть
+            self._recalc_expressions()
 
     @Slot()
     def _read_current_row(self) -> None:
@@ -1827,6 +2130,7 @@ class RegistersPanel(QWidget):
             item.setText(text)
         if ok:
             self._update_alarm(index, values)
+            self._recalc_expressions()
 
     def _flash_value_cell(self, token: int, item: QTableWidgetItem) -> None:
         if token in self._active_alarms:

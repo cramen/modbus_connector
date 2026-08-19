@@ -136,6 +136,23 @@ RU: dict[str, str] = {
         "Формат отображения (только регистры; coils/discrete показывают 0/1)",
     "Delete row": "Удалить строку",
     "Poll this row": "Опрашивать строку",
+    # expressions block
+    "Expressions": "Выражения",
+    "Computed rows over register values ([name] references), "
+    "with their own sparklines and graph series":
+        "Вычисляемые строки над значениями регистров (ссылки [имя]), "
+        "со своими спарклайнами и рядами графика",
+    "Add expression": "Добавить выражение",
+    "Add a computed row; [name] references a register row's "
+    "scaled value, e.g. ([temp] + [flow]) / 2":
+        "Добавить вычисляемую строку; [имя] — ссылка на масштабированное "
+        "значение строки регистров, например ([temp] + [flow]) / 2",
+    "Expression": "Выражение",
+    "Delete expression": "Удалить выражение",
+    "Expressions compute over scaled row values: [name] is a row "
+    "reference, functions abs/sqrt/sin/… and pi/e are available":
+        "Выражения вычисляются над масштабированными значениями строк: "
+        "[имя] — ссылка на строку, доступны функции abs/sqrt/sin/… и pi/e",
     "Move up": "Переместить вверх",
     "Move down": "Переместить вниз",
     "Copy value": "Копировать значение",

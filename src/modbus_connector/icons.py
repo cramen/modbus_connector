@@ -334,6 +334,17 @@ def _snapshot(p: QPainter, _c: QColor) -> None:
     p.drawEllipse(QPointF(8.0, 9.0), 2.6, 2.6)
 
 
+@_drawer("expression")
+def _expression(p: QPainter, _c: QColor) -> None:
+    # ƒx: изогнутая ƒ с перекладиной и маленький x
+    fx = QPainterPath(QPointF(4.5, 13.5))
+    fx.cubicTo(5.0, 8.5, 6.0, 2.5, 10.5, 2.5)
+    p.drawPath(fx)
+    _line(p, 4.0, 7.5, 9.0, 7.5)
+    _line(p, 10.3, 9.5, 13.7, 13.0)
+    _line(p, 13.7, 9.5, 10.3, 13.0)
+
+
 @_drawer("diff")
 def _diff(p: QPainter, c: QColor) -> None:
     # два документа рядом; различающаяся строка отмечена точкой

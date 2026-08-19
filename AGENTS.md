@@ -54,7 +54,12 @@ src/modbus_connector/
                   # разбивка ошибок по видам),
                   # diff_snapshots(old, new) — сравнение двух RAW-снимков
                   # значений строки (None = «нет данных», None/None = нет
-                  # различия) для snapshot diff
+                  # различия) для snapshot diff;
+                  # parse_expression/Expression (.text/.deps/.evaluate) —
+                  # движок выражений: ссылки [имя] на строки, whitelisted
+                  # арифметика/функции (AST-валидация, eval без builtins),
+                  # ValueError на мусоре, KeyError = нет строки, nan = мат.
+                  # ошибка
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
                   # mask_write_register (функция 0x16),
@@ -216,7 +221,28 @@ src/modbus_connector/
                        # окна: diff по models.diff_snapshots (None = «нет
                        # данных»), значения форматируются текущим форматом
                        # строки (_display_text), строки, удалённые после
-                       # снапшота, идут в конец с "(removed)" (raw как есть)
+                       # снапшота, идут в конец с "(removed)" (raw как есть);
+                       # выражения: скрываемый блок под таблицей (чекабельная
+                       # кнопка Expressions в тулбаре, иконка expression;
+                       # видимость — registers_options "expressions_visible",
+                       # default False): таблица Name/Expression/Value/Trend/✕
+                       # (спарклайн — тот же SparklineWidget); вычисление по
+                       # МАСШТАБИРОВАННЫМ primary-значениям строк
+                       # (_row_values_by_name, матч dep по текущему имени
+                       # строки), пересчёт всех выражений при любом чтении
+                       # (handle_read_finished ok) и при правке имени строки;
+                       # невалидное выражение — «⚠» в Value (фон
+                       # theme.alarm_color("red")) + текст ошибки в toolTip,
+                       # предыдущее валидное сбрасывается; нет dep (KeyError)
+                       # или nan → «—»; число — f"{v:g}"; история — своя
+                       # TimeSeries на выражение, append только при _recording
+                       # (poll+record), как у регистров; токены выражений —
+                       # из общего _row_token_counter (уникальны в обеих
+                       # таблицах); API для графика: expr_tokens()/
+                       # expr_label(token)/expr_series(token), rowsChanged
+                       # при add/remove/переименовании выражения; state:
+                       # expressions_state()/set_expressions_state()
+                       # (толерантный разбор, невалидные expr грузятся как «⚠»)
   snapshot_dialog.py  # SnapshotDiffDialog — немодальное окно сравнения
                       # снапшота с текущими чтениями: таблица Name/Type/
                       # Address/Snapshot/Current, изменённые строки
@@ -267,8 +293,10 @@ src/modbus_connector/
                     # MAX_SAMPLES=10000 (~2.7 ч при поллинге 1 Гц)
   graph_window.py   # GraphWindow (pyqtgraph, отдельное окно на сессию):
                     # тулбар — иконочные кнопки с тултипами (icons.make_button),
-                    # чек-лист рядов (по токенам; показываются только строки,
-                    # включённые в поллинг — скрытие живое по rowsChanged,
+                    # чек-лист рядов (по токенам; показываются строки,
+                    # включённые в поллинг, и ВСЕ выражения панели с префиксом
+                    # "fx " — expr_tokens/expr_label/expr_series, у них нет
+                    # poll-галочки; скрытие строк живое по rowsChanged,
                     # при toggle COL_POLL_ENABLED панель его эмитит; состояние
                     # галочек чек-листа при скрытии/показе строки сохраняется),
                     # Follow/Full/Manual + zoom
@@ -386,7 +414,7 @@ src/modbus_connector/
                     # connectionChanged → set_bus_enabled(ok) панели/сканера/
                     # окна графика, при разрыве — stop_logging + stop_polling;
                     # state()/set_state() (connection+registers+
-                    # registers_options+logging+scanner,
+                    # registers_options+expressions+logging+scanner,
                     # backward compat со старым плоским форматом),
                     # shutdown() — stop_logging + корректная остановка
                     # worker/потока;
@@ -500,6 +528,12 @@ tests/
                            # JSON, round-trip регистров через set_state
   test_templates_menu.py   # меню Templates: структура подменю, открытие
                            # вкладки по шаблону, retranslate заголовка
+  test_expressions.py      # блок выражений: add/edit/delete, пересчёт по
+                           # scaled primary зависимости, «—» при нет dep и
+                           # nan, «⚠» + tooltip при невалидном, series только
+                           # в record-режиме, state round-trip, видимость в
+                           # options, "fx …" в чек-листе графика,
+                           # переименование строки-зависимости
 ```
 
 ## Команды

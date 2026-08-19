@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from modbus_connector.models import (
@@ -17,6 +19,7 @@ from modbus_connector.models import (
     format_scaled_values,
     format_values,
     guess_column_mapping,
+    parse_expression,
     parse_values,
     rows_from_csv,
     rows_to_csv,
@@ -572,3 +575,167 @@ class TestDiffSnapshots:
         assert not diff_snapshots(None, None)
         assert diff_snapshots(None, [1])
         assert diff_snapshots([1], None)
+
+
+class TestExpressionArithmetic:
+    def test_basic_ops_and_precedence(self) -> None:
+        assert parse_expression("2 + 3 * 4").evaluate({}) == 14.0
+        assert parse_expression("(2 + 3) * 4").evaluate({}) == 20.0
+        assert parse_expression("10 / 4").evaluate({}) == 2.5
+        assert parse_expression("10 // 4").evaluate({}) == 2.0
+        assert parse_expression("10 % 4").evaluate({}) == 2.0
+        assert parse_expression("2 ** 3 ** 2").evaluate({}) == 512.0
+
+    def test_unary_ops(self) -> None:
+        assert parse_expression("-5").evaluate({}) == -5.0
+        assert parse_expression("+5").evaluate({}) == 5.0
+        assert parse_expression("-2 ** 2").evaluate({}) == -4.0
+        assert parse_expression("-[a]").evaluate({"a": 3}) == -3.0
+
+    def test_number_literals(self) -> None:
+        assert parse_expression("1e3").evaluate({}) == 1000.0
+        assert parse_expression("2.5 + 1").evaluate({}) == 3.5
+        assert parse_expression("0x10").evaluate({}) == 16.0
+
+    def test_refs_and_int_values_coerced(self) -> None:
+        expr = parse_expression("[a] * 2 + [b]")
+        assert expr.evaluate({"a": 3, "b": 0.5}) == 6.5
+
+
+class TestExpressionFunctions:
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("abs(-3)", 3.0),
+            ("sqrt(9)", 3.0),
+            ("exp(0)", 1.0),
+            ("log(e)", 1.0),
+            ("log2(8)", 3.0),
+            ("log10(1000)", 3.0),
+            ("sin(0)", 0.0),
+            ("cos(0)", 1.0),
+            ("tan(0)", 0.0),
+            ("asin(1)", math.pi / 2),
+            ("acos(1)", 0.0),
+            ("atan(1)", math.pi / 4),
+            ("floor(2.7)", 2.0),
+            ("ceil(2.1)", 3.0),
+            ("round(2.5)", 2.0),
+            ("min(3, 1, 2)", 1.0),
+            ("max(3, 1, 2)", 3.0),
+            ("pow(2, 10)", 1024.0),
+            ("clamp(5, 0, 3)", 3.0),
+            ("clamp(-5, 0, 3)", 0.0),
+            ("clamp(2, 0, 3)", 2.0),
+        ],
+    )
+    def test_functions(self, text: str, expected: float) -> None:
+        assert parse_expression(text).evaluate({}) == pytest.approx(expected)
+
+    def test_constants(self) -> None:
+        assert parse_expression("pi").evaluate({}) == pytest.approx(math.pi)
+        assert parse_expression("e").evaluate({}) == pytest.approx(math.e)
+        assert parse_expression("2 * pi * [r]").evaluate({"r": 1}) == pytest.approx(
+            2 * math.pi
+        )
+
+    def test_nested_calls(self) -> None:
+        assert parse_expression("sqrt(abs(-16))").evaluate({}) == 4.0
+        assert parse_expression("max([a], min([b], 10))").evaluate({"a": 5, "b": 20}) == 10.0
+
+
+class TestExpressionDeps:
+    def test_deps_extracted(self) -> None:
+        expr = parse_expression("[temperature] + [pressure] * 2")
+        assert expr.deps == frozenset({"temperature", "pressure"})
+        assert expr.text == "[temperature] + [pressure] * 2"
+
+    def test_names_with_spaces_and_unicode(self) -> None:
+        expr = parse_expression("[flow rate] / [расход жидкости]")
+        assert expr.deps == frozenset({"flow rate", "расход жидкости"})
+        assert expr.evaluate({"flow rate": 10.0, "расход жидкости": 4.0}) == 2.5
+
+    def test_repeated_ref_counts_once(self) -> None:
+        expr = parse_expression("[a] + [a]")
+        assert expr.deps == frozenset({"a"})
+        assert expr.evaluate({"a": 2}) == 4.0
+
+    def test_no_deps(self) -> None:
+        assert parse_expression("1 + 2").deps == frozenset()
+
+    def test_missing_dependency_raises_key_error(self) -> None:
+        expr = parse_expression("[a] + [b]")
+        with pytest.raises(KeyError):
+            expr.evaluate({"a": 1})
+        with pytest.raises(KeyError):
+            expr.evaluate({})
+
+
+class TestExpressionMathErrors:
+    @pytest.mark.parametrize(
+        "text",
+        ["1 / 0", "1 // 0", "1 % 0", "sqrt(-1)", "log(0)", "log(-1)", "log2(-1)",
+         "log10(0)", "exp(1000)", "asin(2)", "acos(-2)", "clamp(1, 2)", "0 ** -1"],
+    )
+    def test_math_errors_give_nan(self, text: str) -> None:
+        result = parse_expression(text).evaluate({})
+        assert math.isnan(result), text
+
+    def test_nan_propagates_through_refs(self) -> None:
+        expr = parse_expression("[a] / [b]")
+        assert math.isnan(expr.evaluate({"a": 1, "b": 0}))
+
+
+class TestExpressionParseErrors:
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "",  # пустое
+            "1 +",  # синтаксический мусор
+            "1 2",
+            "[abc",  # незакрытая [
+            "[]",  # пустая ссылка
+            "[   ]",
+            "foo(1)",  # неизвестная функция
+            "abc",  # неизвестное имя
+            "[a](1)",  # вызов ссылки как функции
+            "[a].__class__",  # атрибут
+            "[a][0]",  # подзапрос
+            "().__class__",
+            "__import__('os')",  # инъекция: неизвестная функция + строковый литерал
+            "lambda x: x",
+            "a = 1",  # присваивание — не выражение
+            "min(x=1)",  # именованные аргументы
+            "'string'",  # строковый литерал
+            "True",  # bool-литерал
+            "[a] if [b] else [c]",  # условный оператор не нужен
+            "[a] == [b]",  # сравнения не нужны
+            "max(*[a])",  # starred args
+        ],
+    )
+    def test_rejected(self, text: str) -> None:
+        with pytest.raises(ValueError):
+            parse_expression(text)
+
+    def test_error_messages_are_readable(self) -> None:
+        with pytest.raises(ValueError, match="Незакрытая скобка"):
+            parse_expression("[abc")
+        with pytest.raises(ValueError, match="Пустая ссылка"):
+            parse_expression("[]")
+        with pytest.raises(ValueError, match="Неизвестная функция 'foo'"):
+            parse_expression("foo(1)")
+        with pytest.raises(ValueError, match="Неизвестное имя 'abc'"):
+            parse_expression("abc")
+        with pytest.raises(ValueError, match="не является функцией"):
+            parse_expression("[a](1)")
+
+    def test_injection_rejected_without_side_effects(self) -> None:
+        with pytest.raises(ValueError):
+            parse_expression("__import__('os').system('echo pwned')")
+        with pytest.raises(ValueError):
+            parse_expression("(1).__class__.__bases__")
+
+    def test_typed_placeholder_name_rejected(self) -> None:
+        # плейсхолдер, подставленный за [a], нельзя «переиспользовать» руками
+        with pytest.raises(ValueError):
+            parse_expression("[a] + __ref_0")

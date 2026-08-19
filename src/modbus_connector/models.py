@@ -1,8 +1,11 @@
+import ast
 import csv
 import io
+import math
 import struct
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from types import CodeType
 from typing import Literal, get_args
 
 RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_registers"]
@@ -588,3 +591,164 @@ def diff_snapshots(old: list | None, new: list | None) -> bool:
     if old is None or new is None:
         return old is not new
     return old != new
+
+
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return min(max(x, lo), hi)
+
+
+# whitelist функций, доступных в выражениях (log — натуральный)
+EXPRESSION_FUNCTIONS: dict[str, Callable[..., float]] = {
+    "abs": abs,
+    "sqrt": math.sqrt,
+    "exp": math.exp,
+    "log": math.log,
+    "log2": math.log2,
+    "log10": math.log10,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "asin": math.asin,
+    "acos": math.acos,
+    "atan": math.atan,
+    "floor": math.floor,
+    "ceil": math.ceil,
+    "round": round,
+    "min": min,
+    "max": max,
+    "pow": pow,
+    "clamp": _clamp,
+}
+
+EXPRESSION_CONSTANTS: dict[str, float] = {"pi": math.pi, "e": math.e}
+
+# AST провалидирован, поэтому eval безопасен: __builtins__ нет, только
+# whitelisted функции/константы, значения строк приходят через locals
+_EXPRESSION_GLOBALS: dict[str, object] = {
+    "__builtins__": {},
+    **EXPRESSION_FUNCTIONS,
+    **EXPRESSION_CONSTANTS,
+}
+
+_EXPRESSION_BIN_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
+_EXPRESSION_UNARY_OPS = (ast.UAdd, ast.USub)
+
+
+@dataclass(frozen=True)
+class Expression:
+    """Скомпилированное выражение над значениями строк регистров.
+
+    text — исходная строка, deps — имена строк-зависимостей (ссылки [имя]).
+    evaluate(values): значения приводятся к float; математические ошибки
+    (деление на 0, выход за область определения, переполнение, неверная
+    арность функции) не бросаются, а дают float("nan"); отсутствующая
+    в values зависимость — KeyError с именем строки.
+    """
+
+    text: str
+    deps: frozenset[str]
+    _code: CodeType = field(repr=False, compare=False)
+    _refs: dict[str, str] = field(repr=False, compare=False)  # плейсхолдер -> имя строки
+
+    def evaluate(self, values: Mapping[str, float]) -> float:
+        local_vars = {
+            placeholder: float(values[name]) for placeholder, name in self._refs.items()
+        }
+        try:
+            result = eval(self._code, _EXPRESSION_GLOBALS, local_vars)
+        except (ArithmeticError, ValueError, TypeError):
+            return float("nan")
+        return float(result)
+
+
+def _extract_refs(text: str) -> tuple[str, list[str]]:
+    """Заменить ссылки [имя] плейсхолдерами __ref_N; вернуть (текст, имена)."""
+    out: list[str] = []
+    names: list[str] = []
+    i = 0
+    while i < len(text):
+        if text[i] == "[":
+            end = text.find("]", i + 1)
+            if end == -1:
+                raise ValueError(f"Незакрытая скобка '[' в выражении: {text!r}")
+            name = text[i + 1 : end]
+            if not name.strip():
+                raise ValueError(f"Пустая ссылка [] в выражении: {text!r}")
+            out.append(f"__ref_{len(names)}")
+            names.append(name)
+            i = end + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out), names
+
+
+def _validate_expression_node(
+    node: ast.AST, refs: dict[str, str], seen: set[str]
+) -> None:
+    """Строгая проверка AST: только числа, refs, pi/e, арифметика и whitelisted вызовы."""
+    if isinstance(node, ast.Expression):
+        _validate_expression_node(node.body, refs, seen)
+    elif isinstance(node, ast.BinOp):
+        if not isinstance(node.op, _EXPRESSION_BIN_OPS):
+            raise ValueError(f"Недопустимая операция {type(node.op).__name__} в выражении")
+        _validate_expression_node(node.left, refs, seen)
+        _validate_expression_node(node.right, refs, seen)
+    elif isinstance(node, ast.UnaryOp):
+        if not isinstance(node.op, _EXPRESSION_UNARY_OPS):
+            raise ValueError(f"Недопустимая операция {type(node.op).__name__} в выражении")
+        _validate_expression_node(node.operand, refs, seen)
+    elif isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError("Вызов не-функции не поддерживается")
+        func_id = node.func.id
+        if func_id in refs:
+            raise ValueError(f"Ссылка [{refs[func_id]}] не является функцией")
+        if func_id not in EXPRESSION_FUNCTIONS:
+            allowed = ", ".join(sorted(EXPRESSION_FUNCTIONS))
+            raise ValueError(f"Неизвестная функция {func_id!r} (доступны: {allowed})")
+        if node.keywords:
+            raise ValueError("Именованные аргументы не поддерживаются")
+        for arg in node.args:
+            _validate_expression_node(arg, refs, seen)
+    elif isinstance(node, ast.Constant):
+        if isinstance(node.value, bool) or not isinstance(node.value, int | float):
+            raise ValueError(f"Недопустимый литерал {node.value!r}: только числа")
+    elif isinstance(node, ast.Name):
+        if node.id in refs:
+            # каждый плейсхолдер встречается в подставленном тексте ровно раз;
+            # повтор — значит, пользователь сам написал __ref_N
+            if node.id in seen:
+                raise ValueError(f"Недопустимое имя {node.id!r} в выражении")
+            seen.add(node.id)
+        elif node.id not in EXPRESSION_CONSTANTS:
+            raise ValueError(
+                f"Неизвестное имя {node.id!r}: ссылки на строки пишутся как [имя], "
+                "константы — pi и e"
+            )
+    else:
+        raise ValueError(f"Недопустимая конструкция {type(node).__name__} в выражении")
+
+
+def parse_expression(text: str) -> Expression:
+    """Разобрать выражение вида ([temperature] + [flow rate]) / 2.
+
+    Ссылки на строки — [имя] (имена могут содержать пробелы и юникод).
+    Допускаются + - * / // % **, унарные +/-, скобки, числа (в т.ч. 1e3),
+    константы pi/e и функции из EXPRESSION_FUNCTIONS. Всё остальное
+    (атрибуты, подзапросы, присваивания, лямбды, произвольные имена) —
+    ValueError с читаемым сообщением.
+    """
+    substituted, ref_names = _extract_refs(text)
+    try:
+        tree = ast.parse(substituted, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Некорректный синтаксис выражения: {text!r}") from exc
+    refs = {f"__ref_{i}": name for i, name in enumerate(ref_names)}
+    _validate_expression_node(tree, refs, set())
+    return Expression(
+        text=text,
+        deps=frozenset(ref_names),
+        _code=compile(tree, "<expression>", "eval"),
+        _refs=refs,
+    )

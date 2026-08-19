@@ -37,6 +37,13 @@ opens file/format/field/row settings.</li>
 rows are skipped). The first matching rule wins and paints the Value cell
 red/yellow, outranking the change flash; activation and clearing are logged
 once per edge (if Log is set), with a beep on activation if Sound is set.</li>
+<li><b>Expressions</b> (the fx toolbar button) opens a block of computed
+rows under the table: <b>[name]</b> references another row's scaled value,
+arithmetic (+ - * / // % **), parentheses, pi/e and functions
+(abs, sqrt, sin, cos, log, min, max, clamp, …) are allowed. Each expression
+has a trend sparkline and appears in the graph window as "fx name"; history
+is recorded in poll-and-record mode only. An invalid expression shows ⚠
+with the error in the tooltip.</li>
 <li><b>Snapshot</b> remembers the current raw values of all rows;
 <b>Diff…</b> (enabled after a snapshot) opens a window comparing them with
 the latest reads — changed rows are highlighted, "(removed)" marks rows
@@ -162,6 +169,13 @@ inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
 красит ячейку значения в красный/жёлтый (приоритет над зелёной вспышкой
 изменения); активация и снятие пишутся в лог один раз на фронт (если
 включён «Лог»), при активации — звук, если включён «Звук».</li>
+<li><b>Выражения</b> (кнопка fx в тулбаре) открывает блок вычисляемых строк
+под таблицей: <b>[имя]</b> — ссылка на масштабированное значение строки,
+допускаются арифметика (+ - * / // % **), скобки, pi/e и функции
+(abs, sqrt, sin, cos, log, min, max, clamp, …). У каждого выражения свой
+спарклайн, а в окне графика оно видно как «fx имя»; история пишется только
+в режиме опроса с записью. Невалидное выражение показывает ⚠, текст ошибки —
+в подсказке ячейки.</li>
 <li><b>Снапшот</b> запоминает текущие raw-значения всех строк;
 <b>Сравнение…</b> (активно после снапшота) открывает окно сравнения с
 последними чтениями — изменённые строки подсвечены, «(удалена)» помечает

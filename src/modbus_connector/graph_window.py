@@ -21,6 +21,7 @@ from modbus_connector import icons, theme
 from modbus_connector.help_dialog import GRAPH_HELP, make_help_button
 from modbus_connector.i18n import tr
 from modbus_connector.registers_panel import RegistersPanel
+from modbus_connector.timeseries import TimeSeries
 
 MODES = ("Follow", "Full", "Manual")
 MARKER_PENS = (pg.mkPen((60, 180, 75), width=2), pg.mkPen((200, 60, 60), width=2))
@@ -60,6 +61,7 @@ class GraphWindow(QWidget):
 
         self._seen: set[int] = set()
         self._checked: set[int] = set()
+        self._expr_tokens: set[int] = set()  # обновляется в _rebuild_rows
         self._curves: dict[int, pg.PlotDataItem] = {}
         self._origin: float | None = None
         self._updating_range = False
@@ -187,18 +189,23 @@ class GraphWindow(QWidget):
 
     @Slot()
     def _rebuild_rows(self) -> None:
-        all_tokens = self._panel.row_tokens()
+        row_tokens = self._panel.row_tokens()
         # rows opted out of polling are hidden from the graph entirely
-        tokens = [t for t in all_tokens if self._panel.row_poll_enabled(t)]
-        for token in tokens:
+        tokens = [t for t in row_tokens if self._panel.row_poll_enabled(t)]
+        # expressions are always listed: they have no poll checkbox
+        expr_tokens = self._panel.expr_tokens()
+        self._expr_tokens = set(expr_tokens)
+        all_tokens = row_tokens + expr_tokens
+        listed = tokens + expr_tokens
+        for token in listed:
             if token not in self._seen:  # first sight: plot new rows by default
                 self._checked.add(token)
         self._seen.update(all_tokens)
         self._checked &= set(all_tokens)  # forget deleted rows, keep hidden ones
         self._rows_list.blockSignals(True)
         self._rows_list.clear()
-        for token in tokens:
-            item = QListWidgetItem(self._panel.row_label(token))
+        for token in listed:
+            item = QListWidgetItem(self._token_label(token))
             item.setData(Qt.ItemDataRole.UserRole, token)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(
@@ -207,13 +214,23 @@ class GraphWindow(QWidget):
             )
             self._rows_list.addItem(item)
         self._rows_list.blockSignals(False)
-        visible = set(tokens) & self._checked
+        visible = set(listed) & self._checked
         for token in list(self._curves):
             if token not in visible:
                 self._remove_curve(token)
         for token in visible:
             if token not in self._curves:
                 self._add_curve(token)
+
+    def _token_label(self, token: int) -> str:
+        if token in self._expr_tokens:
+            return f"fx {self._panel.expr_label(token)}"
+        return self._panel.row_label(token)
+
+    def _token_series(self, token: int) -> TimeSeries | None:
+        if token in self._expr_tokens:
+            return self._panel.expr_series(token)
+        return self._panel.series(token)
 
     @Slot(QListWidgetItem)
     def _on_row_toggled(self, item: QListWidgetItem) -> None:
@@ -229,7 +246,7 @@ class GraphWindow(QWidget):
     def _add_curve(self, token: int) -> None:
         pen = pg.mkPen(_curve_color(len(self._curves)), width=2)
         self._curves[token] = self._plot.plot(
-            [], [], pen=pen, name=self._panel.row_label(token)
+            [], [], pen=pen, name=self._token_label(token)
         )
 
     def _remove_curve(self, token: int) -> None:
@@ -246,7 +263,7 @@ class GraphWindow(QWidget):
     def _refresh(self) -> None:
         latest: float | None = None
         for token, curve in self._curves.items():
-            series = self._panel.series(token)
+            series = self._token_series(token)
             if series is None:
                 continue
             times, values = series.points()
@@ -283,7 +300,7 @@ class GraphWindow(QWidget):
             values = [
                 stats
                 for token in self._curves
-                if (series := self._panel.series(token)) is not None
+                if (series := self._token_series(token)) is not None
                 and (stats := series.stats(t0 + (self._origin or 0.0),
                                            t1 + (self._origin or 0.0)))
             ]
@@ -418,7 +435,7 @@ class GraphWindow(QWidget):
         """Относительный диапазон данных по всем кривым; None — данных нет."""
         extents = []
         for token in self._curves:
-            series = self._panel.series(token)
+            series = self._token_series(token)
             if series is None:
                 continue
             times, _ = series.points()
@@ -488,11 +505,11 @@ class GraphWindow(QWidget):
         rows = [
             (token, series.stats(t0, t1))
             for token in self._curves
-            if (series := self._panel.series(token)) is not None
+            if (series := self._token_series(token)) is not None
         ]
         self._stats_table.setRowCount(len(rows))
         for row, (token, stats) in enumerate(rows):
-            cells = [self._panel.row_label(token)]
+            cells = [self._token_label(token)]
             cells += ["—"] * 3 if stats is None else [f"{v:.4g}" for v in stats]
             for col, text in enumerate(cells):
                 self._stats_table.setItem(row, col, QTableWidgetItem(text))
@@ -519,7 +536,7 @@ class GraphWindow(QWidget):
         dot_xs, dot_ys, dot_brushes = [], [], []
         for token, curve in self._curves.items():
             color = curve.opts["pen"].color().name()
-            name = html.escape(self._panel.row_label(token))
+            name = html.escape(self._token_label(token))
             text = "—"
             xdata, ydata = curve.getData()
             if xdata is not None and len(xdata) and xdata[0] <= view_x <= xdata[-1]:
