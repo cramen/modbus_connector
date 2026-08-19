@@ -19,7 +19,9 @@ REGISTERS_HELP = """
 inputs, holding or input registers), <b>Address</b> (dec or 0x-hex),
 <b>Count</b>, optional per-row <b>Unit ID</b> and <b>Poll, ms</b> interval,
 display <b>Format</b>, the last read <b>Value</b> with a trend sparkline,
-and <b>New value</b> for writes (raw values, no scale/offset).</p>
+and <b>New value</b> for writes: numbers are entered in the row's display
+format for s16/u32/s32/f32/u64/s64/f64 (e.g. 0.1 for f32), dec/hex/ascii
+and bit areas take raw values; scale/offset is not applied.</p>
 <ul>
 <li>The <b>checkbox in the first column</b> includes the row in polling and
 <b>Read all</b>; unchecked rows are skipped (Ctrl+R, quick actions and
@@ -254,8 +256,10 @@ REGISTERS_HELP_RU = """
 inputs, holding или input registers), <b>адрес</b> (dec или 0x-hex),
 <b>кол-во</b>, необязательные <b>Unit ID</b> и интервал <b>Poll, мс</b> на
 строку, <b>формат</b> отображения, последнее прочитанное <b>значение</b> со
-спарклайном и поле <b>Новое значение</b> для записи (сырые значения,
-без scale/offset).</p>
+спарклайном и поле <b>Новое значение</b> для записи: для форматов
+s16/u32/s32/f32/u64/s64/f64 числа вводятся в формате отображения (например
+0.1 для f32), dec/hex/ascii и битовые области — сырые значения;
+scale/offset не применяется.</p>
 <ul>
 <li><b>Галочка в первой колонке</b> включает строку в опрос и
 <b>Прочитать все</b>; снятые строки пропускаются (Ctrl+R, быстрые действия

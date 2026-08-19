@@ -23,6 +23,7 @@ from modbus_connector.models import (
     format_values,
     guess_column_mapping,
     parse_expression,
+    parse_formatted_values,
     parse_values,
     rows_from_csv,
     rows_to_csv,
@@ -887,3 +888,33 @@ class TestExpressionExtensions:
             parse_expression("rand.__globals__", extra_functions={"rand": self._rand})
         with pytest.raises(ValueError):
             parse_expression("t(1)", extra_names={"t"})
+
+
+class TestParseFormattedValues:
+    def test_single_float_f32(self) -> None:
+        values = parse_formatted_values("0.1", "f32", 2)
+        assert len(values) == 2
+        assert abs(decode_register_values(values, "f32")[0] - 0.1) < 1e-6
+
+    def test_multiple_numbers_fill_groups(self) -> None:
+        values = parse_formatted_values("0.5, 2.5", "f32", 4)
+        decoded = decode_register_values(values, "f32")
+        assert abs(decoded[0] - 0.5) < 1e-6
+        assert abs(decoded[1] - 2.5) < 1e-6
+
+    def test_pad_and_truncate_to_count(self) -> None:
+        assert parse_formatted_values("5", "s16", 3) == [5, 0, 0]
+        assert parse_formatted_values("1, 2, 3", "s16", 2) == [1, 2]
+
+    def test_separators_and_whitespace(self) -> None:
+        assert parse_formatted_values("  1 ,  2   3 ", "s16", 3) == [1, 2, 3]
+
+    def test_int_formats_round(self) -> None:
+        assert parse_formatted_values("-5.4", "s16", 1) == [-5 & 0xFFFF]
+        assert parse_formatted_values("70000", "u32", 2) == [1, 4464]
+
+    def test_errors(self) -> None:
+        with pytest.raises(ValueError):
+            parse_formatted_values("", "f32", 2)
+        with pytest.raises(ValueError):
+            parse_formatted_values("abc", "f32", 2)

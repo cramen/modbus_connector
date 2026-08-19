@@ -2,7 +2,6 @@
 
 import math
 import random
-import re
 import time
 from collections.abc import Callable
 from typing import Any, get_args
@@ -40,6 +39,7 @@ from modbus_connector.models import (
     format_register_values,
     format_values,
     parse_expression,
+    parse_formatted_values,
     parse_values,
     register_width,
 )
@@ -633,12 +633,13 @@ class SimPanel(QWidget):
         kind = self._kind_at(index)
         item = self._table.item(index, COL_VALUE)
         # ввод принимается в формате ОТОБРАЖЕНИЯ строки: для числовых форматов
-        # (s16/u32/f32/...) — десятичные числа, кодируемые encode_register_values;
+        # (s16/u32/f32/...) — десятичные числа (models.parse_formatted_values);
         # dec/hex/ascii и битовые области — сырые значения через parse_values
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
         try:
             if kind in REGISTER_KINDS and fmt not in ("dec", "hex", "ascii"):
-                values = self._parse_formatted_numbers(index, item.text(), fmt)
+                count = len(self._values_at(index)) or 1
+                values = parse_formatted_values(item.text(), fmt, count)
             else:
                 values = parse_values(kind, item.text())
         except (ValueError, OverflowError) as exc:
@@ -648,24 +649,6 @@ class SimPanel(QWidget):
         self._table.item(index, COL_NAME).setData(_VALUES_ROLE, values)
         self._render_value(index)
         self._push_row(index)
-
-    def _parse_formatted_numbers(
-        self, index: int, text: str, fmt: DisplayFormat
-    ) -> list[int]:
-        """Разбор ввода Value для числовых форматов: числа через запятую/пробел,
-        каждое кодируется в свою группу регистров (по ширине формата)."""
-        parts = [p for p in re.split(r"[,\s]+", text.strip()) if p]
-        if not parts:
-            raise ValueError("Пустой ввод: введите значения через запятую или пробел")
-        encoded: list[int] = []
-        for part in parts:
-            try:
-                number = float(part)
-            except ValueError:
-                raise ValueError(f"Недопустимое число: {part!r}") from None
-            encoded.extend(encode_register_values(number, fmt))
-        count = len(self._values_at(index)) or 1
-        return (encoded + [0] * count)[:count]
 
     def _commit_count(self, index: int) -> None:
         values = self._values_at(index)

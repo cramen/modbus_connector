@@ -93,6 +93,7 @@ from modbus_connector.models import (
     format_scaled_values,
     format_values,
     parse_expression,
+    parse_formatted_values,
     parse_values,
     row_to_csv_record,
     rows_from_csv,
@@ -2124,9 +2125,16 @@ class RegistersPanel(QWidget):
             return
         new_value_item = self._table.item(index, COL_NEW_VALUE)
         text = new_value_item.text().strip() if new_value_item else ""
+        # ввод в формате отображения: числовые форматы (s16/u32/f32/...)
+        # принимают десятичные числа; dec/hex/ascii и битовые — сырые значения
+        format_combo = self._table.cellWidget(index, COL_FORMAT)
+        fmt = format_combo.currentText() if format_combo is not None else ""
         try:
-            values = parse_values(row.kind, text)
-        except ValueError as exc:
+            if row.kind in REGISTER_KINDS and fmt and fmt not in ("dec", "hex", "ascii"):
+                values = parse_formatted_values(text, fmt, row.count)
+            else:
+                values = parse_values(row.kind, text)
+        except (ValueError, OverflowError) as exc:
             self.logLine.emit(tr("✗ parse error: {exc}", exc=exc))
             return
         self._emit_write(index, row, values)

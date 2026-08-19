@@ -1395,3 +1395,30 @@ def test_help_button_opens_dialog(qapp: QApplication) -> None:
         not (isinstance(widget, QDialog) and widget.windowTitle() == "Registers — Help")
         for widget in QApplication.topLevelWidgets()
     )
+
+
+def test_write_accepts_display_format_numbers(qapp: QApplication) -> None:
+    # ввод "0.1" в строку f32 кодируется в пару регистров, а не parse error
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "h", "kind": "holding_registers", "address": 5,
+          "count": 2, "format": "f32"}]
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel._table.item(0, COL_NEW_VALUE).setText("0.1")
+    assert writes, "write must be emitted"
+    values = writes[-1][3]
+    assert len(values) == 2
+    from modbus_connector.models import decode_register_values
+
+    assert abs(decode_register_values(values, "f32")[0] - 0.1) < 1e-6
+    # dec-строка по-прежнему требует сырые целые
+    panel.set_state([{"name": "d", "kind": "holding_registers", "address": 0, "count": 1}])
+    lines: list[str] = []
+    panel.logLine.connect(lines.append)
+    writes.clear()
+    panel._table.item(0, COL_NEW_VALUE).setText("0.1")
+    assert writes == []
+    assert any("parse error" in line for line in lines)

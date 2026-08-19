@@ -2,6 +2,7 @@ import ast
 import csv
 import io
 import math
+import re
 import struct
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -387,6 +388,27 @@ def encode_register_values(
     perm = _order_permutation(order, len(data))
     raw = bytes(data[perm[j]] for j in range(len(data)))
     return [int.from_bytes(raw[i : i + 2], "big") for i in range(0, len(raw), 2)]
+
+
+def parse_formatted_values(text: str, fmt: DisplayFormat, count: int) -> list[int]:
+    """Разбор ввода в формате отображения: числа через запятую/пробел.
+
+    Каждое число кодируется encode_register_values в свою группу регистров
+    (ширина группы — register_width(fmt)); результат дополняется нулями/
+    обрезается до count регистров. Для dec/hex/ascii ввода — parse_values.
+    ValueError на пустом вводе и нечисловых токенах, OverflowError на
+    непредставимом float."""
+    parts = [p for p in re.split(r"[,\s]+", text.strip()) if p]
+    if not parts:
+        raise ValueError("Пустой ввод: введите значения через запятую или пробел")
+    encoded: list[int] = []
+    for part in parts:
+        try:
+            number = float(part)
+        except ValueError:
+            raise ValueError(f"Недопустимое число: {part!r}") from None
+        encoded.extend(encode_register_values(number, fmt))
+    return (encoded + [0] * count)[:count]
 
 
 def format_register_values(

@@ -48,6 +48,9 @@ src/modbus_connector/
                   # числа в регистры (round+clamp для целых, f32/f64 через
                   # struct.pack, OverflowError на непредставимом; hex/ascii —
                   # ValueError), для правил симулятора,
+                  # register_width(fmt) — регистров на значение (1/2/4),
+                  # parse_formatted_values(text, fmt, count) — ввод чисел в
+                  # формате отображения (поверх encode),
                   # format_register_values (поверх decode),
                   # format_scaled_values (x*scale+offset по decoded),
                   # rows_to_csv/rows_from_csv/row_to_csv_record/CSV_COLUMNS —
@@ -447,7 +450,10 @@ src/modbus_connector/
                        # перечитываются строки, покрывающие адрес,
                        # "Read/Write (0x17)…" — диалог read/write registers,
                        # прочитанные значения пишутся в лог,
-                       # Enter в колонке New value = запись, Ctrl/Cmd+R = чтение
+                       # Enter в колонке New value = запись (числовые форматы —
+                       # ввод в формате отображения через parse_formatted_values,
+                       # dec/hex/ascii и биты — сырые значения), Ctrl/Cmd+R =
+                       # чтение
                        # текущей строки, Ctrl/Cmd+Shift+R = Read all, удаление строки — иконка-крестик,
                        # быстрые действия над текущей строкой (Ctrl+C копия
                        # значения, Ctrl+0/1 запись 0/1, Ctrl+= (и Ctrl++ на
