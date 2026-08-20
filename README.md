@@ -24,10 +24,12 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   parity, etc.; RTU by default) and **RTU over TCP / RTU over UDP** for
   RS-485↔Ethernet converters — all configured in the GUI.
 - Slave mode / device simulator (the **Mode** combo in each tab): the tab
-  turns into a Modbus server — TCP or RTU, answering one unit id or **any** —
-  with an editable register map. Set values manually (they land in the
-  datastore instantly), watch master writes update the table and every
-  request hit the log, or drive rows with expression rules recomputed on a
+  turns into a Modbus server — TCP, RTU or **RTU over TCP**, answering one
+  unit id or **any** — with an editable register map. Set values manually in
+  the row's display format (0.1 for f32, plain text for ascii/ascii1 — they
+  land in the datastore instantly), watch master writes flash the table and
+  every request and client connect hit the log, or drive rows with expression
+  rules recomputed on a
   configurable tick (`[name]` references, `t` seconds since start, `prev`
   previous value, `rand()`/`randint(a,b)`). Device templates fill the map in
   one click — handy for debugging masters and gateways without real hardware.
