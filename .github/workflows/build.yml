@@ -44,9 +44,14 @@ jobs:
 
       - name: Run tests
         shell: bash
+        # Per-module processes: a Qt segfault (seen intermittently in long
+        # offscreen runs on CI) then fails only its module instead of the
+        # whole suite, and the failing module is identified precisely.
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then PY=.venv/Scripts/python; else PY=.venv/bin/python; fi
-          "$PY" -m pytest tests/ -q
+          for f in tests/test_*.py; do
+            "$PY" -m pytest "$f" -q || exit 1
+          done
 
       - name: Build (macOS/Linux)
         if: runner.os != 'Windows'

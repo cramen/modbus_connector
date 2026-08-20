@@ -734,7 +734,8 @@ build.bat                 # то же под Windows (cmd): dist\ModbusConnector
 ```
 
 CI: `.github/workflows/build.yml` — push в main / ручной запуск; матрица
-macOS/Windows/Linux: pytest, затем сборка через build.sh/build.bat,
+macOS/Windows/Linux: pytest (по одному процессу на test-файл — изоляция от
+флаки-сегфолтов Qt на CI), затем сборка через build.sh/build.bat,
 артефакты в upload-artifact (macOS — dmg, Windows/Linux — каталог dist).
 
 ## Соглашения
