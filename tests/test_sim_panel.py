@@ -174,7 +174,7 @@ def test_set_running_ui(panel: SimPanel) -> None:
     assert panel._button.text() == "Stop server"
     assert not panel._type_combo.isEnabled()
     assert panel.running_description() == "sim tcp 127.0.0.1:1502"
-    panel.handle_client_changed(True)
+    panel.handle_client_changed(True, "127.0.0.1:5000")
     assert "1" in panel._status.text()
     panel.set_running(False, "Stopped")
     assert panel._button.text() == "Start server"

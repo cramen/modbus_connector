@@ -35,7 +35,7 @@ _FX_CODES: dict[RegisterKind, int] = {
 
 MasterWriteHook = Callable[[RegisterKind, int, list], None]  # (kind, address, values)
 RequestHook = Callable[[str], None]  # человекочитаемая строка запроса мастера
-ClientHook = Callable[[bool], None]  # True = клиент подключился, False = отключился
+ClientHook = Callable[[bool, str], None]  # (подключился?, адрес клиента "ip:port")
 
 _FC_NAMES = {
     1: "read coils",
@@ -315,12 +315,12 @@ class SimBackend:
         except Exception:  # иначе мастер получит Slave Device Failure
             logger.exception("Ошибка в on_master_write")
 
-    def _emit_client(self, connected: bool) -> None:
+    def _emit_client(self, connected: bool, address: str) -> None:
         hook = self.on_client
         if hook is None:
             return
         try:
-            hook(connected)
+            hook(connected, address)
         except Exception:
             logger.exception("Ошибка в on_client")
 
@@ -338,13 +338,20 @@ class _SimTcpServer(ModbusTcpServer):
         original_connected = handler.callback_connected
         original_disconnected = handler.callback_disconnected
 
+        address = "?"
+
         def connected() -> None:
+            nonlocal address
             original_connected()
-            owner._emit_client(True)
+            info = handler.transport.get_extra_info("peername")
+            if info:
+                address = f"{info[0]}:{info[1]}"
+            owner._emit_client(True, address)
 
         def disconnected(exc: Exception | None) -> None:
             original_disconnected(exc)
-            owner._emit_client(False)
+            # transport к этому моменту уже None — используем сохранённый адрес
+            owner._emit_client(False, address)
 
         handler.callback_connected = connected
         handler.callback_disconnected = disconnected

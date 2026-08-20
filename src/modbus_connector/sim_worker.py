@@ -25,7 +25,7 @@ class SimWorker(QObject):
     serverChanged = Signal(bool, str)  # ok + описание или текст ошибки
     masterWrote = Signal(str, int, list)  # kind, address, values
     requestLine = Signal(str)  # проброс on_request
-    clientChanged = Signal(bool)
+    clientChanged = Signal(bool, str)  # подключился?, адрес клиента "ip:port"
     logLine = Signal(str)
     ticked = Signal()  # после каждого тика — UI обновит значения в таблице
 

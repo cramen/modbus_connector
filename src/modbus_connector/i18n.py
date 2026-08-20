@@ -399,6 +399,8 @@ RU: dict[str, str] = {
         "✗ запись значений симулятора не удалась: {exc}",
     "✗ simulator get values failed: {exc}":
         "✗ чтение значений симулятора не удалось: {exc}",
+    "← client connected {address}": "← клиент подключился {address}",
+    "→ client disconnected {address}": "→ клиент отключился {address}",
     # scanner panel
     "Add probe": "Добавить пробу",
     "Start scan": "Начать сканирование",

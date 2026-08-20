@@ -820,8 +820,13 @@ class SimPanel(QWidget):
             widget.setEnabled(not ok)
 
     @Slot(bool)
-    def handle_client_changed(self, connected: bool) -> None:
+    def handle_client_changed(self, connected: bool, address: str) -> None:
         self._clients = max(0, self._clients + (1 if connected else -1))
+        self.logLine.emit(
+            tr("← client connected {address}", address=address)
+            if connected
+            else tr("→ client disconnected {address}", address=address)
+        )
         if self._running:
             self._render_status()
 

@@ -112,13 +112,14 @@ def test_tcp_request_log(sim: SimBackend, client: ModbusBackend) -> None:
 
 def test_tcp_client_connect_hook(sim: SimBackend, client: ModbusBackend) -> None:
     port = _free_port()
-    events: list[bool] = []
-    sim.on_client = events.append
+    events: list[tuple[bool, str]] = []
+    sim.on_client = lambda *args: events.append(args)
     sim.start(SimTcpParams("127.0.0.1", port))
     client.connect(TcpParams("127.0.0.1", port))
-    assert _wait_for(lambda: events == [True])
+    assert _wait_for(lambda: [ok for ok, _addr in events] == [True])
+    assert events[0][1].startswith("127.0.0.1:")  # адрес клиента передаётся
     client.disconnect()
-    assert _wait_for(lambda: events == [True, False])
+    assert _wait_for(lambda: [ok for ok, _addr in events] == [True, False])
 
 
 def test_tcp_identity(sim: SimBackend, client: ModbusBackend) -> None:
