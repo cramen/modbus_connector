@@ -939,3 +939,19 @@ class TestEncodeAsciiValues:
 
     def test_empty(self) -> None:
         assert encode_ascii_values("", 2) == [0, 0]
+
+
+class TestAscii1Format:
+    def test_decode_one_char_per_register(self) -> None:
+        values = [ord(c) for c in "WBMSW4"] + [0] * 14
+        assert format_register_values(values, "ascii1") == "WBMSW4"
+
+    def test_encode_one_char_per_register(self) -> None:
+        assert encode_ascii_values("qwe", 5, 1) == [0x71, 0x77, 0x65, 0, 0]
+
+    def test_roundtrip(self) -> None:
+        values = encode_ascii_values("MC-42", 8, 1)
+        assert format_register_values(values, "ascii1") == "MC-42"
+
+    def test_non_ascii_replaced(self) -> None:
+        assert format_register_values(encode_ascii_values("aж", 2, 1), "ascii1") == "a?"

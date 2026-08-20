@@ -186,7 +186,10 @@ update the matching map rows.</li>
 <li>Each row is a value range: <b>Name</b>, <b>Type</b> (coils, discrete
 inputs, holding or input registers), <b>Address</b> (0..9999, dec or 0x-hex),
 <b>Count</b>, display <b>Format</b> and <b>Value</b>. Editing a manual value
-writes it to the datastore immediately — even before the server starts.</li>
+writes it to the datastore immediately — even before the server starts.
+Text formats: <b>ascii</b> packs two chars per register, <b>ascii1</b> one
+char per register (Wiren Board string convention, e.g. for model/firmware
+strings).</li>
 <li><b>Template…</b> adds rows from a bundled device template (duplicates by
 type+address are skipped); <b>Add row</b> appends an empty row, ✕ deletes
 one.</li>
@@ -429,7 +432,9 @@ unit id для ответов, <b>любой</b> — отвечать на лю�
 <li>Каждая строка — диапазон значений: <b>имя</b>, <b>тип</b> (coils,
 discrete inputs, holding или input registers), <b>адрес</b> (0..9999, dec или
 0x-hex), <b>кол-во</b>, <b>формат</b> отображения и <b>значение</b>. Правка
-ручного значения пишется в datastore сразу — даже до старта сервера.</li>
+ручного значения пишется в datastore сразу — даже до старта сервера.
+Текстовые форматы: <b>ascii</b> — 2 символа на регистр, <b>ascii1</b> — один
+символ на регистр (конвенция строк Wiren Board, например model/firmware).</li>
 <li><b>Шаблон…</b> добавляет строки из встроенного шаблона устройства (дубли
 по типу+адресу пропускаются); <b>Добавить строку</b> — пустую строку,
 ✕ удаляет строку.</li>

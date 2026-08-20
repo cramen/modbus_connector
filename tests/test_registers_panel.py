@@ -1436,3 +1436,17 @@ def test_write_accepts_text_for_ascii(qapp: QApplication) -> None:
     panel._table.item(0, COL_NEW_VALUE).setText("qwe")
     assert writes, "write must be emitted"
     assert writes[-1][3] == [0x7177, 0x6500, 0, 0]
+
+
+def test_write_accepts_text_for_ascii1(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "model", "kind": "holding_registers", "address": 200,
+          "count": 20, "format": "ascii1"}]
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel._table.item(0, COL_NEW_VALUE).setText("WBMSW4")
+    assert writes, "write must be emitted"
+    assert writes[-1][3] == [ord(c) for c in "WBMSW4"] + [0] * 14

@@ -2127,14 +2127,19 @@ class RegistersPanel(QWidget):
         new_value_item = self._table.item(index, COL_NEW_VALUE)
         text = new_value_item.text().strip() if new_value_item else ""
         # ввод в формате отображения: числовые форматы (s16/u32/f32/...)
-        # принимают десятичные числа; dec/hex/ascii и битовые — сырые значения
+        # принимают десятичные числа; ascii/ascii1 — текст; dec/hex и
+        # битовые — сырые значения
         format_combo = self._table.cellWidget(index, COL_FORMAT)
         fmt = format_combo.currentText() if format_combo is not None else ""
         try:
-            if row.kind in REGISTER_KINDS and fmt and fmt not in ("dec", "hex", "ascii"):
+            if row.kind in REGISTER_KINDS and fmt and fmt not in (
+                "dec", "hex", "ascii", "ascii1",
+            ):
                 values = parse_formatted_values(text, fmt, row.count)
-            elif row.kind in REGISTER_KINDS and fmt == "ascii":
-                values = encode_ascii_values(text, row.count)
+            elif row.kind in REGISTER_KINDS and fmt in ("ascii", "ascii1"):
+                values = encode_ascii_values(
+                    text, row.count, 1 if fmt == "ascii1" else 2
+                )
             else:
                 values = parse_values(row.kind, text)
         except (ValueError, OverflowError) as exc:
@@ -2268,7 +2273,7 @@ class RegistersPanel(QWidget):
             return format_values(values)
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
         # hex and ascii show raw data — scaling them is meaningless
-        if fmt in ("hex", "ascii"):
+        if fmt in ("hex", "ascii", "ascii1"):
             return format_register_values(values, fmt)
         settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
         order = settings.order or self._global_order_combo.currentText()
@@ -2287,7 +2292,7 @@ class RegistersPanel(QWidget):
         if kind not in REGISTER_KINDS:
             return float(int(values[0]))  # coil/discrete bit as 0.0/1.0
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
-        if fmt in ("hex", "ascii"):
+        if fmt in ("hex", "ascii", "ascii1"):
             return None  # not numeric
         settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
         order = settings.order or self._global_order_combo.currentText()
@@ -2303,7 +2308,7 @@ class RegistersPanel(QWidget):
         if kind not in REGISTER_KINDS:
             return ";".join("1" if value else "0" for value in values)  # bits
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
-        if fmt in ("hex", "ascii"):
+        if fmt in ("hex", "ascii", "ascii1"):
             return format_register_values(values, fmt)  # raw string as-is
         settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
         order = settings.order or self._global_order_combo.currentText()

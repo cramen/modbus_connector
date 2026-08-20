@@ -299,3 +299,12 @@ def test_master_write_flashes_value_cell(panel: SimPanel) -> None:
     panel.handle_master_write("holding_registers", 10, [43])
     panel._clear_flash(0, panel._flash_generations[0] - 1)
     assert item.background() == theme.flash_color()
+
+
+def test_edit_value_accepts_text_for_ascii1(panel: SimPanel) -> None:
+    # ascii1: один символ на регистр (конвенция строк Wiren Board)
+    panel._add_row({"name": "model", "kind": "holding_registers", "address": 200,
+                    "count": 20, "format": "ascii1", "values": [0] * 20})
+    panel._table.item(0, COL_VALUE).setText("WBMSW4")
+    assert panel._table.item(0, COL_VALUE).text() == "WBMSW4"
+    assert panel._values_at(0)[:6] == [ord(c) for c in "WBMSW4"]

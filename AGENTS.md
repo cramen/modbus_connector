@@ -224,8 +224,10 @@ src/modbus_connector/
                        # колонка Unit ID — per-row unit (пусто = глобальный
                        # unit из панели подключения),
                        # колонка Format — формат отображения значений
-                       # (dec/hex/s16/u32/s32/f32/u64/s64/f64/ascii, только для
-                       # регистровых kind; ascii и hex не масштабируются),
+                       # (dec/hex/s16/u32/s32/f32/u64/s64/f64/ascii/ascii1,
+                       # только для регистровых kind; ascii — 2 символа/регистр,
+                       # ascii1 — 1 символ/регистр (строки Wiren Board);
+                       # ascii/ascii1 и hex не масштабируются),
                        # Scale/Offset/Unit/Order — в диалоге "Display…",
                        # хранилище _row_display по токену (RowDisplaySettings,
                        # order None = глобальный Order-комбо над таблицей,

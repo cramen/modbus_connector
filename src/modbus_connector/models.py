@@ -11,7 +11,9 @@ from typing import Literal, get_args
 
 RegisterKind = Literal["coils", "discrete_inputs", "holding_registers", "input_registers"]
 
-DisplayFormat = Literal["dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64", "ascii"]
+DisplayFormat = Literal[
+    "dec", "hex", "s16", "u32", "s32", "f32", "u64", "s64", "f64", "ascii", "ascii1"
+]
 
 ByteOrder = Literal["ABCD", "CDAB", "BADC", "DCBA"]
 
@@ -411,11 +413,20 @@ def parse_formatted_values(text: str, fmt: DisplayFormat, count: int) -> list[in
     return (encoded + [0] * count)[:count]
 
 
-def encode_ascii_values(text: str, count: int) -> list[int]:
-    """Текст → регистры для ascii-формата: 2 символа на регистр (high byte
-    first), нечётная длина и хвост добиваются NUL; непечатные/не-ASCII
-    символы заменяются на '?'. Результат — ровно count регистров (pad/truncate).
-    Зеркало ascii-ветки format_register_values."""
+def encode_ascii_values(text: str, count: int, chars_per_register: int = 2) -> list[int]:
+    """Текст → регистры для ascii-форматов.
+
+    chars_per_register=2 (ascii): 2 символа на регистр (high byte first),
+    нечётная длина добивается NUL. chars_per_register=1 (ascii1): один символ
+    на регистр в младшем байте (Wiren Board). Непечатные/не-ASCII символы
+    заменяются на '?'. Результат — ровно count регистров (pad/truncate).
+    Зеркало ascii-веток format_register_values."""
+    if chars_per_register == 1:
+        values = []
+        for ch in text:
+            code = ord(ch)
+            values.append(code if 0x20 <= code <= 0x7E else 0x3F)
+        return (values + [0] * count)[:count]
     raw = bytearray()
     for ch in text:
         code = ord(ch)
@@ -446,6 +457,16 @@ def format_register_values(
                 if byte == 0:
                     return "".join(chars)
                 chars.append(chr(byte) if 0x20 <= byte <= 0x7E else ".")
+        return "".join(chars)
+    if fmt == "ascii1":
+        # ONE char per register in the low byte (Wiren Board string convention);
+        # NUL terminates, non-printable shows as '.'
+        chars = []
+        for value in values:
+            byte = value & 0xFF
+            if byte == 0:
+                return "".join(chars)
+            chars.append(chr(byte) if 0x20 <= byte <= 0x7E else ".")
         return "".join(chars)
     return ", ".join(
         f"{v:.6g}" if isinstance(v, float) else str(v)

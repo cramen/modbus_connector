@@ -547,7 +547,7 @@ class SimPanel(QWidget):
         if self._kind_at(index) not in REGISTER_KINDS:
             return float(int(values[0]))
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
-        if fmt in ("hex", "ascii"):
+        if fmt in ("hex", "ascii", "ascii1"):
             return None  # нечисловые форматы в ссылках не участвуют
         decoded = decode_register_values([int(v) for v in values], fmt)
         return float(decoded[0]) if decoded else None
@@ -572,7 +572,7 @@ class SimPanel(QWidget):
         if self._kind_at(index) not in REGISTER_KINDS:
             return [bool(round(x))] * count
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
-        if fmt in ("hex", "ascii"):
+        if fmt in ("hex", "ascii", "ascii1"):
             fmt = "dec"  # строковые форматы отображения кодируем как dec
         try:
             encoded = encode_register_values(x, fmt)
@@ -645,15 +645,17 @@ class SimPanel(QWidget):
         item = self._table.item(index, COL_VALUE)
         # ввод принимается в формате ОТОБРАЖЕНИЯ строки: для числовых форматов
         # (s16/u32/f32/...) — десятичные числа (models.parse_formatted_values);
-        # dec/hex/ascii и битовые области — сырые значения через parse_values
+        # ascii/ascii1 — текст; dec/hex и битовые области — сырые значения
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
         try:
-            if kind in REGISTER_KINDS and fmt not in ("dec", "hex", "ascii"):
+            if kind in REGISTER_KINDS and fmt not in ("dec", "hex", "ascii", "ascii1"):
                 count = len(self._values_at(index)) or 1
                 values = parse_formatted_values(item.text(), fmt, count)
-            elif kind in REGISTER_KINDS and fmt == "ascii":
+            elif kind in REGISTER_KINDS and fmt in ("ascii", "ascii1"):
                 count = len(self._values_at(index)) or 1
-                values = encode_ascii_values(item.text(), count)
+                values = encode_ascii_values(
+                    item.text(), count, 1 if fmt == "ascii1" else 2
+                )
             else:
                 values = parse_values(kind, item.text())
         except (ValueError, OverflowError) as exc:
