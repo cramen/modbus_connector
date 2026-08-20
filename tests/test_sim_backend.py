@@ -1,4 +1,3 @@
-import fcntl
 import os
 import socket
 import time
@@ -223,6 +222,8 @@ class _FdSerial:
 
         class FdSerial(serial.Serial):
             def open(self) -> None:
+                import fcntl  # POSIX-only: только внутри pty-теста (skip на Windows)
+
                 if self.is_open:
                     raise serial.SerialException("Port is already open.")
                 self.fd = fd
