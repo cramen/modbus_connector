@@ -47,10 +47,19 @@ jobs:
         # Per-module processes: a Qt segfault (seen intermittently in long
         # offscreen runs on CI) then fails only its module instead of the
         # whole suite, and the failing module is identified precisely.
+        # Exit code 5 = module skipped entirely (Qt-less Linux runner) — OK.
+        # A crashed module is retried once in a fresh process (runner flakes);
+        # a real regression fails twice and fails the job.
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then PY=.venv/Scripts/python; else PY=.venv/bin/python; fi
           for f in tests/test_*.py; do
-            "$PY" -m pytest "$f" -q || exit 1
+            "$PY" -m pytest "$f" -q
+            code=$?
+            if [ $code -eq 0 ] || [ $code -eq 5 ]; then continue; fi
+            echo "::warning::$f failed with exit $code — retrying once in a fresh process"
+            "$PY" -m pytest "$f" -q
+            code=$?
+            if [ $code -ne 0 ] && [ $code -ne 5 ]; then exit $code; fi
           done
 
       - name: Build (macOS/Linux)
