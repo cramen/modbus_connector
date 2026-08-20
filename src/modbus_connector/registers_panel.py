@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
+    QPlainTextEdit,
     QSizePolicy,
     QSpinBox,
     QStyledItemDelegate,
@@ -90,14 +91,19 @@ from modbus_connector.models import (
     diff_snapshots,
     encode_ascii_values,
     evaluate_alarm,
+    format_named_value,
     format_register_values,
     format_scaled_values,
     format_values,
     parse_expression,
     parse_formatted_values,
+    parse_value_names,
     parse_values,
     row_to_csv_record,
     rows_from_csv,
+    value_names_from_json,
+    value_names_to_json,
+    value_names_to_text,
 )
 from modbus_connector.snapshot_dialog import DiffRow, SnapshotDiffDialog
 from modbus_connector.timeseries import TimeSeries
@@ -121,6 +127,10 @@ POLL_BUTTON_TIP = (
     "Poll all rows with the Interval period; the dropdown chooses whether "
     "value history is recorded for sparklines and the graph window "
     "(bounded buffer, ~10k samples per row)"
+)
+VALUE_NAMES_HINT = (
+    "One 'value=name' per line, e.g. 0=Stopped; a matching integer value "
+    "shows as 'name (N)' and the row's New value cell becomes a combo."
 )
 
 (
@@ -766,6 +776,7 @@ class RegistersPanel(QWidget):
                     "offset": settings.offset,
                     "unit": settings.unit,
                     "log": settings.log,
+                    "value_names": value_names_to_json(settings.value_names),
                     "alarms": [alarm_rule_to_json(rule) for rule in settings.alarms],
                 }
             )
@@ -885,6 +896,10 @@ class RegistersPanel(QWidget):
             self._row_display[self._row_token_counter].alarms = alarm_rules_from_json(
                 entry.get("alarms")
             )
+            self._row_display[self._row_token_counter].value_names = (
+                value_names_from_json(entry.get("value_names"))
+            )
+            self._sync_value_names_combo(self._row_token_counter)
             # missing key (older settings files) defaults to polling enabled
             if not bool(entry.get("poll_enabled", True)):
                 item = self._table.item(self._table.rowCount() - 1, COL_POLL_ENABLED)
@@ -1094,6 +1109,9 @@ class RegistersPanel(QWidget):
         sparkline_a.swap_series(sparkline_b)
         # the ✕ button finds its row dynamically — nothing to swap
         table.blockSignals(False)
+        # комбо New value прибиты к индексам строк — пересинхронить под токены
+        self._sync_value_names_combo(self._token_at(a))
+        self._sync_value_names_combo(self._token_at(b))
 
     def _defer_move(self, delta: int) -> None:
         # the hotkey fires mid key-event; rebuilding rows synchronously inside
@@ -1286,8 +1304,45 @@ class RegistersPanel(QWidget):
         layout.addWidget(QLabel(tr("Rows added or deleted while this dialog is open"
                                    " appear after reopening it.")))
         layout.addWidget(table)
+        # редактор имён значений привязан к выбранной в таблице строке;
+        # применяется на лету, как Scale/Offset (у диалога нет OK)
+        names_holder: dict[str, int] = {}  # токен строки в редакторе
+        names_label = QLabel(tr("Value names (selected row):"))
+        names_edit = QPlainTextEdit()
+        names_edit.setPlaceholderText("0=Stopped")
+        names_edit.setMaximumHeight(90)
+        names_hint = QLabel(tr(VALUE_NAMES_HINT))
+        names_hint.setWordWrap(True)
+
+        def load_names() -> None:
+            item = table.item(table.currentRow(), 0)
+            token = int(item.data(Qt.ItemDataRole.UserRole)) if item else -1
+            names_holder["token"] = token
+            settings = self._row_display.get(token)
+            names_edit.blockSignals(True)
+            names_edit.setPlainText(
+                value_names_to_text(settings.value_names) if settings is not None else ""
+            )
+            names_edit.blockSignals(False)
+
+        def apply_names() -> None:
+            token = names_holder.get("token", -1)
+            settings = self._row_display.get(token)
+            if settings is None:  # строку удалили при открытом диалоге
+                return
+            settings.value_names = parse_value_names(names_edit.toPlainText())
+            self._sync_value_names_combo(token)
+
+        table.currentItemChanged.connect(lambda _cur, _prev: load_names())
+        names_edit.textChanged.connect(apply_names)
+        if table.rowCount():
+            table.setCurrentCell(0, 0)
+        load_names()
+        layout.addWidget(names_label)
+        layout.addWidget(names_edit)
+        layout.addWidget(names_hint)
         layout.addWidget(buttons)
-        dialog.resize(620, 350)
+        dialog.resize(620, 480)
         # non-modal; rows deleted meanwhile are ignored via the token lookup
         dialog.finished.connect(self._on_display_dialog_closed)
         self._display_dialog = dialog
@@ -2157,6 +2212,70 @@ class RegistersPanel(QWidget):
         unit = row.unit_id if row.unit_id is not None else self._unit_id
         self.writeRequested.emit(request_id, unit, row, values)
 
+    # --- value names (enum «число → имя») -----------------------------------
+
+    def _sync_value_names_combo(self, token: int) -> None:
+        """Комбо New value по value_names строки: создать/перестроить/скрыть.
+
+        Скрытие вместо removeCellWidget: отрыв cell widget оставляет в
+        представлении битые ссылки (см. _swap_rows); скрытый комбо открывает
+        доступ к обычной текстовой ячейке под ним."""
+        index = self._find_row_by_token(token)
+        if index is None:
+            return
+        settings = self._row_display.get(token, RowDisplaySettings())
+        combo = self._table.cellWidget(index, COL_NEW_VALUE)
+        if not settings.value_names:
+            if combo is not None:
+                combo.hide()
+            self._refresh_value_cell(index, token)
+            return
+        if combo is None:
+            combo = theme.FitComboBox()
+            combo.activated.connect(
+                lambda item_index, c=combo: self._on_value_names_activated(c, item_index)
+            )
+            self._table.setCellWidget(index, COL_NEW_VALUE, combo)
+        combo.blockSignals(True)
+        combo.clear()
+        for value, name in sorted(settings.value_names.items()):
+            combo.addItem(f"{value} = {name}", value)
+        combo.setCurrentIndex(-1)  # пусто: повторный выбор того же пункта пишет снова
+        combo.blockSignals(False)
+        combo.show()
+        self._refresh_value_cell(index, token)
+
+    def _refresh_value_cell(self, index: int, token: int) -> None:
+        """Перерисовать Value из последних чтений (сменились value_names)."""
+        values = self._last_values.get(token)
+        if values is None:
+            return
+        item = self._table.item(index, COL_VALUE)
+        if item is not None:
+            item.setText(self._display_text(index, values))
+
+    def _on_value_names_activated(self, combo: QComboBox, item_index: int) -> None:
+        value = combo.itemData(item_index)
+        # reset сразу: семантика текстового New value (очистка после записи)
+        combo.setCurrentIndex(-1)
+        if isinstance(value, bool) or not isinstance(value, int):
+            return
+        if not self._bus_enabled:
+            return  # молча, как и ввод в текстовое New value без подключения
+        index = self._row_of_cell_widget(combo, COL_NEW_VALUE)
+        if index is None:
+            return
+        row = self._row_data(index)
+        if row is None:
+            return
+        self._emit_write(index, row, [bool(value)] if row.kind == "coils" else [value])
+
+    def _row_of_cell_widget(self, widget: QWidget, col: int) -> int | None:
+        for index in range(self._table.rowCount()):
+            if self._table.cellWidget(index, col) is widget:
+                return index
+        return None
+
     # --- quick value actions (hotkeys + context menu) ----------------------
 
     def _action_row(self) -> tuple[int, RegisterRow] | None:
@@ -2267,15 +2386,32 @@ class RegistersPanel(QWidget):
             return
         self._read_table_row(index)
 
+    def _named_value_text(
+        self, kind: str, index: int, values: list, settings: RowDisplaySettings
+    ) -> str | None:
+        """«имя (N)» по value_names: count==1 регистры dec/s16 и битовые строки."""
+        if not settings.value_names or len(values) != 1:
+            return None
+        if kind not in REGISTER_KINDS:
+            return format_named_value(settings.value_names, int(bool(values[0])))
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt not in ("dec", "s16"):
+            return None
+        decoded = decode_register_values([int(values[0])], fmt)
+        return format_named_value(settings.value_names, int(decoded[0]))
+
     def _display_text(self, index: int, values: list) -> str:
         kind = self._table.cellWidget(index, COL_TYPE).currentText()
+        settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
+        named = self._named_value_text(kind, index, values, settings)
+        if named is not None:
+            return named
         if kind not in REGISTER_KINDS:
             return format_values(values)
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
         # hex and ascii show raw data — scaling them is meaningless
         if fmt in ("hex", "ascii", "ascii1"):
             return format_register_values(values, fmt)
-        settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
         order = settings.order or self._global_order_combo.currentText()
         decoded = decode_register_values(values, fmt, order)
         if settings.scale != 1.0 or settings.offset != 0.0 or settings.unit:

@@ -71,7 +71,13 @@ src/modbus_connector/
                   # движок выражений: ссылки [имя] на строки, whitelisted
                   # арифметика/функции (AST-валидация, eval без builtins),
                   # ValueError на мусоре, KeyError = нет строки, nan = мат.
-                  # ошибка
+                  # ошибка;
+                  # RowDisplaySettings.value_names — имена значений (enum,
+                  # dict[int, str]); parse_value_names/value_names_to_text —
+                  # редактор «значение=имя» по строкам (мусор пропускается,
+                  # пустой текст = {}), value_names_to_json/value_names_from_json
+                  # — state (JSON-ключи строками, толерантный разбор),
+                  # format_named_value — «имя (N)» или None
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
                   # mask_write_register (функция 0x16),
@@ -141,6 +147,17 @@ src/modbus_connector/
                   # и до старта); masterWrote → handle_master_write обновляет
                   # покрывающие строки и подсвечивает Value зелёным на ~2 с
                   # (flash_color + parented QTimer, поколения по строке);
+                  # value names (enum): dict[int, str] в _VALUE_NAMES_ROLE
+                  # ячейки Name, state-ключ "value_names"; кнопка "Value
+                  # names…" (иконка display, disabled без строк) — диалог
+                  # текущей строки (QPlainTextEdit «0=Stopped»); совпавшее
+                  # значение count==1 dec/s16 или бита — «имя (N)»
+                  # (_named_key + format_named_value в _render_value), Value
+                  # ручной строки с names — комбо «N = имя» (выбор = запись
+                  # в datastore через setValuesRequested, комбо остаётся на
+                  # записанном значении — activated срабатывает и при
+                  # повторном выборе; expression-строки только показывают
+                  # имя, комбо нет);
                   # покрывающие строки; кнопка Template… (csv_import, QMenu с
                   # подменю производителей, дубли kind+address пропускаются);
                   # help-кнопка (make_help_button → SIMULATOR_HELP) рядом с
@@ -229,6 +246,19 @@ src/modbus_connector/
                        # ascii1 — 1 символ/регистр (строки Wiren Board);
                        # ascii/ascii1 и hex не масштабируются),
                        # Scale/Offset/Unit/Order — в диалоге "Display…",
+                       # там же внизу редактор Value names выбранной строки
+                       # (QPlainTextEdit «0=Stopped» по строкам, применяется
+                       # на лету; value_names в RowDisplaySettings, state-ключ
+                       # "value_names" {"0": "Stopped"}): совпавшее значение
+                       # count==1 dec/s16 или бита показывается как «имя (N)»
+                       # (_named_value_text в _display_text), а New value
+                       # становится комбо «N = имя» (_sync_value_names_combo):
+                       # выбор = немедленная запись через _emit_write ([ключ],
+                       # coils — bool), после записи комбо сбрасывается в -1
+                       # (повторный выбор пишет снова, как очистка текстового
+                       # New value), без шины — молча; скрытие комбо — hide(),
+                       # НЕ removeCellWidget (ломает view, см. _swap_rows);
+                       # _swap_rows пересинхронизирует комбо обеих строк,
                        # хранилище _row_display по токену (RowDisplaySettings,
                        # order None = глобальный Order-комбо над таблицей,
                        # сохраняется как registers_options в session state,

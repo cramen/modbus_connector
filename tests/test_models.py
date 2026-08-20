@@ -19,16 +19,21 @@ from modbus_connector.models import (
     encode_ascii_values,
     encode_register_values,
     evaluate_alarm,
+    format_named_value,
     format_register_values,
     format_scaled_values,
     format_values,
     guess_column_mapping,
     parse_expression,
     parse_formatted_values,
+    parse_value_names,
     parse_values,
     rows_from_csv,
     rows_to_csv,
     rule_matches,
+    value_names_from_json,
+    value_names_to_json,
+    value_names_to_text,
 )
 
 
@@ -955,3 +960,57 @@ class TestAscii1Format:
 
     def test_non_ascii_replaced(self) -> None:
         assert format_register_values(encode_ascii_values("aж", 2, 1), "ascii1") == "a?"
+
+
+class TestValueNames:
+    def test_parse_lines(self) -> None:
+        assert parse_value_names("0=Stopped\n1=Starting\n2 = Pump running") == {
+            0: "Stopped",
+            1: "Starting",
+            2: "Pump running",
+        }
+
+    def test_parse_hex_and_negative_keys(self) -> None:
+        assert parse_value_names("0x10=hex\n-1=below zero") == {16: "hex", -1: "below zero"}
+
+    def test_parse_skips_junk(self) -> None:
+        text = "no separator\n=empty key\n3=\nabc=name\n7=Ok"
+        assert parse_value_names(text) == {7: "Ok"}
+
+    def test_parse_empty_text_is_empty_dict(self) -> None:
+        assert parse_value_names("") == {}
+        assert parse_value_names("  \n\n") == {}
+
+    def test_parse_duplicate_key_last_wins(self) -> None:
+        assert parse_value_names("1=one\n1=uno") == {1: "uno"}
+
+    def test_text_roundtrip(self) -> None:
+        names = {0: "Stopped", 2: "Pump running", 10: "Full speed"}
+        assert value_names_to_text(names) == "0=Stopped\n2=Pump running\n10=Full speed"
+        assert parse_value_names(value_names_to_text(names)) == names
+
+    def test_text_of_empty(self) -> None:
+        assert value_names_to_text({}) == ""
+
+    def test_json_roundtrip(self) -> None:
+        names = {0: "Off", 1: "On"}
+        assert value_names_to_json(names) == {"0": "Off", "1": "On"}
+        assert value_names_from_json(value_names_to_json(names)) == names
+
+    def test_from_json_tolerant(self) -> None:
+        assert value_names_from_json({"0": "Off", "x": 1, "bad key": "no", "5": "On"}) == {
+            0: "Off",
+            5: "On",
+        }
+        assert value_names_from_json(None) == {}
+        assert value_names_from_json([1, 2]) == {}
+
+    def test_format_named_value(self) -> None:
+        names = {0: "Off", 1: "On"}
+        assert format_named_value(names, 0) == "Off (0)"
+        assert format_named_value(names, True) == "On (1)"  # биты — как 0/1
+        assert format_named_value(names, 5) is None
+        assert format_named_value({}, 0) is None
+
+    def test_row_display_settings_default(self) -> None:
+        assert RowDisplaySettings().value_names == {}

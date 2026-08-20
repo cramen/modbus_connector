@@ -84,8 +84,63 @@ class RowDisplaySettings:
     unit: str = ""
     order: ByteOrder | None = None  # None = inherit the panel's global order
     log: bool = True  # include the row when logging values to a file
+    # имена значений (enum): int -> подпись; совпавшее значение показывается
+    # как «имя (N)», а поле ввода превращается в комбо
+    value_names: dict[int, str] = field(default_factory=dict)
     # alarm rules over the scaled primary value (AlarmRule is defined below)
     alarms: list["AlarmRule"] = field(default_factory=list)
+
+
+def parse_value_names(text: str) -> dict[int, str]:
+    """Разбор редактора имен значений: по строке «значение=имя».
+
+    Пустой текст — {} без ошибки; строки без «=», с нечисловым значением
+    (dec/0x-hex) или пустым именем пропускаются; при дублях ключа побеждает
+    последняя строка."""
+    names: dict[int, str] = {}
+    for line in text.splitlines():
+        key, sep, name = line.partition("=")
+        name = name.strip()
+        if not sep or not name:
+            continue
+        try:
+            value = int(key.strip(), 0)
+        except ValueError:
+            continue
+        names[value] = name
+    return names
+
+
+def value_names_to_text(names: Mapping[int, str]) -> str:
+    """Обратная к parse_value_names форма: строки «значение=имя» по ключу."""
+    return "\n".join(f"{value}={name}" for value, name in sorted(names.items()))
+
+
+def value_names_to_json(names: Mapping[int, str]) -> dict[str, str]:
+    """Сериализация в session state: JSON-ключи — строки ({"0": "Stopped"})."""
+    return {str(value): name for value, name in sorted(names.items())}
+
+
+def value_names_from_json(data: object) -> dict[int, str]:
+    """Толерантный разбор из session state; мусор и не-str имена пропускаются."""
+    if not isinstance(data, dict):
+        return {}
+    names: dict[int, str] = {}
+    for key, name in data.items():
+        if not isinstance(name, str):
+            continue
+        try:
+            names[int(str(key), 0)] = name
+        except ValueError:
+            continue
+    return names
+
+
+def format_named_value(names: Mapping[int, str], value: int | bool) -> str | None:
+    """«имя (N)», если value (биты — как 0/1) есть в names; иначе None."""
+    key = int(value)
+    name = names.get(key)
+    return f"{name} ({key})" if name is not None else None
 
 
 CSV_COLUMNS = [

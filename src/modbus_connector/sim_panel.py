@@ -10,11 +10,14 @@ from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
+    QPlainTextEdit,
     QSizePolicy,
     QSpinBox,
     QStackedWidget,
@@ -38,12 +41,17 @@ from modbus_connector.models import (
     decode_register_values,
     encode_ascii_values,
     encode_register_values,
+    format_named_value,
     format_register_values,
     format_values,
     parse_expression,
     parse_formatted_values,
+    parse_value_names,
     parse_values,
     register_width,
+    value_names_from_json,
+    value_names_to_json,
+    value_names_to_text,
 )
 from modbus_connector.registers_panel import ExpressionDelegate
 from modbus_connector.sim_backend import (
@@ -77,6 +85,12 @@ RULE_MODES = ("manual", "expression")  # ключи в itemData, перевод�
 _VALUES_ROLE = Qt.ItemDataRole.UserRole
 _RULE_CACHE_ROLE = Qt.ItemDataRole.UserRole + 1  # (text, Expression | None, error)
 _RULE_PREV_ROLE = Qt.ItemDataRole.UserRole + 2  # float — предыдущий результат
+_VALUE_NAMES_ROLE = Qt.ItemDataRole.UserRole + 3  # dict[int, str] — имена значений
+
+VALUE_NAMES_HINT = (
+    "One 'value=name' per line, e.g. 0=Stopped; a matching integer value "
+    "shows as 'name (N)' and the Value cell of a manual row becomes a combo."
+)
 
 # расширения движка выражений для правил симулятора
 SIM_RULE_FUNCTIONS: dict[str, Callable[..., float]] = {
@@ -189,6 +203,14 @@ class SimPanel(QWidget):
         self._track(self._template_button, "Template…", "Add rows from a device template")
         self._template_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._template_button.setMenu(self._build_templates_menu())
+        self._names_button = icons.make_button(tr("Value names…"), "display")
+        self._track(
+            self._names_button,
+            "Value names…",
+            "Name integer values of the current row (enum), e.g. 0=Off, 1=On",
+        )
+        self._names_button.setEnabled(False)  # активна, когда есть строки
+        self._names_button.clicked.connect(self._on_value_names)
         self._tick_spin = QSpinBox(minimum=TICK_MS_MIN, maximum=TICK_MS_MAX, value=TICK_MS_DEFAULT)
         self._tick_spin.valueChanged.connect(self.setTickIntervalRequested.emit)
         self._status = QLabel()
@@ -210,6 +232,7 @@ class SimPanel(QWidget):
         controls_row.addWidget(self._button)
         controls_row.addWidget(self._add_button)
         controls_row.addWidget(self._template_button)
+        controls_row.addWidget(self._names_button)
         self._help_button = make_help_button(self, "Simulator — Help", SIMULATOR_HELP)
         controls_row.addWidget(self._help_button)
         controls_row.addWidget(self._label("Tick, ms"))
@@ -340,6 +363,9 @@ class SimPanel(QWidget):
         self._table.insertRow(index)
         name_item = QTableWidgetItem(str(entry.get("name", "")))
         name_item.setData(_VALUES_ROLE, values)
+        name_item.setData(
+            _VALUE_NAMES_ROLE, value_names_from_json(entry.get("value_names"))
+        )
         self._table.setItem(index, COL_NAME, name_item)
 
         type_combo = theme.FitComboBox()
@@ -385,6 +411,7 @@ class SimPanel(QWidget):
         actions_layout.addWidget(delete_button)
         self._table.setCellWidget(index, COL_ACTIONS, actions)
         self._table.blockSignals(False)
+        self._names_button.setEnabled(True)
         self._sync_rule_cells(index)
         self._refresh_rule_display(index)  # невалидное правило — сразу «⚠»
 
@@ -417,6 +444,26 @@ class SimPanel(QWidget):
         values = item.data(_VALUES_ROLE) if item is not None else None
         return values if isinstance(values, list) else []
 
+    def _value_names_at(self, index: int) -> dict[int, str]:
+        """Имена значений строки (enum «число → имя»); {} если не заданы."""
+        item = self._table.item(index, COL_NAME)
+        names = item.data(_VALUE_NAMES_ROLE) if item is not None else None
+        return names if isinstance(names, dict) else {}
+
+    def _named_key(self, index: int) -> int | None:
+        """Ключ value_names текущего значения: биты — 0/1, регистры dec/s16 —
+        знаковое/сырое число. None — формат/ширина строки не именуются."""
+        values = self._values_at(index)
+        if len(values) != 1:
+            return None
+        if self._kind_at(index) not in REGISTER_KINDS:
+            return int(bool(values[0]))
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt not in ("dec", "s16"):
+            return None
+        raw = int(values[0])
+        return raw - 0x10000 if fmt == "s16" and raw >= 0x8000 else raw
+
     def _address_at(self, index: int) -> int | None:
         try:
             address = int(self._text_at(index, COL_ADDRESS), 0)
@@ -427,7 +474,35 @@ class SimPanel(QWidget):
     def _render_value(self, index: int) -> None:
         kind = self._kind_at(index)
         values = self._values_at(index)
-        if kind in REGISTER_KINDS:
+        names = self._value_names_at(index)
+        key = self._named_key(index) if names else None
+        combo = self._table.cellWidget(index, COL_VALUE)
+        if key is not None and self._rule_at(index) == "manual":
+            # именованная ручная строка: Value — комбо «N = имя» (и отображение,
+            # и запись); activated срабатывает и при повторном выборе пункта
+            if combo is None:
+                combo = theme.FitComboBox()
+                combo.activated.connect(
+                    lambda item_index, c=combo: self._on_value_combo_activated(
+                        c, item_index
+                    )
+                )
+                self._table.setCellWidget(index, COL_VALUE, combo)
+            if combo.property("value_names") != names:
+                combo.blockSignals(True)
+                combo.clear()
+                for value, name in sorted(names.items()):
+                    combo.addItem(f"{value} = {name}", value)
+                combo.setProperty("value_names", dict(names))
+                combo.blockSignals(False)
+            combo.show()
+            combo.setCurrentIndex(combo.findData(key))  # -1 — значения нет в names
+            return
+        if combo is not None:
+            combo.hide()  # не removeCellWidget: отрыв ломает view (master-панель)
+        if key is not None and (named := format_named_value(names, key)) is not None:
+            text = named
+        elif kind in REGISTER_KINDS:
             fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
             text = format_register_values([int(v) for v in values], fmt)
         else:
@@ -438,6 +513,62 @@ class SimPanel(QWidget):
         self._table.blockSignals(True)
         item.setText(text)
         self._table.blockSignals(False)
+
+    def _on_value_combo_activated(self, combo: QComboBox, item_index: int) -> None:
+        """Выбор в комбо Value — немедленная запись в datastore (как правка)."""
+        value = combo.itemData(item_index)
+        index = self._row_of(combo, COL_VALUE)
+        if index is None or isinstance(value, bool) or not isinstance(value, int):
+            return
+        values = list(self._values_at(index))
+        if not values:
+            return
+        if self._kind_at(index) in REGISTER_KINDS:
+            fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+            try:
+                encoded = encode_register_values(value, fmt)
+            except OverflowError:
+                return
+            values[0] = encoded[0]
+        else:
+            values[0] = bool(value)
+        self._table.item(index, COL_NAME).setData(_VALUES_ROLE, values)
+        self._render_value(index)  # комбо показывает записанное значение
+        self._push_row(index)
+
+    @Slot()
+    def _on_value_names(self) -> None:
+        """Диалог имён значений текущей строки (по строке «значение=имя»)."""
+        index = self._table.currentRow()
+        if index < 0:
+            index = 0
+        if index >= self._table.rowCount():
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr("Value names"))
+        name = self._text_at(index, COL_NAME)
+        label = name or f"{self._kind_at(index)}@{self._text_at(index, COL_ADDRESS)}"
+        edit = QPlainTextEdit(value_names_to_text(self._value_names_at(index)))
+        edit.setPlaceholderText("0=Stopped")
+        hint = QLabel(tr(VALUE_NAMES_HINT))
+        hint.setWordWrap(True)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(label))
+        layout.addWidget(edit)
+        layout.addWidget(hint)
+        layout.addWidget(buttons)
+        dialog.resize(360, 260)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._table.item(index, COL_NAME).setData(
+            _VALUE_NAMES_ROLE, parse_value_names(edit.toPlainText())
+        )
+        self._render_value(index)
 
     def _push_row(self, index: int) -> None:
         """Отправить значения строки в backend (блоки хранятся и до старта)."""
@@ -728,6 +859,7 @@ class SimPanel(QWidget):
         for index in range(self._table.rowCount()):
             if self._table.cellWidget(index, COL_ACTIONS) is button.parent():
                 self._table.removeRow(index)
+                self._names_button.setEnabled(self._table.rowCount() > 0)
                 return
 
     # --- шаблоны ---
@@ -953,6 +1085,7 @@ class SimPanel(QWidget):
                     "values": list(self._values_at(index)),
                     "rule": self._rule_at(index),
                     "rule_text": self._text_at(index, COL_RULE_TEXT),
+                    "value_names": value_names_to_json(self._value_names_at(index)),
                 }
             )
         unit = self._unit_combo.currentData()

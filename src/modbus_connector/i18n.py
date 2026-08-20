@@ -164,6 +164,20 @@ RU: dict[str, str] = {
     "Clear history": "Очистить историю",
     # registers panel: dialogs and log lines
     "Per-row display settings": "Настройки отображения строк",
+    "Value names": "Имена значений",
+    "Value names…": "Имена значений…",
+    "Value names (selected row):": "Имена значений (выбранная строка):",
+    "One 'value=name' per line, e.g. 0=Stopped; a matching integer value "
+    "shows as 'name (N)' and the row's New value cell becomes a combo.":
+        "По строке «значение=имя», например 0=Остановлен; совпавшее целое "
+        "показывается как «имя (N)», а поле New value строки становится комбо.",
+    "One 'value=name' per line, e.g. 0=Stopped; a matching integer value "
+    "shows as 'name (N)' and the Value cell of a manual row becomes a combo.":
+        "По строке «значение=имя», например 0=Остановлен; совпавшее целое "
+        "показывается как «имя (N)», а ячейка Value ручной строки становится "
+        "комбо.",
+    "Name integer values of the current row (enum), e.g. 0=Off, 1=On":
+        "Имена целых значений текущей строки (enum), например 0=Выкл, 1=Вкл",
     "Scale": "Scale",
     "Offset": "Offset",
     "Unit": "Ед.",

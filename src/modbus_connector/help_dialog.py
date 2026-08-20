@@ -36,6 +36,12 @@ opens file/format/field/row settings.</li>
 <b>Filter…</b> hides non-matching rows; <b>Sort by address</b> reorders;
 <b>CSV</b> imports/exports the table; <b>Mask write (0x16)…</b> and
 <b>Read/Write (0x17)…</b> run the advanced functions.</li>
+<li><b>Value names</b> (the Display… dialog, bottom editor for the selected
+row): name integer values as an enum, one <code>value=name</code> per line
+(e.g. <code>0=Stopped</code>). A matching single-register dec/s16 or bit
+value shows as "name (N)", and the row's New value cell turns into a combo
+that writes the picked value immediately (the combo resets after each
+write, so the same value can be picked again).</li>
 <li><b>Alarms…</b> — per-row alarm rules over the scaled value (hex/ascii
 rows are skipped). The first matching rule wins and paints the Value cell
 red/yellow, outranking the change flash; activation and clearing are logged
@@ -193,6 +199,11 @@ strings).</li>
 <li><b>Template…</b> adds rows from a bundled device template (duplicates by
 type+address are skipped); <b>Add row</b> appends an empty row, ✕ deletes
 one.</li>
+<li><b>Value names…</b> names the current row's integer values (one
+<code>value=name</code> per line). A matching single-register dec/s16 or bit
+value shows as "name (N)"; a manual row's Value cell becomes a combo that
+writes the pick to the datastore at once, an expression row only displays
+the name.</li>
 </ul>
 <h4>Rules</h4>
 <p>The <b>Rule</b> column picks <b>Manual</b> (edit the Value yourself) or
@@ -279,6 +290,13 @@ s16/u32/s32/f32/u64/s64/f64 числа вводятся в формате ото
 <b>Фильтр…</b> скрывает лишние строки; <b>Сортировать по адресу</b>
 упорядочивает таблицу; <b>CSV</b> — импорт/экспорт; <b>Mask write (0x16)…</b> и
 <b>Read/Write (0x17)…</b> — расширенные функции.</li>
+<li><b>Имена значений</b> (диалог «Отображение…», редактор внизу для
+выбранной строки): имена целых значений как enum, по строке
+<code>значение=имя</code> (например <code>0=Остановлен</code>). Совпавшее
+значение одиночного регистра dec/s16 или бита показывается как «имя (N)»,
+а поле «Новое значение» строки превращается в комбо, записывающее выбранное
+значение сразу (после записи комбо сбрасывается — то же значение можно
+выбрать повторно).</li>
 <li><b>Алармы…</b> — правила алармов на строку по масштабированному значению
 (строки hex/ascii пропускаются). Срабатывает первое совпавшее правило и
 красит ячейку значения в красный/жёлтый (приоритет над зелёной вспышкой
@@ -438,6 +456,11 @@ discrete inputs, holding или input registers), <b>адрес</b> (0..9999, de
 <li><b>Шаблон…</b> добавляет строки из встроенного шаблона устройства (дубли
 по типу+адресу пропускаются); <b>Добавить строку</b> — пустую строку,
 ✕ удаляет строку.</li>
+<li><b>Имена значений…</b> задаёт имена целых значений текущей строки (по
+строке <code>значение=имя</code>). Совпавшее значение одиночного регистра
+dec/s16 или бита показывается как «имя (N)»; ячейка Value ручной строки
+становится комбо, записывающим выбор в datastore сразу, а строка-выражение
+только показывает имя.</li>
 </ul>
 <h4>Правила</h4>
 <p>Колонка <b>Правило</b> выбирает <b>Вручную</b> (значение правите вы) или

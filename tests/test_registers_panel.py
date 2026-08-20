@@ -19,6 +19,7 @@ try:
     from PySide6.QtWidgets import (  # noqa: E402
         QAbstractItemView,
         QApplication,
+        QPlainTextEdit,
         QSizePolicy,
         QTableWidget,
     )
@@ -1450,3 +1451,120 @@ def test_write_accepts_text_for_ascii1(qapp: QApplication) -> None:
     panel._table.item(0, COL_NEW_VALUE).setText("WBMSW4")
     assert writes, "write must be emitted"
     assert writes[-1][3] == [ord(c) for c in "WBMSW4"] + [0] * 14
+
+
+def test_value_names_state_roundtrip(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [
+            {"name": "pump", "kind": "holding_registers", "address": 0, "count": 1,
+             "value_names": {"0": "Stopped", "2": "Pump running"}},
+            {"name": "plain", "kind": "holding_registers", "address": 1, "count": 1},
+            {"kind": "junk", "address": 2, "count": 1, "value_names": {"x": 1}},  # tolerant
+        ]
+    )
+    state = panel.state()
+    assert state[0]["value_names"] == {"0": "Stopped", "2": "Pump running"}
+    assert state[1]["value_names"] == {}
+    assert state[2]["value_names"] == {}
+
+
+def test_value_names_display_and_combo_write(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "pump", "kind": "holding_registers", "address": 0, "count": 1,
+          "value_names": {"0": "Stopped", "2": "Pump running"}}]
+    )
+    combo = panel._table.cellWidget(0, COL_NEW_VALUE)
+    assert combo is not None and not combo.isHidden()  # names → комбо
+    assert [combo.itemText(i) for i in range(combo.count())] == [
+        "0 = Stopped", "2 = Pump running",
+    ]
+    assert combo.currentIndex() == -1  # placeholder
+
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [2], "")
+    assert panel._table.item(0, COL_VALUE).text() == "Pump running (2)"
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [5], "")
+    assert panel._table.item(0, COL_VALUE).text() == "5"  # вне names — как раньше
+
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    combo.activated[int].emit(combo.findData(2))
+    assert [w[3] for w in writes] == [[2]]
+    assert combo.currentIndex() == -1  # сброс после записи…
+    combo.activated[int].emit(combo.findData(2))  # …повторный выбор пишет снова
+    assert [w[3] for w in writes] == [[2], [2]]
+
+
+def test_value_names_combo_silent_without_bus(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)  # шина выключена
+    panel.set_state(
+        [{"kind": "holding_registers", "address": 0, "count": 1,
+          "value_names": {"1": "On"}}]
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    combo = panel._table.cellWidget(0, COL_NEW_VALUE)
+    combo.activated[int].emit(combo.findData(1))
+    assert writes == []  # молча, как текстовое New value без подключения
+    assert combo.currentIndex() == -1
+
+
+def test_value_names_removed_returns_text_cell(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"kind": "holding_registers", "address": 0, "count": 1,
+          "value_names": {"1": "On"}}]
+    )
+    token = panel._token_at(0)
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [1], "")
+    assert panel._table.item(0, COL_VALUE).text() == "On (1)"
+
+    panel._row_display[token].value_names = {}
+    panel._sync_value_names_combo(token)
+    combo = panel._table.cellWidget(0, COL_NEW_VALUE)
+    assert combo is not None and combo.isHidden()  # комбо скрыто, ячейка текстовая
+    assert panel._table.item(0, COL_VALUE).text() == "1"  # отображение без имени
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel._table.item(0, COL_NEW_VALUE).setText("5")
+    assert [w[3] for w in writes] == [[5]]  # обычный путь записи работает
+
+
+def test_value_names_coils(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"kind": "coils", "address": 0, "count": 1,
+          "value_names": {"0": "Off", "1": "On"}}]
+    )
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [True], "")
+    assert panel._table.item(0, COL_VALUE).text() == "On (1)"
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    combo = panel._table.cellWidget(0, COL_NEW_VALUE)
+    combo.activated[int].emit(combo.findData(0))
+    assert [w[3] for w in writes] == [[False]]  # coils пишутся bool
+
+
+def test_value_names_display_dialog_editor(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel._on_display_settings()
+    dialog = panel._display_dialog
+    assert dialog is not None
+    edit = dialog.findChild(QPlainTextEdit)
+    assert edit is not None
+    edit.setPlainText("3=Hi\njunk line")  # применяется на лету, мусор пропускается
+    token = panel._token_at(0)
+    assert panel._row_display[token].value_names == {3: "Hi"}
+    assert panel._table.cellWidget(0, COL_NEW_VALUE) is not None  # комбо появилось
+    edit.setPlainText("")
+    assert panel._row_display[token].value_names == {}
+    assert panel._table.cellWidget(0, COL_NEW_VALUE).isHidden()  # и скрылось
+    dialog.close()

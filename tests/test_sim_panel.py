@@ -75,7 +75,7 @@ def test_state_roundtrip(panel: SimPanel) -> None:
     rows = collected["rows"]
     assert rows[0] == {"name": "temp", "kind": "holding_registers", "address": 5,
                        "count": 2, "format": "f32", "values": [100, 200],
-                       "rule": "manual", "rule_text": ""}
+                       "rule": "manual", "rule_text": "", "value_names": {}}
     assert rows[1]["values"] == [True]
 
 
@@ -308,3 +308,88 @@ def test_edit_value_accepts_text_for_ascii1(panel: SimPanel) -> None:
     panel._table.item(0, COL_VALUE).setText("WBMSW4")
     assert panel._table.item(0, COL_VALUE).text() == "WBMSW4"
     assert panel._values_at(0)[:6] == [ord(c) for c in "WBMSW4"]
+
+
+def test_value_names_state_roundtrip(panel: SimPanel) -> None:
+    panel.set_state(
+        {"rows": [
+            {"name": "pump", "kind": "holding_registers", "address": 10, "count": 1,
+             "values": [2], "value_names": {"0": "Stopped", "2": "Pump running"}},
+            {"name": "plain", "kind": "holding_registers", "address": 11, "count": 1},
+        ]}
+    )
+    state = panel.state()
+    assert state["rows"][0]["value_names"] == {"0": "Stopped", "2": "Pump running"}
+    assert state["rows"][1]["value_names"] == {}
+    combo = panel._table.cellWidget(0, COL_VALUE)
+    assert combo is not None and not combo.isHidden()
+    assert combo.currentText() == "2 = Pump running"  # комбо — и отображение тоже
+    assert panel._table.cellWidget(1, COL_VALUE) is None  # без names — текст
+
+
+def test_value_names_combo_writes_datastore(panel: SimPanel) -> None:
+    panel._add_row({"kind": "holding_registers", "address": 5, "count": 1,
+                    "values": [0], "value_names": {"0": "Off", "1": "On"}})
+    spy = QSignalSpy(panel.setValuesRequested)
+    combo = panel._table.cellWidget(0, COL_VALUE)
+    combo.activated[int].emit(combo.findData(1))
+    assert spy.count() == 1
+    kind, address, values = spy.at(0)
+    assert (kind, address, list(values)) == ("holding_registers", 5, [1])
+    assert panel._values_at(0) == [1]
+    assert combo.currentText() == "1 = On"  # комбо остаётся на записанном
+    combo.activated[int].emit(combo.findData(1))  # повторный выбор пишет снова
+    assert spy.count() == 2
+
+
+def test_value_names_combo_coils_bool(panel: SimPanel) -> None:
+    panel._add_row({"kind": "coils", "address": 0, "count": 1,
+                    "values": [True], "value_names": {"0": "Off", "1": "On"}})
+    combo = panel._table.cellWidget(0, COL_VALUE)
+    assert combo.currentText() == "1 = On"
+    spy = QSignalSpy(panel.setValuesRequested)
+    combo.activated[int].emit(combo.findData(0))
+    kind, address, values = spy.at(0)
+    assert (kind, address, list(values)) == ("coils", 0, [False])
+    assert isinstance(values[0], bool)
+    assert panel._values_at(0) == [False]
+    assert combo.currentText() == "0 = Off"
+
+
+def test_value_names_dialog(panel: SimPanel, monkeypatch: pytest.MonkeyPatch) -> None:
+    from PySide6.QtWidgets import QDialog, QPlainTextEdit
+
+    panel._add_row({"kind": "holding_registers", "address": 0, "count": 1,
+                    "values": [1]})
+    panel._table.setCurrentCell(0, COL_VALUE)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(QPlainTextEdit, "toPlainText", lambda self: "0=Off\n1=On\njunk")
+    panel._on_value_names()
+    assert panel._value_names_at(0) == {0: "Off", 1: "On"}
+    combo = panel._table.cellWidget(0, COL_VALUE)
+    assert combo is not None and combo.currentText() == "1 = On"
+
+
+def test_value_names_button_disabled_without_rows(panel: SimPanel) -> None:
+    assert not panel._names_button.isEnabled()
+    panel._add_row({"kind": "coils", "address": 0, "count": 1})
+    assert panel._names_button.isEnabled()
+    delete = panel._table.cellWidget(0, COL_ACTIONS).findChild(QToolButton)
+    delete.click()
+    assert not panel._names_button.isEnabled()
+
+
+def test_value_names_expression_row_display(panel: SimPanel) -> None:
+    panel._add_row({"kind": "holding_registers", "address": 0, "count": 1,
+                    "rule": "expression", "rule_text": "1",
+                    "value_names": {"1": "On"}})
+    panel._apply_rule(0, {}, 0.0)
+    assert panel._table.item(0, COL_VALUE).text() == "On (1)"
+    assert panel._table.cellWidget(0, COL_VALUE) is None  # у expression комбо нет
+
+
+def test_value_names_not_applied_to_wide_rows(panel: SimPanel) -> None:
+    panel._add_row({"kind": "holding_registers", "address": 0, "count": 2,
+                    "values": [1, 0], "value_names": {"1": "On"}})
+    assert panel._table.cellWidget(0, COL_VALUE) is None  # count>1 — без комбо
+    assert panel._table.item(0, COL_VALUE).text() == "1, 0"
