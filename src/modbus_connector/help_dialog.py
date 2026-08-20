@@ -171,8 +171,10 @@ debugging masters, clients and gateways without real hardware. The combo is
 locked while the master side is connected or the server is running.</p>
 <h4>Server</h4>
 <ul>
-<li><b>TCP</b> (host, port — 1502 by default, so no admin rights are needed)
-or <b>RTU</b> (serial port, baudrate, parity); <b>Unit</b> picks the unit id
+<li><b>TCP</b> (host, port — 1502 by default, so no admin rights are needed),
+<b>RTU</b> (serial port, baudrate, parity) or <b>RTU over TCP</b> (TCP socket
+with RTU framing — for masters configured as "Modbus RTU over TCP");
+<b>Unit</b> picks the unit id
 to answer, <b>any</b> answers every unit id.</li>
 <li><b>Start server</b> pushes the whole map into the datastore and starts
 listening; the status line shows the bound address and the number of
@@ -413,7 +415,9 @@ SIMULATOR_HELP_RU = """
 <h4>Сервер</h4>
 <ul>
 <li><b>TCP</b> (хост, порт — по умолчанию 1502, права администратора не
-нужны) или <b>RTU</b> (порт, скорость, чётность); <b>Unit</b> задаёт
+нужны), <b>RTU</b> (порт, скорость, чётность) или <b>RTU over TCP</b>
+(TCP-сокет с RTU-фреймингом — для мастеров в режиме «Modbus RTU over TCP»);
+<b>Unit</b> задаёт
 unit id для ответов, <b>любой</b> — отвечать на любой unit id.</li>
 <li><b>Запустить сервер</b> пишет всю карту в datastore и начинает слушать
 порт; строка статуса показывает адрес и число подключённых клиентов. Каждый

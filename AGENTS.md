@@ -105,6 +105,8 @@ src/modbus_connector/
                   # read/write замеряют wall time и пишут в Stats
   sim_backend.py  # без Qt: SimTcpParams(host, port=1502), describe_sim(params)
                   # («sim tcp host:port» для заголовка вкладки), BLOCK_SIZE=10000;
+                  # SimRtuOverTcpParams — подкласс SimTcpParams: тот же TCP-сервер,
+                  # но framer=RTU (для мастеров «Modbus RTU over TCP»);
                   # SimBackend — Modbus slave-сервер (TCP/RTU) на pymodbus,
                   # serve_forever в своём потоке: start(params, unit=None)/stop/
                   # running/set_values/get_values (set_values без хука записи);

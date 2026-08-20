@@ -45,13 +45,18 @@ from modbus_connector.models import (
     register_width,
 )
 from modbus_connector.registers_panel import ExpressionDelegate
-from modbus_connector.sim_backend import BLOCK_SIZE, SimTcpParams, describe_sim
+from modbus_connector.sim_backend import (
+    BLOCK_SIZE,
+    SimRtuOverTcpParams,
+    SimTcpParams,
+    describe_sim,
+)
 from modbus_connector.templates import TemplateInfo, list_templates, load_template
 
 KINDS = list(get_args(RegisterKind))
 FORMATS = list(get_args(DisplayFormat))
 REGISTER_KINDS = ("holding_registers", "input_registers")
-SERVER_TYPES = ("TCP", "RTU")  # never translated
+SERVER_TYPES = ("TCP", "RTU", "RTU over TCP")  # never translated
 
 (
     COL_NAME,
@@ -163,7 +168,10 @@ class SimPanel(QWidget):
         self._stack = QStackedWidget()
         self._stack.addWidget(network_page)
         self._stack.addWidget(rtu_page)
-        self._type_combo.currentIndexChanged.connect(self._stack.setCurrentIndex)
+        # serial-страница только у чистого RTU; TCP и RTU over TCP — network
+        self._type_combo.currentIndexChanged.connect(
+            lambda index: self._stack.setCurrentIndex(1 if index == 1 else 0)
+        )
 
         self._unit_combo = theme.FitComboBox()
         self._unit_combo.addItem(tr("any"), None)  # None = отвечать на любой unit
@@ -762,7 +770,8 @@ class SimPanel(QWidget):
     # --- сервер ---
 
     def _build_params(self) -> SimTcpParams | RtuParams:
-        if self._type_combo.currentIndex() == 1:
+        index = self._type_combo.currentIndex()
+        if index == 1:
             return RtuParams(
                 port=self._rtu_port.currentText(),
                 baudrate=int(self._rtu_baud.currentText()),
@@ -770,9 +779,10 @@ class SimPanel(QWidget):
                 parity=self._rtu_parity.currentText(),
                 stopbits=int(self._rtu_stopbits.currentText()),
             )
-        return SimTcpParams(
-            host=self._tcp_host.text().strip(), port=self._tcp_port.value()
-        )
+        host = self._tcp_host.text().strip()
+        if index == 2:
+            return SimRtuOverTcpParams(host=host, port=self._tcp_port.value())
+        return SimTcpParams(host=host, port=self._tcp_port.value())
 
     @Slot()
     def _on_button_clicked(self) -> None:

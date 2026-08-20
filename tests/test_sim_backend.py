@@ -8,8 +8,13 @@ import pytest
 from pymodbus.exceptions import ModbusIOException
 
 from modbus_connector.backend import ModbusBackend
-from modbus_connector.models import RtuParams, TcpParams
-from modbus_connector.sim_backend import BLOCK_SIZE, SimBackend, SimTcpParams
+from modbus_connector.models import RtuOverTcpParams, RtuParams, TcpParams
+from modbus_connector.sim_backend import (
+    BLOCK_SIZE,
+    SimBackend,
+    SimRtuOverTcpParams,
+    SimTcpParams,
+)
 
 
 def _free_port() -> int:
@@ -259,3 +264,15 @@ def test_rtu_pty(sim: SimBackend) -> None:
         client.close()
         os.close(master_fd)
         os.close(slave_fd)
+
+
+def test_rtu_over_tcp_roundtrip(sim: SimBackend, client: ModbusBackend) -> None:
+    # RTU-фрейминг поверх TCP (мастера «Modbus RTU over TCP»): чтение/запись
+    port = _free_port()
+    sim.start(SimRtuOverTcpParams("127.0.0.1", port))
+    assert sim.running
+    client.connect(RtuOverTcpParams("127.0.0.1", port))
+    sim.set_values("holding_registers", 200, [100, 200])
+    assert client.read(1, "holding_registers", 200, 2) == [100, 200]
+    client.write(1, "holding_registers", 200, [42])
+    assert sim.get_values("holding_registers", 200, 1) == [42]

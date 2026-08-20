@@ -59,8 +59,15 @@ class SimTcpParams:
     port: int = 1502
 
 
+@dataclass(frozen=True)
+class SimRtuOverTcpParams(SimTcpParams):
+    """RTU-фрейминг поверх TCP (MBAP нет): для мастеров «Modbus RTU over TCP»."""
+
+
 def describe_sim(params: "SimTcpParams | RtuParams") -> str:
     """Короткая подпись симулятора («sim tcp host:port») для заголовка вкладки."""
+    if isinstance(params, SimRtuOverTcpParams):
+        return f"sim rtu over tcp {params.host}:{params.port}"
     if isinstance(params, SimTcpParams):
         return f"sim tcp {params.host}:{params.port}"
     return f"sim rtu {params.port}"
@@ -162,7 +169,8 @@ class SimBackend:
             }
         )
         if isinstance(params, SimTcpParams):
-            description = f"tcp {params.host}:{params.port}"
+            kind = "rtu over tcp" if isinstance(params, SimRtuOverTcpParams) else "tcp"
+            description = f"{kind} {params.host}:{params.port}"
             self._check_tcp_port(params)
         else:
             description = f"rtu {params.port} @ {params.baudrate}"
@@ -277,8 +285,10 @@ class SimBackend:
         identity: ModbusDeviceIdentification,
     ) -> ModbusTcpServer | ModbusSerialServer:
         if isinstance(params, SimTcpParams):
+            framer = Framer.RTU if isinstance(params, SimRtuOverTcpParams) else Framer.SOCKET
             return _SimTcpServer(
                 context,
+                framer=framer,
                 identity=identity,
                 address=(params.host, params.port),
                 request_tracer=self._trace_request,
