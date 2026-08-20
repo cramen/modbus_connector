@@ -281,3 +281,21 @@ def test_edit_value_accepts_text_for_ascii(panel: SimPanel) -> None:
     panel._table.item(0, COL_VALUE).setText("MC-42")
     assert panel._table.item(0, COL_VALUE).text() == "MC-42"
     assert panel._values_at(0)[:3] == [0x4D43, 0x2D34, 0x3200]
+
+
+def test_master_write_flashes_value_cell(panel: SimPanel) -> None:
+    from modbus_connector import theme
+
+    panel._add_row({"name": "t", "kind": "holding_registers", "address": 10,
+                    "count": 1, "values": [5]})
+    panel.handle_master_write("holding_registers", 10, [42])
+    item = panel._table.item(0, COL_VALUE)
+    assert item.text() == "42"
+    assert item.background() == theme.flash_color()  # зелёная вспышка
+    # очистка по поколению — фон сброшен
+    panel._clear_flash(0, panel._flash_generations[0])
+    assert item.background() != theme.flash_color()
+    # устаревшее поколение не сбрасывает свежую вспышку
+    panel.handle_master_write("holding_registers", 10, [43])
+    panel._clear_flash(0, panel._flash_generations[0] - 1)
+    assert item.background() == theme.flash_color()

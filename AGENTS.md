@@ -139,6 +139,8 @@ src/modbus_connector/
                   # format_register_values/format_values, правка → parse_values
                   # + setValuesRequested (пишется всегда: backend хранит блоки
                   # и до старта); masterWrote → handle_master_write обновляет
+                  # покрывающие строки и подсвечивает Value зелёным на ~2 с
+                  # (flash_color + parented QTimer, поколения по строке);
                   # покрывающие строки; кнопка Template… (csv_import, QMenu с
                   # подменю производителей, дубли kind+address пропускаются);
                   # help-кнопка (make_help_button → SIMULATOR_HELP) рядом с

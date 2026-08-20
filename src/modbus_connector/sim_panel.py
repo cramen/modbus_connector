@@ -6,7 +6,8 @@ import time
 from collections.abc import Callable
 from typing import Any, get_args
 
-from PySide6.QtCore import QSize, Qt, Signal, Slot
+from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
+from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -114,6 +115,7 @@ class SimPanel(QWidget):
         self._running = False
         self._clients = 0
         self._started_at: float | None = None  # monotonic момента старта сервера
+        self._flash_generations: dict[int, int] = {}  # строка → поколение flash
         self._status_message = "Stopped"
         self._status_is_error = False
         self._last_params: SimTcpParams | RtuParams | None = None
@@ -862,6 +864,35 @@ class SimPanel(QWidget):
                 updated[pos - row_address] = int(raw) if registers else bool(raw)
             self._table.item(index, COL_NAME).setData(_VALUES_ROLE, updated)
             self._render_value(index)
+            self._flash_value(index)  # изменено мастером — зелёная вспышка
+
+    def _flash_value(self, index: int) -> None:
+        """Подсветить ячейку Value зелёным на ~2 с (запись мастера), как в master."""
+        item = self._table.item(index, COL_VALUE)
+        if item is None:
+            return
+        self._table.blockSignals(True)
+        item.setBackground(theme.flash_color())
+        self._table.blockSignals(False)
+        generation = self._flash_generations.get(index, 0) + 1
+        self._flash_generations[index] = generation
+        # parented QTimer, не QTimer.singleShot(lambda) — см. registers_panel
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(lambda: self._clear_flash(index, generation))
+        timer.start(2000)
+
+    def _clear_flash(self, index: int, generation: int) -> None:
+        if self._flash_generations.get(index) != generation:
+            return  # подавлено более новой вспышкой — её таймер и очистит
+        self._flash_generations.pop(index, None)
+        if index >= self._table.rowCount():
+            return  # строка удалена, пока таймер ждал
+        item = self._table.item(index, COL_VALUE)
+        if item is not None:
+            self._table.blockSignals(True)
+            item.setBackground(QBrush())
+            self._table.blockSignals(False)
 
     def running_description(self) -> str | None:
         """«sim tcp host:port»/«sim rtu port» для заголовка вкладки, если запущен."""
