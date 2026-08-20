@@ -68,6 +68,10 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   !=, in/outside range — first match wins) highlight the value cell in red
   or yellow, write an event to the log and optionally play a siren sound
   when a rule starts matching (including escalation to a stricter rule).
+- Value names (enum labels): a row can map numbers to names ("0=Stopped",
+  "1=Running", also 0/1 for coils) — the value then displays as
+  "Running (1)" and the write field becomes a dropdown that writes the chosen
+  value in one click (works in both master and slave modes).
 - Snapshot diff ("Snapshot"/"Diff…" buttons): remember the current raw values
   of all rows, then compare them with later reads in a separate window —
   changed rows are highlighted, an "Only differences" filter hides the rest,
