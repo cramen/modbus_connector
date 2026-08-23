@@ -227,3 +227,74 @@ def test_shutdown_in_slave_mode(qapp: QApplication) -> None:
     session.set_state({"mode": "slave"})
     session.shutdown()  # оба потока останавливаются без зависания
     session.shutdown()  # идемпотентно
+
+
+def test_sniffer_mode_state_roundtrip(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state(
+        {
+            "mode": "sniffer",
+            "sniffer": {
+                "params": {"port": "/dev/ttyFAKE0", "baudrate": 19200, "parity": "E"},
+                "units": [
+                    {"unit": 3, "rows": [
+                        {"address": 5, "kind": "holding_registers", "name": "temp",
+                         "format": "f32", "value": [100, 200]},
+                    ]},
+                ],
+            },
+        }
+    )
+    collected = session.state()
+    assert collected["mode"] == "sniffer"
+    sniffer = collected["sniffer"]
+    assert sniffer["params"]["port"] == "/dev/ttyFAKE0"
+    assert sniffer["params"]["baudrate"] == 19200
+    assert sniffer["params"]["parity"] == "E"
+    assert sniffer["units"][0]["unit"] == 3
+    assert sniffer["units"][0]["rows"][0]["value"] == [100, 200]
+    # master/slave-части state на месте
+    assert "connection" in collected and "sim" in collected
+    session.shutdown()
+
+
+def test_sniffer_mode_visibility(qapp: QApplication) -> None:
+    session = SessionWidget()
+    assert session._center_stack.currentWidget() is session.registers_panel
+    session.set_state({"mode": "sniffer"})
+    assert session._center_stack.currentWidget() is session.sniffer_panel
+    assert session.connection_panel.isHidden()
+    assert session._scanner_button.isHidden()
+    assert session._graph_button.isHidden()
+    session.set_state({"mode": "master"})
+    assert session._center_stack.currentWidget() is session.registers_panel
+    assert not session.connection_panel.isHidden()
+    assert not session._scanner_button.isHidden()
+    session.shutdown()
+
+
+def test_sniffer_mode_lock_and_title(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state({"mode": "sniffer"})
+    assert session._mode_combo.isEnabled()
+    assert session.title() == "Sniffer"  # panel не знает params — общий ключ
+    # активный сниффинг — режим менять нельзя, заголовок — описание порта
+    session.sniffer_panel.set_state({"params": {"port": "/dev/ttyFAKE0"}})
+    session.sniffer_panel.startRequested.disconnect()  # не поднимать реальный порт
+    session.sniffer_panel._button.click()
+    session.sniffer_panel.set_sniffing(True, "Listening (sniff rtu /dev/ttyFAKE0 @ 9600)")
+    session._on_sniffing_changed(True, "Listening (sniff rtu /dev/ttyFAKE0 @ 9600)")
+    assert not session._mode_combo.isEnabled()
+    assert session.title() == "sniff rtu /dev/ttyFAKE0 @ 9600"
+    session.sniffer_panel.set_sniffing(False, "Stopped")
+    session._on_sniffing_changed(False, "Stopped")
+    assert session._mode_combo.isEnabled()
+    assert session.title() == "Sniffer"
+    session.shutdown()
+
+
+def test_shutdown_in_sniffer_mode(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state({"mode": "sniffer"})
+    session.shutdown()  # все три потока останавливаются без зависания
+    session.shutdown()  # идемпотентно

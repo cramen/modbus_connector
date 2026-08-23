@@ -24,6 +24,11 @@ ValuesHook = Callable[[int, RegisterKind, int, list], None]  # (unit, kind, addr
 FrameHook = Callable[[str], None]  # человекочитаемая строка кадра
 ErrorHook = Callable[[str], None]  # человекочитаемая ошибка потока чтения
 
+
+def describe_sniffer(params: RtuParams) -> str:
+    """«sniff rtu port @ baud» — короткое описание для заголовка вкладки."""
+    return f"sniff rtu {params.port} @ {params.baudrate}"
+
 MAX_FRAME = 256  # максимальный кадр: fc15/16 запрос — 9 байт + до 246 байт данных
 
 _FC_NAMES = {
@@ -382,14 +387,17 @@ class SerialSniffer:
 class SnifferBackend:
     """Композиция: SerialSniffer → RtuFrameParser → BusModel.
 
-    Колбэки on_values/on_frame/on_error вызываются из потока чтения порта
-    (как хуки SimBackend — из потока сервера). start() сбрасывает парсер
-    и модель: новая сессия сниффинга начинается с чистого состояния.
+    Колбэки on_values/on_frame/on_decoded_frame/on_error вызываются из потока
+    чтения порта (как хуки SimBackend — из потока сервера). start() сбрасывает
+    парсер и модель: новая сессия сниффинга начинается с чистого состояния.
+    on_decoded_frame — каждый декодированный кадр (SniffedFrame с unit/fc) —
+    для per-unit логов; on_frame — те же кадры одной форматированной строкой.
     """
 
     def __init__(self) -> None:
         self.on_values: ValuesHook | None = None
         self.on_frame: FrameHook | None = None
+        self.on_decoded_frame: Callable[[SniffedFrame], None] | None = None
         self.on_error: ErrorHook | None = None
         self._sniffer = SerialSniffer()
         self._sniffer.on_error = self._emit_error
@@ -429,6 +437,7 @@ class SnifferBackend:
             frames = self._parser.feed(data)
             for frame in frames:
                 self._bus.handle_frame(frame)
+                self._emit_decoded_frame(frame)
 
     def _emit_values(self, unit: int, kind: RegisterKind, address: int, values: list) -> None:
         hook = self.on_values
@@ -439,6 +448,11 @@ class SnifferBackend:
         hook = self.on_frame
         if hook is not None:
             hook(line)
+
+    def _emit_decoded_frame(self, frame: SniffedFrame) -> None:
+        hook = self.on_decoded_frame
+        if hook is not None:
+            hook(frame)
 
     def _emit_error(self, message: str) -> None:
         hook = self.on_error

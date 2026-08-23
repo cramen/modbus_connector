@@ -415,6 +415,19 @@ RU: dict[str, str] = {
         "✗ чтение значений симулятора не удалось: {exc}",
     "← client connected {address}": "← клиент подключился {address}",
     "→ client disconnected {address}": "→ клиент отключился {address}",
+    # sniffer mode / sniffer panel
+    "Sniffer": "Сниффер",
+    "Start sniffing": "Начать сниффинг",
+    "Stop sniffing": "Остановить сниффинг",
+    "unit {unit}": "юнит {unit}",
+    "Listening ({desc})": "Слушаем ({desc})",
+    # sniffer worker log lines
+    "→ start sniffer {desc}": "→ запуск сниффера {desc}",
+    "✗ sniffer start failed: {exc}": "✗ запуск сниффера не удался: {exc}",
+    "← sniffer listening ({desc})": "← сниффер слушает ({desc})",
+    "→ sniffer stopped": "→ сниффер остановлен",
+    "✗ sniffer stop failed: {exc}": "✗ остановка сниффера не удалась: {exc}",
+    "✗ sniffer: {message}": "✗ сниффер: {message}",
     # scanner panel
     "Add probe": "Добавить пробу",
     "Start scan": "Начать сканирование",
