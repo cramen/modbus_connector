@@ -30,6 +30,9 @@ writes still work on them).</li>
 <li><b>Read all</b> reads every checked row once; the split button starts polling
 with or without history recording (the dropdown chooses; the choice flips
 recording mid-poll without restarting timers).</li>
+<li><b>Group reads</b> (toggle) merges adjacent addresses of the polling tick
+and Read all into one request (rows with their own Poll, ms interval are not
+merged). If a grouped read fails, its rows are retried individually.</li>
 <li><b>Log to file</b> records read values to CSV or JSON Lines; <b>⚙</b>
 opens file/format/field/row settings.</li>
 <li><b>Display…</b> — per-row Scale/Offset/Unit and byte order;
@@ -315,6 +318,10 @@ s16/u32/s32/f32/u64/s64/f64 числа вводятся в формате ото
 <li><b>Прочитать все</b> читает каждую отмеченную строку один раз; split-кнопка
 начинает опрос с записью истории или без (выбор в выпадающем меню; на ходу
 переключает запись без перезапуска таймеров).</li>
+<li><b>Объединять чтения</b> (переключатель) сливает соседние адреса тика
+опроса и «Прочитать все» в один запрос (строки со своим интервалом Poll, мс
+не объединяются). При ошибке объединённого чтения его строки перечитываются
+по отдельности.</li>
 <li><b>Запись в файл</b> пишет значения в CSV или JSON Lines; <b>⚙</b> открывает
 настройки файла, формата, полей и строк.</li>
 <li><b>Отображение…</b> — Scale/Offset/Unit и порядок байт на строку;

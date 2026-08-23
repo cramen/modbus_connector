@@ -82,6 +82,15 @@ RU: dict[str, str] = {
     "Read all": "Прочитать все",
     "Read every row once (Ctrl/Cmd+Shift+R)":
         "Прочитать каждую строку один раз (Ctrl/Cmd+Shift+R)",
+    "Group reads": "Объединять чтения",
+    "Merge adjacent addresses of the polling tick and Read all into "
+    "one request; falls back to per-row reads if a grouped read fails":
+        "Объединять соседние адреса тика опроса и «Прочитать все» в один "
+        "запрос; при ошибке объединённого чтения — откат на чтение по строкам",
+    "✗ grouped read {kind}@{address} ({count}): {error}"
+    " — retrying rows individually":
+        "✗ объединённое чтение {kind}@{address} ({count}): {error}"
+        " — повтор по строкам",
     "Sort by address": "Сортировать по адресу",
     "Mask write (0x16)…": "Запись по маске (0x16)…",
     "Set or clear individual bits of a holding register without touching "

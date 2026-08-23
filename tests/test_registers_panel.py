@@ -1568,3 +1568,117 @@ def test_value_names_display_dialog_editor(qapp: QApplication) -> None:
     assert panel._row_display[token].value_names == {}
     assert panel._table.cellWidget(0, COL_NEW_VALUE).isHidden()  # и скрылось
     dialog.close()
+
+
+
+def _grouped_panel() -> RegistersPanel:
+    """Панель с тремя holding-строками: @0, @1 (смежные) и @30 (далёкая)."""
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel._add_row(RegisterRow(name="", kind="holding_registers", address=1, count=1))
+    panel._add_row(RegisterRow(name="", kind="holding_registers", address=30, count=1))
+    return panel
+
+
+def test_group_reads_off_by_default(qapp: QApplication) -> None:
+    panel = _grouped_panel()
+    assert not panel._group_reads_button.isChecked()
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel._poll_global_rows()
+    assert len(reads) == 3  # прежнее поведение: по запросу на строку
+
+
+def test_grouped_poll_tick_merges_adjacent_rows(qapp: QApplication) -> None:
+    panel = _grouped_panel()
+    panel._group_reads_button.setChecked(True)
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel._poll_global_rows()
+    # @0 и @1 слились в один запрос, @30 — отдельный (зазор > 8)
+    assert len(reads) == 2
+    request_id, unit, row = reads[0]
+    assert unit == 1  # глобальный unit панели
+    assert (row.kind, row.address, row.count) == ("holding_registers", 0, 2)
+    assert (reads[1][2].address, reads[1][2].count) == (30, 1)
+    # раздача values членам плана: каждая строка получает свой срез
+    panel.handle_read_finished(request_id, True, [10, 20], "")
+    assert panel._table.item(0, COL_VALUE).text() == "10"
+    assert panel._table.item(1, COL_VALUE).text() == "20"
+    panel.handle_read_finished(reads[1][0], True, [99], "")
+    assert panel._table.item(2, COL_VALUE).text() == "99"
+
+
+def test_grouped_read_all_merges_too(qapp: QApplication) -> None:
+    panel = _grouped_panel()
+    panel._group_reads_button.setChecked(True)
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel.read_all()
+    assert len(reads) == 2
+    assert (reads[0][2].address, reads[0][2].count) == (0, 2)
+
+
+def test_grouped_read_error_falls_back_to_per_row(qapp: QApplication) -> None:
+    panel = _grouped_panel()
+    panel._group_reads_button.setChecked(True)
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel._poll_global_rows()
+    assert len(reads) == 2
+    request_id = reads[0][0]
+    panel.handle_read_finished(request_id, False, [], "Illegal Data Address")
+    # фолбэк: члены рассыпавшегося плана перечитаны поштучно
+    assert len(reads) == 4
+    fallback_ids = [reads[2][0], reads[3][0]]
+    assert [reads[2][2].address, reads[3][2].address] == [0, 1]
+    # повторные запросы — обычные per-row чтения (токены, не планы)
+    for rid in fallback_ids:
+        assert isinstance(panel._pending_reads[rid], int)
+    panel.handle_read_finished(fallback_ids[0], True, [5], "")
+    panel.handle_read_finished(fallback_ids[1], False, [], "boom")
+    assert panel._table.item(0, COL_VALUE).text() == "5"
+    assert panel._table.item(1, COL_VALUE).text() == "✗ boom"
+    # и после фолбэка ничего нового не уходит: зацикливания нет
+    assert len(reads) == 4
+
+
+def test_group_reads_state_roundtrip(qapp: QApplication) -> None:
+    panel = _grouped_panel()
+    assert panel.options_state()["group_reads"] is False
+    panel._group_reads_button.setChecked(True)
+    options = panel.options_state()
+    assert options["group_reads"] is True
+    fresh = RegistersPanel(itertools.count(1).__next__)
+    fresh.set_options(options)
+    assert fresh._group_reads_button.isChecked()
+    fresh.set_options({"group_reads": "junk"})  # не bool: игнорируется
+    assert fresh._group_reads_button.isChecked()
+    fresh.deleteLater()
+
+
+def test_grouped_tick_skips_per_row_interval_rows(qapp: QApplication) -> None:
+    panel = _grouped_panel()
+    panel._group_reads_button.setChecked(True)
+    # у строки @30 свой интервал — в объединённый тик она не входит
+    panel._table.item(2, COL_POLL).setText("500")
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel._poll_global_rows()
+    assert len(reads) == 1
+    assert (reads[0][2].address, reads[0][2].count) == (0, 2)
+
+
+def test_grouped_tick_splits_by_unit(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel._add_row(
+        RegisterRow(name="", kind="holding_registers", address=1, count=1, unit_id=2)
+    )
+    panel._group_reads_button.setChecked(True)
+    reads: list[tuple] = []
+    panel.readRequested.connect(lambda *args: reads.append(args))
+    panel._poll_global_rows()
+    # адреса смежные, но unit разный — два запроса
+    assert len(reads) == 2
+    assert {read[1] for read in reads} == {1, 2}

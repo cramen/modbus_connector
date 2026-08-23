@@ -287,6 +287,91 @@ def rows_from_csv(
     return result
 
 
+@dataclass(frozen=True)
+class ReadSpec:
+    """Входная строка для plan_grouped_reads: одно чтение таблицы регистров."""
+
+    token: int
+    unit: int | None  # None = глобальный unit из панели подключения
+    kind: RegisterKind
+    address: int
+    count: int = 1
+
+
+@dataclass(frozen=True)
+class ReadMember:
+    """Участник объединённого чтения: offset/count внутри окна плана."""
+
+    token: int
+    offset: int  # начало диапазона члена относительно начала плана
+    count: int
+
+
+@dataclass(frozen=True)
+class ReadPlan:
+    """Один объединённый запрос: [address, address+count) и его члены."""
+
+    unit: int | None
+    kind: RegisterKind
+    address: int
+    count: int
+    members: list[ReadMember]
+
+
+# лимит длины одного запроса: 125 регистров, 2000 бит (Modbus spec)
+_PLAN_LIMITS: dict[str, int] = {
+    "coils": 2000,
+    "discrete_inputs": 2000,
+    "holding_registers": 125,
+    "input_registers": 125,
+}
+
+
+def plan_grouped_reads(rows: Iterable[ReadSpec], *, max_gap: int = 8) -> list[ReadPlan]:
+    """Объединить чтения соседних адресов в один запрос.
+
+    Строки группируются по (unit, kind), внутри группы сортируются по адресу;
+    соседние диапазоны [address, address+count) мерджатся, пока зазор между
+    концом текущего плана и началом следующей строки ≤ max_gap (перекрытия
+    тоже мерджатся; max_gap клампится снизу нулём). Длина плана ограничена
+    125 регистрами / 2000 битами — дальше начинается новый план. Строки с
+    неположительным count или отрицательным адресом пропускаются.
+    """
+    max_gap = max(0, max_gap)
+    groups: dict[tuple[int | None, RegisterKind], list[ReadSpec]] = {}
+    for row in rows:
+        if row.count <= 0 or row.address < 0:
+            continue
+        groups.setdefault((row.unit, row.kind), []).append(row)
+    plans: list[ReadPlan] = []
+    for (unit, kind), group in groups.items():
+        limit = _PLAN_LIMITS.get(kind, 125)
+        group.sort(key=lambda row: (row.address, row.token))
+        start = end = -1
+        members: list[ReadMember] = []
+        for row in group:
+            row_end = row.address + row.count
+            if (
+                members
+                and row.address <= end + max_gap
+                and max(end, row_end) - start <= limit
+            ):
+                members.append(
+                    ReadMember(token=row.token, offset=row.address - start, count=row.count)
+                )
+                end = max(end, row_end)
+                continue
+            if members:
+                plans.append(
+                    ReadPlan(unit, kind, start, end - start, list(members))
+                )
+            start, end = row.address, row_end
+            members = [ReadMember(token=row.token, offset=0, count=row.count)]
+        if members:
+            plans.append(ReadPlan(unit, kind, start, end - start, list(members)))
+    return plans
+
+
 @dataclass
 class ScanProbe:
     kind: RegisterKind

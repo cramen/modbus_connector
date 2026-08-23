@@ -81,6 +81,8 @@ from modbus_connector.models import (
     ByteOrder,
     DisplayFormat,
     Expression,
+    ReadPlan,
+    ReadSpec,
     RegisterKind,
     RegisterRow,
     RowDisplaySettings,
@@ -99,6 +101,7 @@ from modbus_connector.models import (
     parse_formatted_values,
     parse_value_names,
     parse_values,
+    plan_grouped_reads,
     row_to_csv_record,
     rows_from_csv,
     value_names_from_json,
@@ -376,7 +379,7 @@ class RegistersPanel(QWidget):
         self._next_request_id = request_id_provider
         self._unit_id = 1
         self._row_token_counter = 0
-        self._pending_reads: dict[int, int] = {}
+        self._pending_reads: dict[int, int | ReadPlan] = {}  # request_id -> token | план
         self._pending_writes: dict[int, int] = {}
         self._pending_mask_writes: dict[int, int] = {}  # request_id -> address
         self._pending_readwrites: dict[int, int] = {}  # request_id -> write address
@@ -461,6 +464,15 @@ class RegistersPanel(QWidget):
             self._read_all_button, "Read all", "Read every row once (Ctrl/Cmd+Shift+R)"
         )
         self._read_all_button.clicked.connect(self.read_all)
+        self._group_reads_button = icons.make_button(
+            tr("Group reads"), "merge", checkable=True
+        )
+        self._track(
+            self._group_reads_button,
+            "Group reads",
+            "Merge adjacent addresses of the polling tick and Read all into "
+            "one request; falls back to per-row reads if a grouped read fails",
+        )
         sort_button = icons.make_button(tr("Sort by address"), "sort")
         self._track(sort_button, "Sort by address")
         sort_button.clicked.connect(self._sort_by_address)
@@ -592,6 +604,7 @@ class RegistersPanel(QWidget):
         top = QHBoxLayout()
         top.addWidget(add_button)
         top.addWidget(self._read_all_button)
+        top.addWidget(self._group_reads_button)
         top.addWidget(sort_button)
         top.addWidget(self._mask_write_button)
         top.addWidget(self._readwrite_button)
@@ -800,6 +813,7 @@ class RegistersPanel(QWidget):
                 COLUMN_KEYS[col] for col in DATA_COLUMNS if header.isSectionHidden(col)
             ],
             "expressions_visible": self._expr_button.isChecked(),
+            "group_reads": self._group_reads_button.isChecked(),
         }
 
     def set_options(self, options: dict) -> None:
@@ -810,6 +824,9 @@ class RegistersPanel(QWidget):
         visible = options.get("expressions_visible")
         if isinstance(visible, bool):
             self._expr_button.setChecked(visible)  # toggled → setVisible
+        group_reads = options.get("group_reads")
+        if isinstance(group_reads, bool):
+            self._group_reads_button.setChecked(group_reads)
         header = self._table.horizontalHeader()
         order = options.get("column_order")
         if isinstance(order, list):
@@ -2159,6 +2176,16 @@ class RegistersPanel(QWidget):
         if index >= 0:
             self._read_table_row(index)
 
+    def _read_pending(self, token: int) -> bool:
+        """У строки уже есть необработанный запрос (свой или в составе плана)."""
+        for pending in self._pending_reads.values():
+            if isinstance(pending, ReadPlan):
+                if any(member.token == token for member in pending.members):
+                    return True
+            elif pending == token:
+                return True
+        return False
+
     def _read_table_row(self, index: int) -> None:
         if not self._bus_enabled:
             return  # no connection: bus controls are disabled, stay silent
@@ -2166,7 +2193,7 @@ class RegistersPanel(QWidget):
         if row is None:
             return
         token = self._token_at(index)
-        if token in self._pending_reads.values():
+        if self._read_pending(token):
             return  # previous read still unanswered, don't pile up the worker queue
         request_id = self._next_request_id()
         self._pending_reads[request_id] = token
@@ -2345,18 +2372,68 @@ class RegistersPanel(QWidget):
 
     @Slot()
     def read_all(self) -> None:
+        if self._group_reads_button.isChecked():
+            self._read_grouped(
+                [i for i in range(self._table.rowCount()) if self._poll_enabled_at(i)]
+            )
+            return
         for index in range(self._table.rowCount()):
             if self._poll_enabled_at(index):  # unchecked rows are opted out
                 self._read_table_row(index)
 
     @Slot()
     def _poll_global_rows(self) -> None:
-        # rows with a per-row interval have their own timer in _row_timers
-        for index in range(self._table.rowCount()):
-            if not self._poll_enabled_at(index):
+        # rows with a per-row interval have their own timer in _row_timers and
+        # never join grouped reads: they run on their own schedule
+        indexes = [
+            index
+            for index in range(self._table.rowCount())
+            if self._poll_enabled_at(index)
+            and _parse_poll_ms(self._text_at(index, COL_POLL)) is None
+        ]
+        if self._group_reads_button.isChecked():
+            self._read_grouped(indexes)
+            return
+        for index in indexes:
+            self._read_table_row(index)
+
+    def _read_grouped(self, indexes: list[int]) -> None:
+        """Объединённые чтения: соседние адреса — один запрос на шину.
+
+        Каждый план уходит одним readRequested с RegisterRow окна плана; в
+        _pending_reads ложится сам план (его members), а handle_read_finished
+        раздаёт values членам. Ошибка плана — фолбэк на поштучные чтения.
+        """
+        if not self._bus_enabled:
+            return
+        specs: list[ReadSpec] = []
+        for index in indexes:
+            row = self._row_data(index)
+            if row is None:
                 continue
-            if _parse_poll_ms(self._text_at(index, COL_POLL)) is None:
-                self._read_table_row(index)
+            token = self._token_at(index)
+            if self._read_pending(token):
+                continue  # unanswered read: skip, don't pile up the queue
+            specs.append(
+                ReadSpec(
+                    token=token,
+                    unit=row.unit_id,
+                    kind=row.kind,
+                    address=row.address,
+                    count=row.count,
+                )
+            )
+        for plan in plan_grouped_reads(specs):
+            request_id = self._next_request_id()
+            self._pending_reads[request_id] = plan
+            unit = plan.unit if plan.unit is not None else self._unit_id
+            self.readRequested.emit(
+                request_id,
+                unit,
+                RegisterRow(
+                    name="", kind=plan.kind, address=plan.address, count=plan.count
+                ),
+            )
 
     def _sync_row_timer(self, index: int) -> None:
         token = self._token_at(index)
@@ -2473,9 +2550,48 @@ class RegistersPanel(QWidget):
 
     @Slot(int, bool, list, str)
     def handle_read_finished(self, request_id: int, ok: bool, values: list, error: str) -> None:
-        token = self._pending_reads.pop(request_id, None)
-        if token is None:
+        pending = self._pending_reads.pop(request_id, None)
+        if pending is None:
             return
+        if isinstance(pending, ReadPlan):
+            self._handle_plan_finished(pending, ok, values, error)
+            return
+        self._apply_read_values(pending, ok, values, error)
+
+    def _handle_plan_finished(self, plan: ReadPlan, ok: bool, values: list, error: str) -> None:
+        """Ответ на объединённое чтение: раздать values членам или откатиться.
+
+        При ошибке план рассыпается на индивидуальные чтения членов — один
+        фолбэк-проход: повторные запросы уходят обычными per-row чтениями
+        (токены в _pending_reads), зацикливания нет.
+        """
+        if ok:
+            for member in plan.members:
+                self._apply_read_values(
+                    member.token,
+                    True,
+                    values[member.offset : member.offset + member.count],
+                    "",
+                )
+            return
+        self.logLine.emit(
+            tr(
+                "✗ grouped read {kind}@{address} ({count}): {error}"
+                " — retrying rows individually",
+                kind=plan.kind,
+                address=plan.address,
+                count=plan.count,
+                error=error,
+            )
+        )
+        for member in plan.members:
+            index = self._find_row_by_token(member.token)
+            if index is not None:
+                self._read_table_row(index)
+
+    def _apply_read_values(self, token: int, ok: bool, values: list, error: str) -> None:
+        """Общий путь обновления строки по результату чтения (свой запрос или
+        член объединённого плана)."""
         index = self._find_row_by_token(token)
         if index is None:
             return

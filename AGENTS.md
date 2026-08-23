@@ -44,6 +44,12 @@ src/modbus_connector/
                   # RtuOverTcpParams/RtuOverUdpParams, ConnectionParams,
                   # describe_connection(params) — "tcp host:port" и т.п.,
                   # RegisterRow, ScanProbe, DEFAULT_SCAN_PROBES, DisplayFormat,
+                  # ReadSpec/ReadMember/ReadPlan + plan_grouped_reads(rows,
+                  # max_gap=8) — объединение чтений соседних адресов в один
+                  # запрос: группировка по (unit, kind), сортировка по адресу,
+                  # мердж при зазоре ≤ max_gap (перекрытия тоже; members
+                  # помнят offset/count), кап длины плана 125 регистров /
+                  # 2000 бит, count<=0/address<0 пропускаются,
                   # ByteOrder, parse_values(kind, text), format_values(values),
                   # decode_register_values(values, fmt, order) — decode до чисел,
                   # encode_register_values(value, fmt, order) — обратный encode
@@ -283,6 +289,22 @@ src/modbus_connector/
                        # режим запоминается; выбор пункта на ходу переключает
                        # запись без перезапуска таймеров; во время поллинга
                        # основная кнопка — "Stop polling"),
+                       # checkable-кнопка "Group reads" (иконка merge, по
+                       # умолчанию ВЫКЛ, registers_options "group_reads",
+                       # толерантный разбор) — объединение чтений соседних
+                       # адресов в один запрос (models.plan_grouped_reads);
+                       # применяется ТОЛЬКО в _poll_global_rows и read_all
+                       # (per-row таймеры, Ctrl+R, перечитывание после записи —
+                       # поштучно): _read_grouped шлёт на план один
+                       # readRequested с RegisterRow окна плана, в
+                       # _pending_reads (dict[int, int | ReadPlan]) ложится
+                       # план; handle_read_finished раздаёт values членам по
+                       # offset/count через общий _apply_read_values
+                       # (flash/last_values/series/alarm/expressions/лог);
+                       # ошибка плана — лог + фолбэк _handle_plan_finished:
+                       # члены перечитываются поштучно (один проход, токены
+                       # в _pending_reads, без зацикливания); _read_pending —
+                       # проверка «у строки есть запрос» с учётом планов,
                        # start_polling(record)/stop_polling/is_polling/
                        # is_recording, сигнал pollStateChanged(polling,
                        # recording) — по нему синхронизируются кнопки панели

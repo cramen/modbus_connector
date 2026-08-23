@@ -6,6 +6,9 @@ from modbus_connector.models import (
     AlarmRule,
     ByteOrder,
     DisplayFormat,
+    ReadMember,
+    ReadPlan,
+    ReadSpec,
     RegisterRow,
     RowDisplaySettings,
     Stats,
@@ -28,6 +31,7 @@ from modbus_connector.models import (
     parse_formatted_values,
     parse_value_names,
     parse_values,
+    plan_grouped_reads,
     rows_from_csv,
     rows_to_csv,
     rule_matches,
@@ -35,6 +39,112 @@ from modbus_connector.models import (
     value_names_to_json,
     value_names_to_text,
 )
+
+
+def _spec(token: int, address: int, count: int = 1, kind: str = "holding_registers",
+          unit: int | None = 1) -> ReadSpec:
+    return ReadSpec(token=token, unit=unit, kind=kind, address=address, count=count)
+
+
+class TestPlanGroupedReads:
+    def test_adjacent_rows_merge_into_one_plan(self) -> None:
+        plans = plan_grouped_reads([_spec(1, 0), _spec(2, 1, 2), _spec(3, 3)])
+        assert plans == [
+            ReadPlan(
+                unit=1,
+                kind="holding_registers",
+                address=0,
+                count=4,
+                members=[
+                    ReadMember(token=1, offset=0, count=1),
+                    ReadMember(token=2, offset=1, count=2),
+                    ReadMember(token=3, offset=3, count=1),
+                ],
+            )
+        ]
+
+    def test_gap_within_max_merges(self) -> None:
+        plans = plan_grouped_reads([_spec(1, 0), _spec(2, 9)])  # gap 8 ≤ 8
+        assert len(plans) == 1
+        assert plans[0].address == 0
+        assert plans[0].count == 10
+        assert plans[0].members[1] == ReadMember(token=2, offset=9, count=1)
+
+    def test_gap_beyond_max_splits(self) -> None:
+        plans = plan_grouped_reads([_spec(1, 0), _spec(2, 10)])  # gap 9 > 8
+        assert [plan.address for plan in plans] == [0, 10]
+        assert all(len(plan.members) == 1 for plan in plans)
+
+    def test_custom_max_gap(self) -> None:
+        rows = [_spec(1, 0), _spec(2, 2)]  # gap 1
+        assert len(plan_grouped_reads(rows, max_gap=0)) == 2
+        assert len(plan_grouped_reads(rows, max_gap=-3)) == 2  # clamped to 0
+        assert len(plan_grouped_reads(rows, max_gap=1)) == 1
+
+    def test_different_units_and_kinds_do_not_merge(self) -> None:
+        plans = plan_grouped_reads([
+            _spec(1, 0, unit=1),
+            _spec(2, 1, unit=2),
+            _spec(3, 2, kind="input_registers"),
+        ])
+        assert len(plans) == 3
+        assert {(plan.unit, plan.kind) for plan in plans} == {
+            (1, "holding_registers"),
+            (2, "holding_registers"),
+            (1, "input_registers"),
+        }
+
+    def test_overlapping_ranges_merge(self) -> None:
+        plans = plan_grouped_reads([_spec(1, 0, 4), _spec(2, 2, 4)])
+        assert plans == [
+            ReadPlan(
+                unit=1,
+                kind="holding_registers",
+                address=0,
+                count=6,
+                members=[
+                    ReadMember(token=1, offset=0, count=4),
+                    ReadMember(token=2, offset=2, count=4),
+                ],
+            )
+        ]
+
+    def test_plan_length_capped_at_125_registers(self) -> None:
+        rows = [_spec(1, 0, 100), _spec(2, 100, 100)]  # merged would be 200
+        plans = plan_grouped_reads(rows)
+        assert [plan.count for plan in plans] == [100, 100]
+        # a 100+20 merge fits the cap
+        plans = plan_grouped_reads([_spec(1, 0, 100), _spec(2, 100, 20)])
+        assert len(plans) == 1
+        assert plans[0].count == 120
+
+    def test_bit_areas_capped_at_2000(self) -> None:
+        rows = [_spec(1, 0, 1500, kind="coils"), _spec(2, 1500, 1000, kind="coils")]
+        plans = plan_grouped_reads(rows)
+        assert [plan.count for plan in plans] == [1500, 1000]
+
+    def test_unsorted_input_sorted_inside_group(self) -> None:
+        plans = plan_grouped_reads([_spec(7, 5), _spec(3, 0), _spec(9, 1)])
+        assert len(plans) == 1
+        assert [member.token for member in plans[0].members] == [3, 9, 7]
+        assert [member.offset for member in plans[0].members] == [0, 1, 5]
+
+    def test_invalid_rows_skipped(self) -> None:
+        plans = plan_grouped_reads([
+            _spec(1, 0, 0),
+            _spec(2, 0, -5),
+            _spec(3, -1),
+            _spec(4, 7),
+        ])
+        assert plans == [
+            ReadPlan(
+                unit=1, kind="holding_registers", address=7, count=1,
+                members=[ReadMember(token=4, offset=0, count=1)],
+            )
+        ]
+
+    def test_empty_input(self) -> None:
+        assert plan_grouped_reads([]) == []
 
 
 class TestParseRegisters:
