@@ -33,6 +33,15 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   configurable tick (`[name]` references, `t` seconds since start, `prev`
   previous value, `rand()`/`randint(a,b)`). Device templates fill the map in
   one click — handy for debugging masters and gateways without real hardware.
+- Sniffer mode (the third **Mode** option): a passive Modbus RTU bus listener
+  on a separate serial adapter (a "tap" on the same RS-485 line — pyserial
+  opens the port exclusively, so it cannot share the master's port). It
+  watches another master's traffic and rebuilds the register map from what it
+  sees: one tab per unit id with an auto-filled table (editable names and
+  display formats, change flashes, trend sparklines), a per-unit frame log, a
+  live graph window and CSV export in the master-table format (the file
+  imports back into a master tab as is). Serial RTU only — Modbus TCP cannot
+  be sniffed.
 - Device templates (the **Templates** menu): ready-made register maps and
   default connection settings for popular devices — Eastron SDM120/SDM630,
   EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 and
@@ -161,6 +170,12 @@ editable register map with manual values and expression rules (the "Mode"
 combo above the table):
 
 ![Slave mode simulator](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/simulator.png)
+
+Sniffer mode — passive listening of a Modbus RTU bus through a separate
+serial adapter: one tab per unit id, auto-filled value table with trends,
+per-unit frame log:
+
+![RTU sniffer](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/sniffer.png)
 
 ## Requirements
 
@@ -528,6 +543,15 @@ src/modbus_connector/
                   # QThread; rule ticker for the simulator
   sim_panel.py    # slave-mode panel: server parameters, editable register
                   # map with manual values and expression rules
+  sniffer_backend.py  # passive Modbus RTU bus sniffer (no Qt): own frame
+                      # parser with CRC16 resync, tx/rx direction heuristics,
+                      # bus model; SnifferBackend with value/frame/error hooks
+  sniffer_worker.py   # SnifferWorker (QObject) — signals/slots over
+                      # SnifferBackend in a QThread
+  sniffer_panel.py    # sniffer-mode panel: serial parameters, per-unit tabs
+                      # with an auto-filled value table (trend sparklines),
+                      # per-unit frame logs, live graph, CSV export in the
+                      # master-table format
   connection_panel.py  # connection panel (TCP/RTU/RTU over TCP/RTU over UDP,
                        # state/set_state) with a live status indicator
                        # (gray/green/orange); Device ID…/Diagnostics… dialogs

@@ -169,6 +169,37 @@ rows for them — duplicates (same type and address) are skipped.</li>
 """
 
 
+SNIFFER_HELP = """
+<h3>Sniffer</h3>
+<p>The <b>Mode</b> combo switches the tab to <b>Sniffer</b> — a passive
+listener for a Modbus RTU bus: it watches the traffic between an existing
+master and its slaves and rebuilds the register map from what it sees, without
+sending a single frame. Connect a <b>separate serial adapter</b> (a "tap") to
+the same RS-485 line: pyserial opens the port exclusively, so the sniffer
+needs its own interface — it cannot share the master's port.</p>
+<ul>
+<li><b>Port settings</b> (port, baud, bits, parity, stop bits) must match the
+bus exactly, otherwise frames turn into garbage.</li>
+<li><b>Start sniffing</b> begins listening; the status line turns green. One
+<b>unit tab</b> appears per unit id seen on the bus.</li>
+<li>Each unit tab has a table of observed addresses
+(<b>Address</b>/<b>Name</b>/<b>Type</b>/<b>Format</b>/<b>Value</b>/<b>Trend</b>)
+and a <b>per-unit frame log</b>; the session log at the bottom shows all
+frames. Rows appear automatically, sorted by address; the Name and the display
+Format are editable, a changed value flashes green, the Trend sparkline
+follows every update.</li>
+<li><b>Graph…</b> opens a live graph window for the tab's rows (the sniffer
+does not poll, so there is no polling button there);
+<b>Export CSV…</b> writes the table in the master-table CSV format — the file
+imports back into a master tab's register table as is.</li>
+<li>Limits: <b>serial RTU only</b> — Modbus TCP cannot be sniffed; the frame
+direction (tx = master → slave, rx = slave → master) is not physically
+distinguishable on the wire and is guessed heuristically from the frame
+structure, so exotic function codes or noisy lines may misclassify.</li>
+</ul>
+"""
+
+
 SIMULATOR_HELP = """
 <h3>Simulator (slave mode)</h3>
 <p>The <b>Mode</b> combo above switches the tab between <b>Master</b> (poll a
@@ -427,6 +458,39 @@ SCANNER_HELP_RU = """
 </ul>
 """
 
+SNIFFER_HELP_RU = """
+<h3>Сниффер</h3>
+<p>Комбо <b>Режим</b> переключает вкладку в <b>Сниффер</b> — пассивного
+слушателя Modbus RTU шины: он наблюдает за трафиком между существующим
+мастером и его слейвами и восстанавливает карту регистров по увиденному, не
+отправляя ни одного кадра. Подключите к той же линии RS-485 <b>отдельный
+serial-адаптер</b> («тап»): pyserial открывает порт эксклюзивно, поэтому
+снифферу нужен свой интерфейс — порт мастера он разделить не может.</p>
+<ul>
+<li><b>Настройки порта</b> (порт, скорость, биты, чётность, стоп-биты) должны
+точно совпадать с настройками шины, иначе кадры превратятся в мусор.</li>
+<li><b>Начать сниффинг</b> запускает прослушивание; строка статуса зеленеет.
+Для каждого unit id, увиденного на шине, появляется своя <b>вкладка
+unit</b>.</li>
+<li>Во вкладке unit — таблица наблюдаемых адресов
+(<b>адрес</b>/<b>имя</b>/<b>тип</b>/<b>формат</b>/<b>значение</b>/<b>тренд</b>)
+и <b>лог кадров этого unit</b>; общий лог сессии внизу показывает все кадры.
+Строки появляются автоматически, отсортированные по адресу; имя и формат
+отображения редактируются, изменившееся значение вспыхивает зелёным, спарклайн
+тренда следует за каждым обновлением.</li>
+<li><b>График…</b> открывает окно живого графика строк вкладки (сниффер не
+поллит, поэтому кнопки поллинга там нет); <b>Экспорт CSV…</b> пишет таблицу в
+формате CSV master-таблицы — файл как есть импортируется в таблицу регистров
+master-вкладки.</li>
+<li>Ограничения: <b>только serial RTU</b> — Modbus TCP не сниффится;
+направление кадра (tx = мастер → слейв, rx = слейв → мастер) на проводе
+физически не различить и угадывается эвристически по структуре кадра, поэтому
+экзотические коды функций или зашумлённая линия могут классифицироваться
+неверно.</li>
+</ul>
+"""
+
+
 SIMULATOR_HELP_RU = """
 <h3>Симулятор (slave-режим)</h3>
 <p>Комбо <b>Режим</b> выше переключает вкладку между <b>Мастером</b> (опрос
@@ -496,4 +560,5 @@ HELP_RU = {
     SCANNER_HELP: SCANNER_HELP_RU,
     EXPRESSIONS_HELP: EXPRESSIONS_HELP_RU,
     SIMULATOR_HELP: SIMULATOR_HELP_RU,
+    SNIFFER_HELP: SNIFFER_HELP_RU,
 }

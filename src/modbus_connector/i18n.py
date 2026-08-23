@@ -421,6 +421,10 @@ RU: dict[str, str] = {
     "Stop sniffing": "Остановить сниффинг",
     "unit {unit}": "юнит {unit}",
     "Listening ({desc})": "Слушаем ({desc})",
+    "Export CSV…": "Экспорт CSV…",
+    "Live graph of this unit's rows": "Живой график строк этого unit",
+    "Export rows to CSV in the master table format":
+        "Экспорт строк в CSV в формате master-таблицы",
     # sniffer worker log lines
     "→ start sniffer {desc}": "→ запуск сниффера {desc}",
     "✗ sniffer start failed: {exc}": "✗ запуск сниффера не удался: {exc}",
@@ -482,6 +486,7 @@ RU: dict[str, str] = {
     "Scanner — Help": "Сканер — справка",
     "Expressions — Help": "Выражения — справка",
     "Simulator — Help": "Симулятор — справка",
+    "Sniffer — Help": "Сниффер — справка",
 }
 
 

@@ -3,9 +3,11 @@
 ## Назначение
 
 GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
-Каждая вкладка — сессия в режиме Master (опрос устройства) или Slave
+Каждая вкладка — сессия в режиме Master (опрос устройства), Slave
 (встроенный симулятор устройства: Modbus TCP/RTU сервер на pymodbus с
-редактируемой картой значений и правилами-выражениями).
+редактируемой картой значений и правилами-выражениями) или Sniffer (пассивное
+прослушивание RTU-шины через отдельный serial-адаптер: карта регистров
+восстанавливается из подслушанного трафика чужого мастера).
 Подключение к устройствам по Modbus TCP и RTU (по умолчанию RTU), чтение/запись
 регистров из таблицы, поллинг с интервалом, сканер unit-адресов в отдельном окне.
 Настройки соединений (вкладки), списки регистров и состояния сканеров
@@ -189,6 +191,57 @@ src/modbus_connector/
                   # "tick_ms": int}; строки += "rule"/"rule_text" (толерантный
                   # разбор, default manual, текст хранится только у expression,
                   # невалидный expr грузится как «⚠»)
+  sniffer_backend.py  # без Qt: пассивный сниффер RTU-шины: свой разбор кадров
+                      # со скользящим окном и ресинхронизацией по CRC16
+                      # (декодер pymodbus не используется — заточен под активного
+                      # клиента), направление tx/rx физически не различить —
+                      # эвристика по структуре кадра + матчер транзакций;
+                      # describe_sniffer(params) («sniff rtu port @ baud»),
+                      # RtuFrameParser.feed → SniffedFrame, BusModel (карта
+                      # unit → kind → address), format_frame(frame);
+                      # SnifferBackend — композиция SerialSniffer → parser →
+                      # BusModel: start(params)/stop/running, хуки
+                      # on_values(unit, kind, address, values)/on_frame(line)/
+                      # on_decoded_frame(SniffedFrame)/on_error(message) —
+                      # вызываются из потока чтения порта; порт занимается
+                      # pyserial эксклюзивно, start сбрасывает парсер и модель
+  sniffer_worker.py   # Qt: SnifferWorker(QObject) над SnifferBackend (в
+                      # отдельном QThread): сигналы sniffingChanged(bool,str)/
+                      # valuesChanged(int,str,int,list)/frameLine(str) (все
+                      # кадры, общий лог)/frameForUnit(int,str) (per-unit логи)/
+                      # logLine(str); слоты start_sniffing(params) (вызывать
+                      # СИГНАЛОМ — Q_ARG не маршаллит dataclass)/stop_sniffing/
+                      # shutdown; колбэки backend привязаны к сигналам напрямую
+                      # (emit из потока чтения безопасен, доставка queued)
+  sniffer_panel.py    # SnifferPanel — sniffer-режим сессии: строка serial-
+                      # параметров (port/baud/bits/parity/stop + Refresh,
+                      # BAUDRATES из connection_panel), кнопка Start/Stop
+                      # sniffing (иконки scanner/poll_stop, как
+                      # ConnectionPanel._sync_button_text), статус
+                      # (status_colors, серый/зелёный, красный при ошибке),
+                      # help-кнопка (SNIFFER_HELP) рядом с Start;
+                      # вкладки unit'ов (QTabWidget) — UnitTab создаётся при
+                      # первом кадре/значении unit'а: тулбар (Graph… —
+                      # GraphWindow этой вкладки, заголовок «unit N» через
+                      # set_window_title; Export CSV… — формат master-таблицы:
+                      # ExportColumnsDialog + колонки CSV_COLUMNS+value,
+                      # count=1, файл читается models.rows_from_csv),
+                      # таблица Address|Name|Type|Format|Value|Trend (строки
+                      # добавляются автоматически, отсортированы по адресу;
+                      # значения — в UserRole ячейки Name, ключ (kind, address)
+                      # — в UserRole+1; Name и Format редактируются, flash
+                      # изменения ~2 с, тренд — SparklineWidget по TimeSeries
+                      # на строку, hex/ascii в тренд не пишутся) + per-unit лог
+                      # кадров (QPlainTextEdit); мини-интерфейс для GraphWindow:
+                      # row_tokens/row_label («имя» или «kind@addr»)/
+                      # row_poll_enabled (всегда True)/series/clear_series +
+                      # сигнал rowsChanged (новая строка, переименование по
+                      # itemChanged с кэшем имён — setData значений его не
+                      # дёргает); сигналы startRequested(object)/stopRequested/
+                      # logLine; set_sniffing(ok, message),
+                      # sniffing_description(),
+                      # state()/set_state() = {"params": {...}, "units": [...]}
+                      # (толерантный разбор)
   connection_panel.py  # параметры подключения (TCP / RTU / RTU over TCP /
                        # RTU over UDP — страницы network/serial; тип в комбо
                        # лежит в itemData английским, переводится только
@@ -453,8 +506,12 @@ src/modbus_connector/
                     # sigRangeChanged (иначе сдвигался при панорамировании)), Clear — сброс истории
                     # (panel.clear_series: регистры И выражения) и оси времени,
                     # кнопка-дублёр "Start polling and record"/"Stop polling"
-                    # (управляет панелью, следит за pollStateChanged),
+                    # (управляет панелью, следит за pollStateChanged) — панель
+                    # без start_polling (вкладка сниффера): кнопка скрыта,
+                    # pollStateChanged/expr_tokens не трогаются (hasattr/getattr),
                     # set_bus_enabled(ok) — гейтинг этой кнопки,
+                    # set_window_title(text) — фиксированный заголовок вместо
+                    # «Graph» (окно вкладки сниффера — «unit N»),
                     # update_theme() — перекраска фона/осей/кроссхейра/легенды
                     # под тему (pg.setConfigOptions + setBackground; у легенды
                     # label.setText(label.text) — цвет запечён в HTML; вызывается
@@ -556,22 +613,26 @@ src/modbus_connector/
   session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
                     # RegistersPanel + LogPanel + ScannerPanel (окно) +
                     # ModbusWorker в QThread, вся проводка сигналов внутри;
-                    # режим Master/Slave: тонкая строка (QLabel "Mode:" +
-                    # FitComboBox, ключи master/slave в itemData) между панелью
-                    # подключения и центральным QStackedWidget
-                    # (registers_panel | sim_panel); в slave connection_panel и
-                    # кнопки Scanner…/Graph… скрываются, LogPanel общая;
-                    # комбо режима disabled, пока master подключён или
-                    # sim-сервер запущен (_sync_mode_lock);
-                    # SimPanel + SimWorker во втором QThread (создаются сразу,
-                    # shutdown() останавливает оба: invokeMethod shutdown
+                    # режим Master/Slave/Sniffer: тонкая строка (QLabel "Mode:" +
+                    # FitComboBox, ключи master/slave/sniffer в itemData) между
+                    # панелью подключения и центральным QStackedWidget
+                    # (registers_panel | sim_panel | sniffer_panel); в
+                    # slave/sniffer connection_panel и кнопки Scanner…/Graph…
+                    # скрываются, LogPanel общая;
+                    # комбо режима disabled, пока master подключён,
+                    # sim-сервер запущен или активен сниффинг (_sync_mode_lock);
+                    # SimPanel + SimWorker во втором QThread, SnifferPanel +
+                    # SnifferWorker в третьем (создаются сразу,
+                    # shutdown() останавливает все: invokeMethod shutdown
                     # BlockingQueuedConnection);
                     # заголовок вкладки в slave — describe_sim(params) при
-                    # запущенном сервере, иначе "Simulator";
+                    # запущенном сервере, иначе "Simulator"; в sniffer —
+                    # sniffing_description() при активном сниффинге, иначе
+                    # "Sniffer";
                     # connectionChanged → set_bus_enabled(ok) панели/сканера/
                     # окна графика, при разрыве — stop_logging + stop_polling;
                     # state()/set_state() (mode+connection+registers+
-                    # registers_options+expressions+logging+scanner+sim;
+                    # registers_options+expressions+logging+scanner+sim+sniffer;
                     # mode применяется ДО панелей, старые state без mode —
                     # master, backward compat со старым плоским форматом),
                     # shutdown() — stop_logging + корректная остановка
@@ -661,9 +722,10 @@ tests/
                           # Refresh/Take new snapshot, перезапись снапшота,
                           # "(removed)" для удалённых строк
   test_session_widget.py   # smoke: state round-trip + shutdown сессии;
-                           # режим Master/Slave: mode+sim в state round-trip,
-                           # видимость панелей, блокировка комбо режима,
-                           # заголовок вкладки, shutdown в slave
+                           # режимы Master/Slave/Sniffer: mode+sim+sniffer в
+                           # state round-trip, видимость панелей, блокировка
+                           # комбо режима, заголовок вкладки, shutdown в
+                           # slave/sniffer
   test_sim_backend.py      # SimBackend: start/stop TCP/RTU, занятый порт,
                            # записи мастера (хук), set/get_values
   test_sim_worker.py       # SimWorker в QThread: start/stop, masterWrote,
@@ -673,6 +735,16 @@ tests/
                            # (server+rows, толерантный разбор), шаблон в карту,
                            # masterWrote → Value, правка Value →
                            # setValuesRequested, start эмитит params+push строк
+  test_sniffer_backend.py  # RtuFrameParser/BusModel/SnifferBackend: разбор
+                           # кадров, направление tx/rx, карта значений, хуки
+  test_sniffer_worker.py   # SnifferWorker в QThread: start/stop, сигналы
+                           # valuesChanged/frameLine/frameForUnit
+  test_sniffer_panel.py    # SnifferPanel: вкладки unit'ов, таблица (сортировка,
+                           # flash, форматы, тренд), state round-trip,
+                           # start/stop-сигналы, акцессоры графика +
+                           # GraphWindow вкладки (poll-кнопка скрыта),
+                           # CSV-экспорт round-trip через rows_from_csv,
+                           # help-кнопка
   test_sim_rules.py        # правила SimPanel: rule/rule_text/tick_ms в state,
                            # «⚠» при невалидном, гейтинг редактируемости ячеек,
                            # apply_rules ([a]*2, prev-счётчик, t, rand/randint),
@@ -752,3 +824,70 @@ macOS/Windows/Linux: pytest (по одному процессу на test-фай
 - Тесты backend используют реальный тестовый Modbus TCP сервер (фикстура
   `modbus_server`), запущенный в отдельном потоке.
 - При изменении структуры/команд/модулей обновлять этот файл и README.md.
+
+
+# Coding guide
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

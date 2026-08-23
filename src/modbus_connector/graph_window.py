@@ -1,4 +1,5 @@
 import html
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pyqtgraph as pg
@@ -22,6 +23,9 @@ from modbus_connector.help_dialog import GRAPH_HELP, make_help_button
 from modbus_connector.i18n import tr
 from modbus_connector.registers_panel import RegistersPanel
 from modbus_connector.timeseries import TimeSeries
+
+if TYPE_CHECKING:
+    from modbus_connector.sniffer_panel import UnitTab
 
 MODES = ("Follow", "Full", "Manual")
 MARKER_PENS = (pg.mkPen((60, 180, 75), width=2), pg.mkPen((200, 60, 60), width=2))
@@ -50,10 +54,14 @@ def _curve_color(index: int) -> QColor:
 class GraphWindow(QWidget):
     """Живой график выбранных строк таблицы регистров (отдельное окно)."""
 
-    def __init__(self, panel: RegistersPanel, parent: QWidget | None = None) -> None:
+    def __init__(self, panel: "RegistersPanel | UnitTab",
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.Window)
         self._panel = panel
+        # вкладки сниффера не поллят: без start_polling кнопка-дублёр скрыта
+        self._has_poll = hasattr(panel, "start_polling")
+        self._title_override: str | None = None  # фиксированный заголовок (unit N)
         self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
         self._translatable_tips: list[tuple[QWidget, str]] = []
         self.setWindowTitle(tr("Graph"))
@@ -181,8 +189,11 @@ class GraphWindow(QWidget):
         self._timer.timeout.connect(self._refresh)
 
         panel.rowsChanged.connect(self._rebuild_rows)
-        panel.pollStateChanged.connect(self._sync_poll_button)
-        self._sync_poll_button(panel.is_polling(), panel.is_recording())
+        if self._has_poll:
+            panel.pollStateChanged.connect(self._sync_poll_button)
+            self._sync_poll_button(panel.is_polling(), panel.is_recording())
+        else:
+            self._poll_button.hide()  # сниффер пассивен: поллить нечего
         self._rebuild_rows()
 
     # --- series checklist ------------------------------------------------
@@ -193,7 +204,9 @@ class GraphWindow(QWidget):
         # rows opted out of polling are hidden from the graph entirely
         tokens = [t for t in row_tokens if self._panel.row_poll_enabled(t)]
         # expressions are always listed: they have no poll checkbox
-        expr_tokens = self._panel.expr_tokens()
+        # (у вкладок сниффера выражений нет — expr_tokens отсутствует)
+        expr_fn = getattr(self._panel, "expr_tokens", None)
+        expr_tokens = expr_fn() if expr_fn is not None else []
         self._expr_tokens = set(expr_tokens)
         all_tokens = row_tokens + expr_tokens
         listed = tokens + expr_tokens
@@ -350,6 +363,11 @@ class GraphWindow(QWidget):
     def set_bus_enabled(self, ok: bool) -> None:
         self._poll_button.setEnabled(ok)
 
+    def set_window_title(self, title: str) -> None:
+        """Фиксированный (уже переведённый) заголовок вместо «Graph»."""
+        self._title_override = title
+        self.setWindowTitle(title)
+
     def _track(self, widget: QWidget, text: str, tip: str | None = None) -> None:
         widget.setText(tr(text))
         self._translatable.append((widget, text))
@@ -371,7 +389,10 @@ class GraphWindow(QWidget):
 
     def retranslate(self) -> None:
         """Переприменить tr() ко всем строкам окна (по смене языка)."""
-        self.setWindowTitle(tr("Graph"))
+        if self._title_override is not None:
+            self.setWindowTitle(self._title_override)  # переводит вызывающий
+        else:
+            self.setWindowTitle(tr("Graph"))
         for widget, text in self._translatable:
             widget.setText(tr(text))
         for widget, tip in self._translatable_tips:
@@ -385,7 +406,8 @@ class GraphWindow(QWidget):
         )
         self._plot.setLabel("bottom", tr("time, s (relative)"))
         # state-dependent text goes through its sync path, not a stale snapshot
-        self._sync_poll_button(self._panel.is_polling(), self._panel.is_recording())
+        if self._has_poll:
+            self._sync_poll_button(self._panel.is_polling(), self._panel.is_recording())
 
     def update_theme(self) -> None:
         """Перекрасить открытый график под текущую тему (вызывает MainWindow)."""

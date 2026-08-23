@@ -8,13 +8,19 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # skip the whole module there — it still runs on macOS/Windows CI and dev machines.
 try:
     from PySide6.QtTest import QSignalSpy  # noqa: E402
-    from PySide6.QtWidgets import QApplication  # noqa: E402
+    from PySide6.QtWidgets import (  # noqa: E402
+        QApplication,
+        QDialog,
+        QFileDialog,
+        QTextBrowser,
+    )
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
 
 from modbus_connector import theme  # noqa: E402
+from modbus_connector.csv_dialogs import ExportColumnsDialog  # noqa: E402
 from modbus_connector.i18n import current_language, set_language, tr  # noqa: E402
-from modbus_connector.models import RtuParams  # noqa: E402
+from modbus_connector.models import RtuParams, rows_from_csv  # noqa: E402
 from modbus_connector.sniffer_panel import (  # noqa: E402
     COL_ADDRESS,
     COL_FORMAT,
@@ -24,6 +30,7 @@ from modbus_connector.sniffer_panel import (  # noqa: E402
     SnifferPanel,
     UnitTab,
 )
+from modbus_connector.timeseries import TimeSeries  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -214,3 +221,89 @@ def test_retranslate(panel: SnifferPanel, qapp: QApplication) -> None:
         set_language(previous)
     panel.retranslate()
     assert panel._tabs.tabText(0) == tr("unit {unit}", unit=1)
+
+
+def test_graph_accessors(panel: SnifferPanel) -> None:
+    panel.handle_values(1, "holding_registers", 0, [10])
+    panel.handle_values(1, "coils", 3, [True])
+    tab = _tab(panel, 1)
+    tokens = tab.row_tokens()
+    assert len(tokens) == 2
+    assert all(tab.row_poll_enabled(t) for t in tokens)
+    assert isinstance(tab.series(tokens[0]), TimeSeries)
+    assert tab.series(-1) is None
+    # без имени — «kind@addr», с именем — имя
+    assert tab.row_label(tokens[0]) == "holding_registers@0"
+    tab._table.item(0, COL_NAME).setText("temp")
+    assert tab.row_label(tokens[0]) == "temp"
+    tab.clear_series()
+    assert len(tab.series(tokens[0])) == 0
+
+
+def test_rows_changed_signal(panel: SnifferPanel) -> None:
+    panel.handle_values(1, "holding_registers", 0, [1])
+    tab = _tab(panel, 1)
+    spy = QSignalSpy(tab.rowsChanged)
+    panel.handle_values(1, "holding_registers", 5, [2])  # новая строка
+    assert spy.count() == 1
+    panel.handle_values(1, "holding_registers", 5, [3])  # смена значения — не emit
+    assert spy.count() == 1
+    tab._table.item(1, COL_NAME).setText("flow")  # переименование
+    assert spy.count() == 2
+
+
+def test_graph_window(panel: SnifferPanel, qapp: QApplication) -> None:
+    panel.handle_values(1, "holding_registers", 0, [10])
+    panel.handle_values(1, "coils", 3, [True])
+    tab = _tab(panel, 1)
+    tab._graph_button.click()
+    window = tab._graph_window
+    assert window is not None
+    assert window.windowTitle() == "unit 1"
+    assert window._rows_list.count() == 2
+    # сниффер не поллит: кнопка-дублёр поллинга скрыта
+    assert window._poll_button.isHidden()
+    tab._graph_button.click()  # повторное нажатие поднимает то же окно
+    assert tab._graph_window is window
+    # новая строка вкладки появляется в чек-листе по rowsChanged
+    panel.handle_values(1, "holding_registers", 7, [1])
+    assert window._rows_list.count() == 3
+    window.close()
+
+
+def test_csv_export_roundtrip(
+    panel: SnifferPanel, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel.handle_values(1, "holding_registers", 0, [100])
+    panel.handle_values(1, "coils", 2, [True])
+    tab = _tab(panel, 1)
+    tab._table.item(0, COL_NAME).setText("temp")
+    path = tmp_path / "unit1.csv"
+    monkeypatch.setattr(
+        ExportColumnsDialog, "exec", lambda self: QDialog.DialogCode.Accepted
+    )
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName",
+        lambda *args, **kwargs: (str(path), "CSV (*.csv)"),
+    )
+    tab._csv_button.click()
+    parsed = rows_from_csv(path.read_text(encoding="utf-8-sig"))
+    assert [(row.name, row.kind, row.address) for row, _display in parsed] == [
+        ("temp", "holding_registers", 0),
+        ("", "coils", 2),
+    ]
+    assert all(row.count == 1 for row, _display in parsed)
+    assert "exported" in tab._log.toPlainText()
+
+
+def test_help_button(panel: SnifferPanel, qapp: QApplication) -> None:
+    panel._help_button.click()
+    qapp.processEvents()
+    dialogs = [
+        widget for widget in qapp.topLevelWidgets()
+        if isinstance(widget, QDialog) and widget.windowTitle() == "Sniffer — Help"
+    ]
+    assert len(dialogs) == 1
+    browser = dialogs[0].findChild(QTextBrowser)
+    assert "sniff" in browser.toPlainText().lower()
+    dialogs[0].close()

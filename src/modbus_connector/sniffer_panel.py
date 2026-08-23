@@ -7,13 +7,19 @@
 у сниффера нет record-режима, он «пишет» всегда.
 """
 
+import csv
+import io
+import itertools
 import time
+from pathlib import Path
 from typing import Any, get_args
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -29,8 +35,11 @@ from serial.tools import list_ports
 
 from modbus_connector import icons, theme
 from modbus_connector.connection_panel import BAUDRATES
+from modbus_connector.csv_dialogs import ExportColumnsDialog
+from modbus_connector.help_dialog import SNIFFER_HELP, make_help_button
 from modbus_connector.i18n import tr
 from modbus_connector.models import (
+    CSV_COLUMNS,
     DisplayFormat,
     RegisterKind,
     RtuParams,
@@ -52,12 +61,16 @@ HEADER_LABELS = ("Address", "Name", "Type", "Format", "Value", "Trend")
 
 # роль данных ячейки Name: значения строки (list[int|bool]), как в SimPanel
 _VALUES_ROLE = Qt.ItemDataRole.UserRole
+# роль с ключом строки (kind, address) — для переименований и токенов графика
+_KEY_ROLE = Qt.ItemDataRole.UserRole + 1
 
 LOG_MAX_BLOCKS = 1000
 
 
 class UnitTab(QWidget):
     """Вкладка одного unit: таблица значений + лог кадров только этого unit."""
+
+    rowsChanged = Signal()  # строка добавлена/переименована (для GraphWindow)
 
     def __init__(self, unit: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -67,6 +80,29 @@ class UnitTab(QWidget):
         self._series: dict[tuple[str, int], TimeSeries] = {}
         self._sparklines: dict[tuple[str, int], SparklineWidget] = {}
         self._flash_generations: dict[tuple[str, int], int] = {}
+        self._names: dict[tuple[str, int], str] = {}
+        self._token_counter = itertools.count(1)
+        self._tokens: dict[tuple[str, int], int] = {}
+        self._token_keys: dict[int, tuple[str, int]] = {}
+        self._graph_window: Any = None  # GraphWindow, создаётся лениво
+        self._translatable: list[tuple[QWidget, str]] = []  # (widget, English key)
+        self._translatable_tips: list[tuple[QWidget, str]] = []
+
+        self._graph_button = icons.make_button(tr("Graph…"), "graph")
+        self._track(self._graph_button, "Graph…", "Live graph of this unit's rows")
+        self._graph_button.clicked.connect(self._show_graph)
+        self._csv_button = icons.make_button(tr("Export CSV…"), "csv_export")
+        self._track(
+            self._csv_button, "Export CSV…",
+            "Export rows to CSV in the master table format",
+        )
+        self._csv_button.clicked.connect(self._on_csv_export)
+
+        toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        toolbar.addWidget(self._graph_button)
+        toolbar.addWidget(self._csv_button)
+        toolbar.addStretch(1)
 
         self._table = QTableWidget(0, len(HEADER_LABELS))
         self._sync_header()
@@ -76,6 +112,7 @@ class UnitTab(QWidget):
                            (COL_FORMAT, 90), (COL_VALUE, 140)):
             self._table.setColumnWidth(col, width)
         self._table.verticalHeader().setVisible(False)
+        self._table.itemChanged.connect(self._on_item_changed)
 
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
@@ -84,10 +121,17 @@ class UnitTab(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
+        layout.addLayout(toolbar)
         layout.addWidget(self._table, 1)
         layout.addWidget(self._log)
 
     # --- строки таблицы ---
+
+    def _track(self, widget: QWidget, text: str, tip: str) -> None:
+        widget.setText(tr(text))
+        self._translatable.append((widget, text))
+        widget.setToolTip(tr(tip))  # у иконочных кнопок подпись живёт в тултипе
+        self._translatable_tips.append((widget, tip))
 
     def _sync_header(self) -> None:
         self._table.setHorizontalHeaderLabels([tr(text) for text in HEADER_LABELS])
@@ -118,6 +162,7 @@ class UnitTab(QWidget):
 
         name_item = QTableWidgetItem(name)
         name_item.setData(_VALUES_ROLE, list(values))
+        name_item.setData(_KEY_ROLE, key)
         self._table.setItem(index, COL_NAME, name_item)
 
         type_item = QTableWidgetItem(kind)  # RegisterKind не переводится
@@ -147,7 +192,25 @@ class UnitTab(QWidget):
         self._table.setCellWidget(index, COL_TREND, sparkline)
 
         self._rows[key] = name_item
+        self._names[key] = name
+        token = next(self._token_counter)
+        self._tokens[key] = token
+        self._token_keys[token] = key
         self._render_value(key)
+        self.rowsChanged.emit()
+
+    def _on_item_changed(self, item: QTableWidgetItem) -> None:
+        """Переименование строки → rowsChanged (список рядов графика)."""
+        if item.column() != COL_NAME:
+            return
+        key = item.data(_KEY_ROLE)
+        if key is None or self._rows.get(key) is not item:
+            return  # строка ещё добавляется (setItem в _add_row)
+        # setData(_VALUES_ROLE) тоже эмитит itemChanged — реагируем только
+        # на смену текста
+        if item.text() != self._names.get(key, ""):
+            self._names[key] = item.text()
+            self.rowsChanged.emit()
 
     def _format_at(self, key: tuple[str, int]) -> str:
         index = self._row_index(key)
@@ -236,6 +299,110 @@ class UnitTab(QWidget):
     def append_log(self, line: str) -> None:
         self._log.appendPlainText(line)
 
+    # --- мини-интерфейс панели для GraphWindow ---
+
+    def _keys_in_row_order(self) -> list[tuple[str, int]]:
+        keys = []
+        for index in range(self._table.rowCount()):
+            item = self._table.item(index, COL_NAME)
+            key = item.data(_KEY_ROLE) if item is not None else None
+            if key is not None:
+                keys.append(key)
+        return keys
+
+    def row_tokens(self) -> list[int]:
+        return [self._tokens[key] for key in self._keys_in_row_order()]
+
+    def row_label(self, token: int) -> str:
+        key = self._token_keys.get(token)
+        if key is None:
+            return ""
+        name = self._names.get(key, "")
+        kind, address = key
+        return name or f"{kind}@{address}"
+
+    def row_poll_enabled(self, token: int) -> bool:
+        return True  # сниффер не поллит: все строки всегда на графике
+
+    def series(self, token: int) -> TimeSeries | None:
+        key = self._token_keys.get(token)
+        return self._series.get(key) if key is not None else None
+
+    def clear_series(self) -> None:
+        for ts in self._series.values():
+            ts.clear()
+        for sparkline in self._sparklines.values():
+            sparkline.refresh()
+
+    @Slot()
+    def _show_graph(self) -> None:
+        if self._graph_window is None:
+            # lazy import: pyqtgraph/numpy load only when the window opens
+            from modbus_connector.graph_window import GraphWindow
+
+            self._graph_window = GraphWindow(self, self)
+            self._graph_window.set_window_title(tr("unit {unit}", unit=self.unit))
+        self._graph_window.show()
+        self._graph_window.raise_()
+        self._graph_window.activateWindow()
+
+    # --- экспорт CSV (формат master-таблицы) ---
+
+    @Slot()
+    def _on_csv_export(self) -> None:
+        dialog = ExportColumnsDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        columns = dialog.columns()
+        if not columns:
+            self.append_log(tr("✗ export: no columns selected"))
+            return
+        path_str, _ = QFileDialog.getSaveFileName(
+            self, tr("Export registers to CSV"), str(Path.home() / "registers.csv"),
+            "CSV (*.csv)",
+        )
+        if path_str:
+            self.export_csv(Path(path_str), columns)
+
+    def export_csv(self, path: Path, columns: list[str] | None = None) -> None:
+        # колонки master-таблицы + value: файл импортируется в master без
+        # сопоставления (value при импорте пропускается)
+        columns = columns or [*CSV_COLUMNS, "value"]
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\n")
+        writer.writerow(columns)
+        count = 0
+        for index in range(self._table.rowCount()):
+            address_item = self._table.item(index, COL_ADDRESS)
+            name_item = self._table.item(index, COL_NAME)
+            type_item = self._table.item(index, COL_TYPE)
+            if address_item is None or name_item is None or type_item is None:
+                continue
+            combo = self._table.cellWidget(index, COL_FORMAT)
+            value_item = self._table.item(index, COL_VALUE)
+            record = {  # как models.row_to_csv_record, count=1 и без per-row настроек
+                "name": name_item.text(),
+                "kind": type_item.text(),
+                "address": int(address_item.text()),
+                "count": 1,
+                "unit_id": "",
+                "poll_ms": "",
+                "format": combo.currentText() if combo is not None else "dec",
+                "scale": 1.0,
+                "offset": 0.0,
+                "unit": "",
+                "order": "",
+                "value": value_item.text() if value_item is not None else "",
+            }
+            writer.writerow([record.get(column, "") for column in columns])
+            count += 1
+        try:
+            path.write_text(buffer.getvalue(), encoding="utf-8-sig")
+        except OSError as exc:
+            self.append_log(tr("✗ failed to write {path}: {exc}", path=path, exc=exc))
+            return
+        self.append_log(tr("→ exported {count} rows to {path}", count=count, path=path))
+
     # --- состояние и перевод ---
 
     def rows_state(self) -> list[dict[str, Any]]:
@@ -264,6 +431,9 @@ class UnitTab(QWidget):
         self._series.clear()
         self._sparklines.clear()
         self._flash_generations.clear()
+        self._names.clear()
+        self._tokens.clear()
+        self._token_keys.clear()
         for entry in rows:
             if not isinstance(entry, dict):
                 continue
@@ -290,6 +460,13 @@ class UnitTab(QWidget):
 
     def retranslate(self) -> None:
         self._sync_header()
+        for widget, text in self._translatable:
+            widget.setText(tr(text))
+        for widget, tip in self._translatable_tips:
+            widget.setToolTip(tr(tip))
+        if self._graph_window is not None:
+            self._graph_window.set_window_title(tr("unit {unit}", unit=self.unit))
+            self._graph_window.retranslate()
 
 
 class SnifferPanel(QWidget):
@@ -341,6 +518,7 @@ class SnifferPanel(QWidget):
 
         self._button = icons.make_button(tr("Start sniffing"), "scanner")
         self._button.clicked.connect(self._on_button_clicked)
+        self._help_button = make_help_button(self, "Sniffer — Help", SNIFFER_HELP)
         self._status = QLabel()
         # длинный статус не должен расширять окно (как в ConnectionPanel)
         self._status.setSizePolicy(
@@ -348,6 +526,7 @@ class SnifferPanel(QWidget):
         )
         controls_row = QHBoxLayout()
         controls_row.addWidget(self._button)
+        controls_row.addWidget(self._help_button)
         controls_row.addWidget(self._status, 1)
 
         self._tabs = QTabWidget()
