@@ -65,7 +65,6 @@ class SessionWidget(QWidget):
         self._log_button.toggled.connect(self.log_panel.setVisible)
         self.connection_panel.add_control(self._scanner_button)
         self.connection_panel.add_control(self._graph_button)
-        self.connection_panel.add_control(self._log_button)
 
         # тонкая строка между панелью подключения и центральной областью
         self._mode_label = QLabel(tr("Mode:"))
@@ -77,6 +76,9 @@ class SessionWidget(QWidget):
         mode_row.addWidget(self._mode_label)
         mode_row.addWidget(self._mode_combo)
         mode_row.addStretch(1)
+        # кнопка скрытия лога — всегда на виду: connection_panel (и её
+        # контролы) видна только в master-режиме
+        mode_row.addWidget(self._log_button)
 
         # центр: таблица регистров (master), панель симулятора (slave)
         # или панель сниффера (sniffer)
