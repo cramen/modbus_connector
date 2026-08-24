@@ -1602,14 +1602,14 @@ def test_bitmask_display_and_button(qapp: QApplication) -> None:
     assert isinstance(button, QToolButton) and not button.isHidden()  # кнопка, не комбо
     request_id = _read_row(panel, 0)
     panel.handle_read_finished(request_id, True, [0x0005], "")
-    assert panel._table.item(0, COL_VALUE).text() == "Running, Alarm (0x0005)"
+    assert panel._table.item(0, COL_VALUE).text() == "Running, Alarm (0000 0000 0000 0101)"
     # полный текст — в tooltip на случай обрезки, сводка — на кнопке
-    assert panel._table.item(0, COL_VALUE).toolTip() == "Running, Alarm (0x0005)"
-    assert button.text() == "Running, Alarm (0x0005)"
+    assert panel._table.item(0, COL_VALUE).toolTip() == "Running, Alarm (0000 0000 0000 0101)"
+    assert button.text() == "Running, Alarm (0000 0000 0000 0101)"
     request_id = _read_row(panel, 0)
     panel.handle_read_finished(request_id, True, [0], "")
-    assert panel._table.item(0, COL_VALUE).text() == "0x0000"  # нет установленных
-    assert button.text() == "0x0000"
+    assert panel._table.item(0, COL_VALUE).text() == "0000 0000 0000 0000"  # нет установленных
+    assert button.text() == "0000 0000 0000 0000"
 
 
 def test_bitmask_empty_names_shows_bit_numbers(qapp: QApplication) -> None:
@@ -1620,7 +1620,7 @@ def test_bitmask_empty_names_shows_bit_numbers(qapp: QApplication) -> None:
     assert isinstance(panel._table.cellWidget(0, COL_NEW_VALUE), QToolButton)
     request_id = _read_row(panel, 0)
     panel.handle_read_finished(request_id, True, [0x00A1], "")
-    assert panel._table.item(0, COL_VALUE).text() == "b0, b5, b7 (0x00A1)"
+    assert panel._table.item(0, COL_VALUE).text() == "b0, b5, b7 (0000 0000 1010 0001)"
 
 
 def test_bitmask_button_dialog_writes(

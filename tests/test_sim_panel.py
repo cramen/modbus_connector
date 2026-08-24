@@ -410,8 +410,8 @@ def test_bitmask_state_roundtrip_and_display(panel: SimPanel) -> None:
     assert state["rows"][1]["bitmask"] is False  # ключ отсутствовал — default False
     button = panel._table.cellWidget(0, COL_VALUE)
     assert isinstance(button, QToolButton) and not button.isHidden()
-    assert button.text() == "Running, Alarm (0x0005)"
-    assert panel._table.item(0, COL_VALUE).toolTip() == "Running, Alarm (0x0005)"
+    assert button.text() == "Running, Alarm (0000 0000 0000 0101)"
+    assert panel._table.item(0, COL_VALUE).toolTip() == "Running, Alarm (0000 0000 0000 0101)"
     assert panel._table.cellWidget(1, COL_VALUE) is None  # без bitmask — текст
 
 
@@ -438,7 +438,7 @@ def test_bitmask_button_writes_datastore(
     kind, address, values = spy.at(0)
     assert (kind, address, list(values)) == ("holding_registers", 5, [0b110])
     assert panel._values_at(0) == [0b110]
-    assert button.text() == "b1, b2 (0x0006)"  # сводка обновилась
+    assert button.text() == "b1, b2 (0000 0000 0000 0110)"  # сводка обновилась
 
 
 def test_bitmask_master_write_updates_display(panel: SimPanel) -> None:
@@ -447,7 +447,7 @@ def test_bitmask_master_write_updates_display(panel: SimPanel) -> None:
                     "bitmask": True})
     panel.handle_master_write("holding_registers", 5, [0b101])
     button = panel._table.cellWidget(0, COL_VALUE)
-    assert button.text() == "Running, Alarm (0x0005)"
+    assert button.text() == "Running, Alarm (0000 0000 0000 0101)"
 
 
 def test_bitmask_expression_row_no_button(panel: SimPanel) -> None:
@@ -455,7 +455,7 @@ def test_bitmask_expression_row_no_button(panel: SimPanel) -> None:
                     "rule": "expression", "rule_text": "5",
                     "value_names": {"0": "Running", "2": "Alarm"}, "bitmask": True})
     panel._apply_rule(0, {}, 0.0)
-    assert panel._table.item(0, COL_VALUE).text() == "Running, Alarm (0x0005)"
+    assert panel._table.item(0, COL_VALUE).text() == "Running, Alarm (0000 0000 0000 0101)"
     assert panel._table.cellWidget(0, COL_VALUE) is None  # expression — только текст
 
 

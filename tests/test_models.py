@@ -1146,8 +1146,11 @@ class TestBitmask:
 
     def test_format_bitmask_value(self) -> None:
         names = {0: "Running", 2: "Alarm"}
-        assert format_bitmask_value(0x0005, names) == "Running, Alarm (0x0005)"
-        assert format_bitmask_value(0x00A5, names) == "Running, Alarm, b5, b7 (0x00A5)"
-        assert format_bitmask_value(0, names) == "0x0000"  # нет установленных
-        assert format_bitmask_value(0x0005, {}) == "b0, b2 (0x0005)"  # пустые names
-        assert format_bitmask_value(0x1_0005, names) == "Running, Alarm (0x0005)"  # u16
+        assert format_bitmask_value(0x0005, names) == "Running, Alarm (0000 0000 0000 0101)"
+        assert format_bitmask_value(0x00A5, names) == "Running, Alarm, b5, b7 (0000 0000 1010 0101)"
+        assert format_bitmask_value(0, names) == "0000 0000 0000 0000"  # нет установленных
+        assert format_bitmask_value(0x0005, {}) == "b0, b2 (0000 0000 0000 0101)"  # пустые names
+        assert (
+            format_bitmask_value(0x1_0005, names)
+            == "Running, Alarm (0000 0000 0000 0101)"
+        )  # u16

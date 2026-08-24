@@ -47,7 +47,8 @@ that writes the picked value immediately (the combo resets after each
 write, so the same value can be picked again). The <b>Bitmask</b> checkbox
 switches the mode: value names label bits 0..15 of a single-register
 dec/s16/hex row, the Value cell lists the set bits ("Running, Alarm
-(0x00A5)") and New value becomes a button opening a bit checkbox dialog.</li>
+(0000 0000 1010 0101)") and New value becomes a button opening a bit
+checkbox dialog.</li>
 <li><b>Alarms…</b> — per-row alarm rules over the scaled value (hex/ascii
 rows are skipped). The first matching rule wins and paints the Value cell
 red/yellow, outranking the change flash; activation and clearing are logged
@@ -342,8 +343,8 @@ s16/u32/s32/f32/u64/s64/f64 числа вводятся в формате ото
 выбрать повторно). Галочка <b>Битовая маска</b> переключает режим: имена
 значений подписывают биты 0..15 строки одиночного регистра dec/s16/hex,
 ячейка значения перечисляет установленные биты («Работает, Авария
-(0x00A5)»), а «Новое значение» становится кнопкой, открывающей диалог
-с галочками битов.</li>
+(0000 0000 1010 0101)»), а «Новое значение» становится кнопкой, открывающей
+диалог с галочками битов.</li>
 <li><b>Алармы…</b> — правила алармов на строку по масштабированному значению
 (строки hex/ascii пропускаются). Срабатывает первое совпавшее правило и
 красит ячейку значения в красный/жёлтый (приоритет над зелёной вспышкой

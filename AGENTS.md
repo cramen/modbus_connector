@@ -90,7 +90,8 @@ src/modbus_connector/
                   # value_names именуют биты 0..15 u16-значения (enum по битам);
                   # set_bit_labels — метки установленных битов (имя или «bN»),
                   # bits_to_value — сборка u16 из номеров битов (вне 0..15 игнор),
-                  # format_bitmask_value — «Running, Alarm (0x00A5)» (метки
+                  # format_bitmask_value — «Running, Alarm
+                  # (0000 0000 1010 0101)» (метки
                   # через ", " + hex в скобках; без установленных — «0x0000»;
                   # пустые names — все биты «bN»)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,

@@ -168,15 +168,18 @@ def bits_to_value(indices: Iterable[int]) -> int:
 
 
 def format_bitmask_value(value: int, names: Mapping[int, str]) -> str:
-    """«Running, Alarm (0x00A5)»: метки установленных битов + hex в скобках.
+    """«Running, Alarm (0000 0000 1000 0111)»: метки установленных битов +
+    двоичное слово в скобках (16 бит, пробел каждые 4 — для читаемости).
 
-    Установленных битов нет — просто «0x0000»; names может быть пустым —
+    Установленных битов нет — просто двоичное слово; names может быть пустым —
     тогда все биты подписываются как «bN»."""
     raw = int(value) & 0xFFFF
+    binary = format(raw, "016b")
+    grouped = " ".join(binary[i : i + 4] for i in range(0, 16, 4))
     labels = set_bit_labels(raw, names)
     if not labels:
-        return f"0x{raw:04X}"
-    return f"{', '.join(labels)} (0x{raw:04X})"
+        return grouped
+    return f"{', '.join(labels)} ({grouped})"
 
 
 CSV_COLUMNS = [
