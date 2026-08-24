@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QDialogButtonBox,
-    QGridLayout,
     QVBoxLayout,
     QWidget,
 )
@@ -16,7 +15,8 @@ from modbus_connector.models import BIT_COUNT, bits_to_value
 
 
 class BitsDialog(QDialog):
-    """Модальная сетка 4×4 из 16 чекбоксов: подпись — имя бита или «bN».
+    """Модальный список из 16 чекбоксов в один столбец: подпись — имя бита
+    или «bN».
 
     Чекнутость инициализируется из переданного значения; итог — value()
     (сборка через models.bits_to_value). Общий для master (New value) и
@@ -28,19 +28,17 @@ class BitsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(tr("Edit bits"))
         self._boxes: list[QCheckBox] = []
-        grid = QGridLayout()
+        layout = QVBoxLayout(self)
         for bit in range(BIT_COUNT):
             box = QCheckBox(names.get(bit) or f"b{bit}")
             box.setChecked(bool(value & (1 << bit)))
-            grid.addWidget(box, bit // 4, bit % 4)
+            layout.addWidget(box)
             self._boxes.append(box)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout = QVBoxLayout(self)
-        layout.addLayout(grid)
         layout.addWidget(buttons)
 
     def value(self) -> int:

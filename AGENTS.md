@@ -355,7 +355,7 @@ src/modbus_connector/
                        # format_bitmask_value (raw u16, tooltip ячейки — полный
                        # текст), а New value — кнопка QToolButton со сводкой
                        # (обновляется при чтениях), открывающая BitsDialog
-                       # (grid 4×4 чекбоксов); OK → _emit_write([dialog.value()]),
+                       # (16 чекбоксов столбцом); OK → _emit_write([dialog.value()]),
                        # без шины — молча; переключение режима прячет старый
                        # виджет и ставит новый setCellWidget'ом (Qt прячет
                        # вытесненный, не удаляя); _swap_rows пересинхронизирует
@@ -499,7 +499,7 @@ src/modbus_connector/
                         # Select all/none, Space/Enter)
   bits_dialog.py    # BitsDialog — модальный диалог правки u16-значения как
                     # 16 именованных битов (bitmask-режим value names): grid
-                    # 4×4 из 16 QCheckBox (подпись — имя бита или «bN»,
+                    # 16 QCheckBox в один столбец (подпись — имя бита или «bN»,
                     # чекнутость из значения), value() — сборка через
                     # models.bits_to_value; общий для master (New value)
                     # и slave (Value ручной строки)
