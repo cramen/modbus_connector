@@ -82,8 +82,9 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   "Running (1)" and the write field becomes a dropdown that writes the chosen
   value in one click (works in both master and slave modes). A "Bitmask"
   checkbox switches the mode: the names label bits 0..15 of a u16 register,
-  the value lists the set bits ("Running, Alarm (0x00A5)") and the write
-  field becomes a button opening a 16-bit checkbox dialog.
+  the value lists the set bits with a grouped binary word ("Running, Alarm
+  (0000 0000 1010 0101)") and the write field becomes a button opening a
+  16-bit checkbox dialog.
 - Snapshot diff ("Snapshot"/"Diff…" buttons): remember the current raw values
   of all rows, then compare them with later reads in a separate window —
   changed rows are highlighted, an "Only differences" filter hides the rest,
