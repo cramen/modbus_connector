@@ -187,6 +187,22 @@ RU: dict[str, str] = {
         "комбо.",
     "Name integer values of the current row (enum), e.g. 0=Off, 1=On":
         "Имена целых значений текущей строки (enum), например 0=Выкл, 1=Вкл",
+    "Bitmask (16 named bits)": "Битовая маска (16 именованных битов)",
+    "Edit bits": "Правка битов",
+    "Edit bits…": "Биты…",
+    "Treat the u16 value as 16 named bits: value names label bits 0..15, "
+    "the Value cell lists the set bits and New value becomes a button "
+    "opening a bit checkbox dialog.":
+        "Трактовать значение u16 как 16 именованных битов: имена значений "
+        "подписывают биты 0..15, ячейка Value перечисляет установленные биты, "
+        "а New value становится кнопкой, открывающей диалог с галочками битов.",
+    "Treat the u16 value as 16 named bits: value names label bits 0..15, "
+    "the Value cell lists the set bits and a manual row's cell becomes "
+    "a button opening a bit checkbox dialog.":
+        "Трактовать значение u16 как 16 именованных битов: имена значений "
+        "подписывают биты 0..15, ячейка Value перечисляет установленные биты, "
+        "а у ручной строки она становится кнопкой, открывающей диалог "
+        "с галочками битов.",
     "Scale": "Scale",
     "Offset": "Offset",
     "Unit": "Ед.",

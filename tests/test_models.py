@@ -15,6 +15,7 @@ from modbus_connector.models import (
     alarm_rule_from_json,
     alarm_rule_to_json,
     alarm_rules_from_json,
+    bits_to_value,
     csv_header,
     decode_register_values,
     describe_exception,
@@ -22,6 +23,7 @@ from modbus_connector.models import (
     encode_ascii_values,
     encode_register_values,
     evaluate_alarm,
+    format_bitmask_value,
     format_named_value,
     format_register_values,
     format_scaled_values,
@@ -35,6 +37,7 @@ from modbus_connector.models import (
     rows_from_csv,
     rows_to_csv,
     rule_matches,
+    set_bit_labels,
     value_names_from_json,
     value_names_to_json,
     value_names_to_text,
@@ -1124,3 +1127,27 @@ class TestValueNames:
 
     def test_row_display_settings_default(self) -> None:
         assert RowDisplaySettings().value_names == {}
+        assert RowDisplaySettings().bitmask is False
+
+
+class TestBitmask:
+    def test_set_bit_labels(self) -> None:
+        names = {0: "Running", 2: "Alarm"}
+        assert set_bit_labels(0x0005, names) == ["Running", "Alarm"]
+        assert set_bit_labels(0x00A5, names) == ["Running", "Alarm", "b5", "b7"]
+        assert set_bit_labels(0, names) == []
+        assert set_bit_labels(0xFFFF, {}) == [f"b{i}" for i in range(16)]
+
+    def test_bits_to_value(self) -> None:
+        assert bits_to_value([]) == 0
+        assert bits_to_value([0, 2]) == 0x0005
+        assert bits_to_value(range(16)) == 0xFFFF
+        assert bits_to_value([0, 16, 100, -1]) == 1  # вне 0..15 — игнор
+
+    def test_format_bitmask_value(self) -> None:
+        names = {0: "Running", 2: "Alarm"}
+        assert format_bitmask_value(0x0005, names) == "Running, Alarm (0x0005)"
+        assert format_bitmask_value(0x00A5, names) == "Running, Alarm, b5, b7 (0x00A5)"
+        assert format_bitmask_value(0, names) == "0x0000"  # нет установленных
+        assert format_bitmask_value(0x0005, {}) == "b0, b2 (0x0005)"  # пустые names
+        assert format_bitmask_value(0x1_0005, names) == "Running, Alarm (0x0005)"  # u16

@@ -75,7 +75,8 @@ def test_state_roundtrip(panel: SimPanel) -> None:
     rows = collected["rows"]
     assert rows[0] == {"name": "temp", "kind": "holding_registers", "address": 5,
                        "count": 2, "format": "f32", "values": [100, 200],
-                       "rule": "manual", "rule_text": "", "value_names": {}}
+                       "rule": "manual", "rule_text": "", "value_names": {},
+                       "bitmask": False}
     assert rows[1]["values"] == [True]
 
 
@@ -393,3 +394,90 @@ def test_value_names_not_applied_to_wide_rows(panel: SimPanel) -> None:
                     "values": [1, 0], "value_names": {"1": "On"}})
     assert panel._table.cellWidget(0, COL_VALUE) is None  # count>1 — без комбо
     assert panel._table.item(0, COL_VALUE).text() == "1, 0"
+
+
+def test_bitmask_state_roundtrip_and_display(panel: SimPanel) -> None:
+    panel.set_state(
+        {"rows": [
+            {"name": "flags", "kind": "holding_registers", "address": 10, "count": 1,
+             "values": [5], "value_names": {"0": "Running", "2": "Alarm"},
+             "bitmask": True},
+            {"name": "plain", "kind": "holding_registers", "address": 11, "count": 1},
+        ]}
+    )
+    state = panel.state()
+    assert state["rows"][0]["bitmask"] is True
+    assert state["rows"][1]["bitmask"] is False  # ключ отсутствовал — default False
+    button = panel._table.cellWidget(0, COL_VALUE)
+    assert isinstance(button, QToolButton) and not button.isHidden()
+    assert button.text() == "Running, Alarm (0x0005)"
+    assert panel._table.item(0, COL_VALUE).toolTip() == "Running, Alarm (0x0005)"
+    assert panel._table.cellWidget(1, COL_VALUE) is None  # без bitmask — текст
+
+
+def test_bitmask_button_writes_datastore(
+    panel: SimPanel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtWidgets import QDialog
+
+    from modbus_connector.bits_dialog import BitsDialog
+
+    panel._add_row({"kind": "holding_registers", "address": 5, "count": 1,
+                    "values": [0], "value_names": {"0": "Running"}, "bitmask": True})
+
+    def fake_exec(dialog: BitsDialog) -> QDialog.DialogCode:
+        dialog._boxes[1].setChecked(True)
+        dialog._boxes[2].setChecked(True)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(BitsDialog, "exec", fake_exec)
+    spy = QSignalSpy(panel.setValuesRequested)
+    button = panel._table.cellWidget(0, COL_VALUE)
+    button.click()
+    assert spy.count() == 1
+    kind, address, values = spy.at(0)
+    assert (kind, address, list(values)) == ("holding_registers", 5, [0b110])
+    assert panel._values_at(0) == [0b110]
+    assert button.text() == "b1, b2 (0x0006)"  # сводка обновилась
+
+
+def test_bitmask_master_write_updates_display(panel: SimPanel) -> None:
+    panel._add_row({"kind": "holding_registers", "address": 5, "count": 1,
+                    "values": [0], "value_names": {"0": "Running", "2": "Alarm"},
+                    "bitmask": True})
+    panel.handle_master_write("holding_registers", 5, [0b101])
+    button = panel._table.cellWidget(0, COL_VALUE)
+    assert button.text() == "Running, Alarm (0x0005)"
+
+
+def test_bitmask_expression_row_no_button(panel: SimPanel) -> None:
+    panel._add_row({"kind": "holding_registers", "address": 0, "count": 1,
+                    "rule": "expression", "rule_text": "5",
+                    "value_names": {"0": "Running", "2": "Alarm"}, "bitmask": True})
+    panel._apply_rule(0, {}, 0.0)
+    assert panel._table.item(0, COL_VALUE).text() == "Running, Alarm (0x0005)"
+    assert panel._table.cellWidget(0, COL_VALUE) is None  # expression — только текст
+
+
+def test_bitmask_checkbox_in_names_dialog(
+    panel: SimPanel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtWidgets import QCheckBox, QDialog, QPlainTextEdit
+
+    panel._add_row({"kind": "holding_registers", "address": 0, "count": 1,
+                    "values": [1]})
+    panel._table.setCurrentCell(0, COL_VALUE)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(QPlainTextEdit, "toPlainText", lambda self: "0=Running")
+    monkeypatch.setattr(QCheckBox, "isChecked", lambda self: True)
+    panel._on_value_names()
+    assert panel._bitmask_at(0) is True
+    assert isinstance(panel._table.cellWidget(0, COL_VALUE), QToolButton)
+
+
+def test_bitmask_coils_unaffected(panel: SimPanel) -> None:
+    panel._add_row({"kind": "coils", "address": 0, "count": 1, "values": [True],
+                    "value_names": {"0": "Off", "1": "On"}, "bitmask": True})
+    widget = panel._table.cellWidget(0, COL_VALUE)
+    assert not isinstance(widget, QToolButton)  # bitmask только для регистров
+    assert widget.currentText() == "1 = On"  # enum-комбо, как раньше

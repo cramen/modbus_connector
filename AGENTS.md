@@ -85,7 +85,14 @@ src/modbus_connector/
                   # редактор «значение=имя» по строкам (мусор пропускается,
                   # пустой текст = {}), value_names_to_json/value_names_from_json
                   # — state (JSON-ключи строками, толерантный разбор),
-                  # format_named_value — «имя (N)» или None
+                  # format_named_value — «имя (N)» или None;
+                  # RowDisplaySettings.bitmask (state-ключ "bitmask", bool):
+                  # value_names именуют биты 0..15 u16-значения (enum по битам);
+                  # set_bit_labels — метки установленных битов (имя или «bN»),
+                  # bits_to_value — сборка u16 из номеров битов (вне 0..15 игнор),
+                  # format_bitmask_value — «Running, Alarm (0x00A5)» (метки
+                  # через ", " + hex в скобках; без установленных — «0x0000»;
+                  # пустые names — все биты «bN»)
   backend.py      # без Qt: ModbusBackend — connect/disconnect/connected,
                   # read/write (write только coils/holding_registers),
                   # mask_write_register (функция 0x16),
@@ -165,7 +172,14 @@ src/modbus_connector/
                   # в datastore через setValuesRequested, комбо остаётся на
                   # записанном значении — activated срабатывает и при
                   # повторном выборе; expression-строки только показывают
-                  # имя, комбо нет);
+                  # имя, комбо нет); bitmask (чекбокс в диалоге «Value
+                  # names…», _BITMASK_ROLE ячейки Name, state-ключ
+                  # "bitmask"): строка регистра count==1 в dec/s16/hex
+                  # (_bitmask_row) показывает Value через format_bitmask_value
+                  # (tooltip — полный текст); Value ручной строки — кнопка
+                  # QToolButton со сводкой → тот же BitsDialog, OK → запись
+                  # в datastore через setValuesRequested; expression-строки —
+                  # только отображение, кнопки нет;
                   # покрывающие строки; кнопка Template… (csv_import, QMenu с
                   # подменю производителей, дубли kind+address пропускаются);
                   # help-кнопка (make_help_button → SIMULATOR_HELP) рядом с
@@ -333,7 +347,18 @@ src/modbus_connector/
                        # (повторный выбор пишет снова, как очистка текстового
                        # New value), без шины — молча; скрытие комбо — hide(),
                        # НЕ removeCellWidget (ломает view, см. _swap_rows);
-                       # _swap_rows пересинхронизирует комбо обеих строк,
+                       # bitmask (чекбокс "Bitmask (16 named bits)" рядом с
+                       # редактором value names, live-применение, state-ключ
+                       # "bitmask"): строка регистра count==1 в dec/s16/hex
+                       # (_bitmask_active) показывает Value через
+                       # format_bitmask_value (raw u16, tooltip ячейки — полный
+                       # текст), а New value — кнопка QToolButton со сводкой
+                       # (обновляется при чтениях), открывающая BitsDialog
+                       # (grid 4×4 чекбоксов); OK → _emit_write([dialog.value()]),
+                       # без шины — молча; переключение режима прячет старый
+                       # виджет и ставит новый setCellWidget'ом (Qt прячет
+                       # вытесненный, не удаляя); _swap_rows пересинхронизирует
+                       # редактор обеих строк,
                        # хранилище _row_display по токену (RowDisplaySettings,
                        # order None = глобальный Order-комбо над таблицей,
                        # сохраняется как registers_options в session state,
@@ -471,6 +496,12 @@ src/modbus_connector/
                         # расширения), чекбоксы полей, append/overwrite,
                         # чек-лист логируемых строк (group box "Rows to log",
                         # Select all/none, Space/Enter)
+  bits_dialog.py    # BitsDialog — модальный диалог правки u16-значения как
+                    # 16 именованных битов (bitmask-режим value names): grid
+                    # 4×4 из 16 QCheckBox (подпись — имя бита или «bN»,
+                    # чекнутость из значения), value() — сборка через
+                    # models.bits_to_value; общий для master (New value)
+                    # и slave (Value ручной строки)
   alarms_dialog.py  # AlarmsDialog — модальный диалог правил алармов: слева
                     # список строк регистров и выражений (label по токену,
                     # у выражений — «fx имя»), справа таблица правил
@@ -733,10 +764,14 @@ tests/
                   # coils 0..7 = True/False чередуя, di 0..7 = с False; unit_id = 1;
                   # identity (0x2B/0x0E): pymodbus/test-server/1.0;
                   # фикстура modbus_rtu_server — то же с framer=RTU
-  test_models.py  # parse_values/format_values
+  test_models.py  # parse_values/format_values, bitmask-хелперы
+                  # (set_bit_labels/bits_to_value/format_bitmask_value)
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
   test_datalogger.py  # DataLogger: csv/jsonl, subset полей, append/overwrite
-  test_registers_panel.py  # offscreen Qt тесты таблицы регистров
+  test_registers_panel.py  # offscreen Qt тесты таблицы регистров, в т.ч.
+                           # bitmask: state round-trip, отображение, кнопка
+                           # битов → BitsDialog → запись, live-чекбокс в
+                           # Display…, coils не затрагиваются
   test_alarms_dialog.py   # диалог алармов (add/edit/remove/round-trip) и
                           # алармы панели: подсветка, edge-лог, state, hex/ascii
   test_snapshot_diff.py   # snapshot diff: гейтинг кнопок, подсветка изменённых
@@ -756,7 +791,9 @@ tests/
   test_sim_panel.py        # SimPanel: add/remove строк, state round-trip
                            # (server+rows, толерантный разбор), шаблон в карту,
                            # masterWrote → Value, правка Value →
-                           # setValuesRequested, start эмитит params+push строк
+                           # setValuesRequested, start эмитит params+push строк,
+                           # bitmask: отображение, кнопка → BitsDialog →
+                           # setValuesRequested, expression-строка без кнопки
   test_sniffer_backend.py  # RtuFrameParser/BusModel/SnifferBackend: разбор
                            # кадров, направление tx/rx, карта значений, хуки
   test_sniffer_worker.py   # SnifferWorker в QThread: start/stop, сигналы

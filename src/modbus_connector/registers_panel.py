@@ -32,6 +32,7 @@ from PySide6.QtGui import (
     QShortcut,
 )
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QCompleter,
     QDialog,
@@ -58,6 +59,7 @@ from PySide6.QtWidgets import (
 from modbus_connector import icons, theme
 from modbus_connector.alarm_sound import AlarmSound
 from modbus_connector.alarms_dialog import AlarmsDialog
+from modbus_connector.bits_dialog import BitsDialog
 from modbus_connector.csv_dialogs import ExportColumnsDialog, ImportMappingDialog
 from modbus_connector.datalogger import (
     LOG_FIELDS,
@@ -93,6 +95,7 @@ from modbus_connector.models import (
     diff_snapshots,
     encode_ascii_values,
     evaluate_alarm,
+    format_bitmask_value,
     format_named_value,
     format_register_values,
     format_scaled_values,
@@ -134,6 +137,11 @@ POLL_BUTTON_TIP = (
 VALUE_NAMES_HINT = (
     "One 'value=name' per line, e.g. 0=Stopped; a matching integer value "
     "shows as 'name (N)' and the row's New value cell becomes a combo."
+)
+BITMASK_HINT = (
+    "Treat the u16 value as 16 named bits: value names label bits 0..15, "
+    "the Value cell lists the set bits and New value becomes a button "
+    "opening a bit checkbox dialog."
 )
 
 (
@@ -790,6 +798,7 @@ class RegistersPanel(QWidget):
                     "unit": settings.unit,
                     "log": settings.log,
                     "value_names": value_names_to_json(settings.value_names),
+                    "bitmask": settings.bitmask,
                     "alarms": [alarm_rule_to_json(rule) for rule in settings.alarms],
                 }
             )
@@ -915,6 +924,9 @@ class RegistersPanel(QWidget):
             )
             self._row_display[self._row_token_counter].value_names = (
                 value_names_from_json(entry.get("value_names"))
+            )
+            self._row_display[self._row_token_counter].bitmask = bool(
+                entry.get("bitmask", False)
             )
             self._sync_value_names_combo(self._row_token_counter)
             # missing key (older settings files) defaults to polling enabled
@@ -1330,6 +1342,8 @@ class RegistersPanel(QWidget):
         names_edit.setMaximumHeight(90)
         names_hint = QLabel(tr(VALUE_NAMES_HINT))
         names_hint.setWordWrap(True)
+        bitmask_box = QCheckBox(tr("Bitmask (16 named bits)"))
+        bitmask_box.setToolTip(tr(BITMASK_HINT))
 
         def load_names() -> None:
             item = table.item(table.currentRow(), 0)
@@ -1341,6 +1355,9 @@ class RegistersPanel(QWidget):
                 value_names_to_text(settings.value_names) if settings is not None else ""
             )
             names_edit.blockSignals(False)
+            bitmask_box.blockSignals(True)
+            bitmask_box.setChecked(settings.bitmask if settings is not None else False)
+            bitmask_box.blockSignals(False)
 
         def apply_names() -> None:
             token = names_holder.get("token", -1)
@@ -1350,13 +1367,23 @@ class RegistersPanel(QWidget):
             settings.value_names = parse_value_names(names_edit.toPlainText())
             self._sync_value_names_combo(token)
 
+        def apply_bitmask(checked: bool) -> None:
+            token = names_holder.get("token", -1)
+            settings = self._row_display.get(token)
+            if settings is None:
+                return
+            settings.bitmask = checked
+            self._sync_value_names_combo(token)
+
         table.currentItemChanged.connect(lambda _cur, _prev: load_names())
         names_edit.textChanged.connect(apply_names)
+        bitmask_box.toggled.connect(apply_bitmask)
         if table.rowCount():
             table.setCurrentCell(0, 0)
         load_names()
         layout.addWidget(names_label)
         layout.addWidget(names_edit)
+        layout.addWidget(bitmask_box)
         layout.addWidget(names_hint)
         layout.addWidget(buttons)
         dialog.resize(620, 480)
@@ -2239,24 +2266,61 @@ class RegistersPanel(QWidget):
         unit = row.unit_id if row.unit_id is not None else self._unit_id
         self.writeRequested.emit(request_id, unit, row, values)
 
-    # --- value names (enum «число → имя») -----------------------------------
+    # --- value names (enum «число → имя») и bitmask (16 именованных битов) ---
+
+    def _bitmask_active(self, index: int) -> bool:
+        """bitmask-режим строки: регистровая строка count==1 в dec/s16/hex."""
+        settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
+        if not settings.bitmask:
+            return False
+        if self._table.cellWidget(index, COL_TYPE).currentText() not in REGISTER_KINDS:
+            return False
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt not in ("dec", "s16", "hex"):
+            return False
+        try:
+            return int(self._text_at(index, COL_COUNT), 0) == 1
+        except ValueError:
+            return False
 
     def _sync_value_names_combo(self, token: int) -> None:
-        """Комбо New value по value_names строки: создать/перестроить/скрыть.
+        """Редактор New value по настройкам строки: кнопка битов / комбо / текст.
 
         Скрытие вместо removeCellWidget: отрыв cell widget оставляет в
-        представлении битые ссылки (см. _swap_rows); скрытый комбо открывает
-        доступ к обычной текстовой ячейке под ним."""
+        представлении битые ссылки (см. _swap_rows); скрытый комбо/кнопка
+        открывают доступ к обычной текстовой ячейке под ними. При смене типа
+        редактора старый виджет прячется, а замена ставится setCellWidget'ом
+        (Qt прячет вытесненный виджет сам, он не удаляется)."""
         index = self._find_row_by_token(token)
         if index is None:
             return
         settings = self._row_display.get(token, RowDisplaySettings())
-        combo = self._table.cellWidget(index, COL_NEW_VALUE)
-        if not settings.value_names:
-            if combo is not None:
-                combo.hide()
+        widget = self._table.cellWidget(index, COL_NEW_VALUE)
+        if self._bitmask_active(index):
+            if isinstance(widget, QComboBox):
+                widget.hide()
+                widget = None
+            button = widget if isinstance(widget, QToolButton) else None
+            if button is None:
+                button = QToolButton()
+                button.setToolTip(tr("Edit bits…"))
+                button.clicked.connect(
+                    lambda _checked=False, b=button: self._on_bitmask_clicked(b)
+                )
+                self._table.setCellWidget(index, COL_NEW_VALUE, button)
+            button.setText(self._bitmask_summary(token, settings))
+            button.show()
             self._refresh_value_cell(index, token)
             return
+        if not settings.value_names:
+            if widget is not None:
+                widget.hide()
+            self._refresh_value_cell(index, token)
+            return
+        if isinstance(widget, QToolButton):
+            widget.hide()
+            widget = None
+        combo = widget
         if combo is None:
             combo = theme.FitComboBox()
             combo.activated.connect(
@@ -2272,6 +2336,30 @@ class RegistersPanel(QWidget):
         combo.show()
         self._refresh_value_cell(index, token)
 
+    def _bitmask_summary(self, token: int, settings: RowDisplaySettings) -> str:
+        """Текст-сводка кнопки битов: метки установленных битов последнего чтения."""
+        values = self._last_values.get(token)
+        raw = int(values[0]) if values else 0
+        return format_bitmask_value(raw, settings.value_names)
+
+    def _on_bitmask_clicked(self, button: QToolButton) -> None:
+        """Кнопка New value bitmask-строки: диалог битов → запись результата."""
+        index = self._row_of_cell_widget(button, COL_NEW_VALUE)
+        if index is None:
+            return
+        token = self._token_at(index)
+        settings = self._row_display.get(token, RowDisplaySettings())
+        row = self._row_data(index)
+        if row is None:
+            return
+        values = self._last_values.get(token)
+        dialog = BitsDialog(int(values[0]) if values else 0, settings.value_names, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        if not self._bus_enabled:
+            return  # молча, как и ввод в текстовое New value без подключения
+        self._emit_write(index, row, [dialog.value()])
+
     def _refresh_value_cell(self, index: int, token: int) -> None:
         """Перерисовать Value из последних чтений (сменились value_names)."""
         values = self._last_values.get(token)
@@ -2280,6 +2368,7 @@ class RegistersPanel(QWidget):
         item = self._table.item(index, COL_VALUE)
         if item is not None:
             item.setText(self._display_text(index, values))
+            item.setToolTip(self._value_tooltip(index, values))
 
     def _on_value_names_activated(self, combo: QComboBox, item_index: int) -> None:
         value = combo.itemData(item_index)
@@ -2480,6 +2569,8 @@ class RegistersPanel(QWidget):
     def _display_text(self, index: int, values: list) -> str:
         kind = self._table.cellWidget(index, COL_TYPE).currentText()
         settings = self._row_display.get(self._token_at(index), RowDisplaySettings())
+        if len(values) == 1 and self._bitmask_active(index):
+            return format_bitmask_value(int(values[0]), settings.value_names)
         named = self._named_value_text(kind, index, values, settings)
         if named is not None:
             return named
@@ -2496,6 +2587,12 @@ class RegistersPanel(QWidget):
                 decoded, settings.scale, settings.offset, settings.unit
             )
         return format_register_values(values, fmt, order)
+
+    def _value_tooltip(self, index: int, values: list) -> str:
+        """Полный текст bitmask-значения — в tooltip ячейки (на случай обрезки)."""
+        if len(values) == 1 and self._bitmask_active(index):
+            return self._display_text(index, values)
+        return ""
 
     def _primary_value(self, index: int, values: list) -> float | None:
         """Первое декодированное число строки (со scale/offset) для графика."""
@@ -2610,6 +2707,12 @@ class RegistersPanel(QWidget):
             if text != item.text():
                 self._flash_value_cell(token, item)
             item.setText(text)
+            item.setToolTip(self._value_tooltip(index, values) if ok else "")
+        if ok and self._bitmask_active(index):
+            editor = self._table.cellWidget(index, COL_NEW_VALUE)
+            if isinstance(editor, QToolButton):  # сводка на кнопке битов
+                settings = self._row_display.get(token, RowDisplaySettings())
+                editor.setText(self._bitmask_summary(token, settings))
         if ok:
             self._update_alarm(index, values)
             self._recalc_expressions()

@@ -9,6 +9,7 @@ from typing import Any, get_args
 from PySide6.QtCore import QSize, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -30,6 +31,7 @@ from PySide6.QtWidgets import (
 from serial.tools import list_ports
 
 from modbus_connector import icons, theme
+from modbus_connector.bits_dialog import BitsDialog
 from modbus_connector.connection_panel import BAUDRATES
 from modbus_connector.help_dialog import SIMULATOR_HELP, make_help_button
 from modbus_connector.i18n import tr
@@ -41,6 +43,7 @@ from modbus_connector.models import (
     decode_register_values,
     encode_ascii_values,
     encode_register_values,
+    format_bitmask_value,
     format_named_value,
     format_register_values,
     format_values,
@@ -86,10 +89,16 @@ _VALUES_ROLE = Qt.ItemDataRole.UserRole
 _RULE_CACHE_ROLE = Qt.ItemDataRole.UserRole + 1  # (text, Expression | None, error)
 _RULE_PREV_ROLE = Qt.ItemDataRole.UserRole + 2  # float — предыдущий результат
 _VALUE_NAMES_ROLE = Qt.ItemDataRole.UserRole + 3  # dict[int, str] — имена значений
+_BITMASK_ROLE = Qt.ItemDataRole.UserRole + 4  # bool — value_names именуют биты 0..15
 
 VALUE_NAMES_HINT = (
     "One 'value=name' per line, e.g. 0=Stopped; a matching integer value "
     "shows as 'name (N)' and the Value cell of a manual row becomes a combo."
+)
+BITMASK_HINT = (
+    "Treat the u16 value as 16 named bits: value names label bits 0..15, "
+    "the Value cell lists the set bits and a manual row's cell becomes "
+    "a button opening a bit checkbox dialog."
 )
 
 # расширения движка выражений для правил симулятора
@@ -366,6 +375,7 @@ class SimPanel(QWidget):
         name_item.setData(
             _VALUE_NAMES_ROLE, value_names_from_json(entry.get("value_names"))
         )
+        name_item.setData(_BITMASK_ROLE, bool(entry.get("bitmask", False)))
         self._table.setItem(index, COL_NAME, name_item)
 
         type_combo = theme.FitComboBox()
@@ -450,6 +460,22 @@ class SimPanel(QWidget):
         names = item.data(_VALUE_NAMES_ROLE) if item is not None else None
         return names if isinstance(names, dict) else {}
 
+    def _bitmask_at(self, index: int) -> bool:
+        """Флаг bitmask строки: value_names именуют биты 0..15 u16-значения."""
+        item = self._table.item(index, COL_NAME)
+        return bool(item.data(_BITMASK_ROLE)) if item is not None else False
+
+    def _bitmask_row(self, index: int) -> bool:
+        """bitmask-режим применим: регистровая строка count==1 в dec/s16/hex."""
+        if not self._bitmask_at(index):
+            return False
+        if self._kind_at(index) not in REGISTER_KINDS:
+            return False
+        if len(self._values_at(index)) != 1:
+            return False
+        fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        return fmt in ("dec", "s16", "hex")
+
     def _named_key(self, index: int) -> int | None:
         """Ключ value_names текущего значения: биты — 0/1, регистры dec/s16 —
         знаковое/сырое число. None — формат/ширина строки не именуются."""
@@ -475,8 +501,15 @@ class SimPanel(QWidget):
         kind = self._kind_at(index)
         values = self._values_at(index)
         names = self._value_names_at(index)
+        if self._bitmask_row(index):
+            self._render_bitmask(index, values, names)
+            return
         key = self._named_key(index) if names else None
         combo = self._table.cellWidget(index, COL_VALUE)
+        if not isinstance(combo, QComboBox):
+            if combo is not None:
+                combo.hide()  # bitmask-кнопка: прячем, не отрывая (см. ниже)
+            combo = None
         if key is not None and self._rule_at(index) == "manual":
             # именованная ручная строка: Value — комбо «N = имя» (и отображение,
             # и запись); activated срабатывает и при повторном выборе пункта
@@ -536,6 +569,55 @@ class SimPanel(QWidget):
         self._render_value(index)  # комбо показывает записанное значение
         self._push_row(index)
 
+    def _render_bitmask(
+        self, index: int, values: list[int | bool], names: dict[int, str]
+    ) -> None:
+        """bitmask-строка: Value — метки установленных битов; у ручной строки
+        ячейка — кнопка с той же сводкой, открывающая диалог битов (как комбо
+        value names: скрытие вместо removeCellWidget, expression — только текст)."""
+        raw = int(values[0]) if values else 0
+        text = format_bitmask_value(raw, names)
+        widget = self._table.cellWidget(index, COL_VALUE)
+        if self._rule_at(index) == "manual":
+            if isinstance(widget, QComboBox):
+                widget.hide()
+                widget = None
+            button = widget if isinstance(widget, QToolButton) else None
+            if button is None:
+                button = QToolButton()
+                button.setToolTip(tr("Edit bits…"))
+                button.clicked.connect(
+                    lambda _checked=False, b=button: self._on_bitmask_clicked(b)
+                )
+                self._table.setCellWidget(index, COL_VALUE, button)
+            button.setText(text)
+            button.show()
+        elif widget is not None:
+            widget.hide()
+        item = self._table.item(index, COL_VALUE)
+        if item is None:
+            return
+        self._table.blockSignals(True)
+        item.setText("" if self._rule_at(index) == "manual" else text)
+        item.setToolTip(text)  # полный текст на случай обрезки
+        self._table.blockSignals(False)
+
+    def _on_bitmask_clicked(self, button: QToolButton) -> None:
+        """Кнопка bitmask-строки: диалог битов → запись результата в datastore."""
+        index = self._row_of(button, COL_VALUE)
+        if index is None:
+            return
+        values = list(self._values_at(index))
+        if not values:
+            return
+        dialog = BitsDialog(int(values[0]), self._value_names_at(index), self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        values[0] = dialog.value()
+        self._table.item(index, COL_NAME).setData(_VALUES_ROLE, values)
+        self._render_value(index)
+        self._push_row(index)
+
     @Slot()
     def _on_value_names(self) -> None:
         """Диалог имён значений текущей строки (по строке «значение=имя»)."""
@@ -550,6 +632,9 @@ class SimPanel(QWidget):
         label = name or f"{self._kind_at(index)}@{self._text_at(index, COL_ADDRESS)}"
         edit = QPlainTextEdit(value_names_to_text(self._value_names_at(index)))
         edit.setPlaceholderText("0=Stopped")
+        bitmask_box = QCheckBox(tr("Bitmask (16 named bits)"))
+        bitmask_box.setToolTip(tr(BITMASK_HINT))
+        bitmask_box.setChecked(self._bitmask_at(index))
         hint = QLabel(tr(VALUE_NAMES_HINT))
         hint.setWordWrap(True)
         buttons = QDialogButtonBox(
@@ -560,14 +645,15 @@ class SimPanel(QWidget):
         layout = QVBoxLayout(dialog)
         layout.addWidget(QLabel(label))
         layout.addWidget(edit)
+        layout.addWidget(bitmask_box)
         layout.addWidget(hint)
         layout.addWidget(buttons)
         dialog.resize(360, 260)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        self._table.item(index, COL_NAME).setData(
-            _VALUE_NAMES_ROLE, parse_value_names(edit.toPlainText())
-        )
+        name_item = self._table.item(index, COL_NAME)
+        name_item.setData(_VALUE_NAMES_ROLE, parse_value_names(edit.toPlainText()))
+        name_item.setData(_BITMASK_ROLE, bitmask_box.isChecked())
         self._render_value(index)
 
     def _push_row(self, index: int) -> None:
@@ -1086,6 +1172,7 @@ class SimPanel(QWidget):
                     "rule": self._rule_at(index),
                     "rule_text": self._text_at(index, COL_RULE_TEXT),
                     "value_names": value_names_to_json(self._value_names_at(index)),
+                    "bitmask": self._bitmask_at(index),
                 }
             )
         unit = self._unit_combo.currentData()

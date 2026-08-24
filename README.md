@@ -80,7 +80,10 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
 - Value names (enum labels): a row can map numbers to names ("0=Stopped",
   "1=Running", also 0/1 for coils) — the value then displays as
   "Running (1)" and the write field becomes a dropdown that writes the chosen
-  value in one click (works in both master and slave modes).
+  value in one click (works in both master and slave modes). A "Bitmask"
+  checkbox switches the mode: the names label bits 0..15 of a u16 register,
+  the value lists the set bits ("Running, Alarm (0x00A5)") and the write
+  field becomes a button opening a 16-bit checkbox dialog.
 - Snapshot diff ("Snapshot"/"Diff…" buttons): remember the current raw values
   of all rows, then compare them with later reads in a separate window —
   changed rows are highlighted, an "Only differences" filter hides the rest,

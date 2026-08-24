@@ -87,6 +87,9 @@ class RowDisplaySettings:
     # имена значений (enum): int -> подпись; совпавшее значение показывается
     # как «имя (N)», а поле ввода превращается в комбо
     value_names: dict[int, str] = field(default_factory=dict)
+    # bitmask: value_names именуют биты 0..15 u16-значения (enum по битам,
+    # а не по значению целиком); имена неименованных битов — «bN»
+    bitmask: bool = False
     # alarm rules over the scaled primary value (AlarmRule is defined below)
     alarms: list["AlarmRule"] = field(default_factory=list)
 
@@ -141,6 +144,39 @@ def format_named_value(names: Mapping[int, str], value: int | bool) -> str | Non
     key = int(value)
     name = names.get(key)
     return f"{name} ({key})" if name is not None else None
+
+
+BIT_COUNT = 16  # bitmask-режим value_names разворачивает u16 в 16 именованных битов
+
+
+def set_bit_labels(value: int, names: Mapping[int, str]) -> list[str]:
+    """Метки установленных битов 0..15: имя из names или «bN» без имени."""
+    return [
+        names.get(bit) or f"b{bit}"
+        for bit in range(BIT_COUNT)
+        if value & (1 << bit)
+    ]
+
+
+def bits_to_value(indices: Iterable[int]) -> int:
+    """Собрать u16-значение из номеров установленных битов (вне 0..15 — игнор)."""
+    value = 0
+    for index in indices:
+        if 0 <= index < BIT_COUNT:
+            value |= 1 << index
+    return value
+
+
+def format_bitmask_value(value: int, names: Mapping[int, str]) -> str:
+    """«Running, Alarm (0x00A5)»: метки установленных битов + hex в скобках.
+
+    Установленных битов нет — просто «0x0000»; names может быть пустым —
+    тогда все биты подписываются как «bN»."""
+    raw = int(value) & 0xFFFF
+    labels = set_bit_labels(raw, names)
+    if not labels:
+        return f"0x{raw:04X}"
+    return f"{', '.join(labels)} (0x{raw:04X})"
 
 
 CSV_COLUMNS = [

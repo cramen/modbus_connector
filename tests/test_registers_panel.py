@@ -19,9 +19,13 @@ try:
     from PySide6.QtWidgets import (  # noqa: E402
         QAbstractItemView,
         QApplication,
+        QCheckBox,
+        QComboBox,
+        QDialog,
         QPlainTextEdit,
         QSizePolicy,
         QTableWidget,
+        QToolButton,
     )
 except ImportError as exc:
     pytest.skip(f"Qt system libraries not available: {exc}", allow_module_level=True)
@@ -29,6 +33,7 @@ except ImportError as exc:
 from PySide6.QtGui import QColor, QGuiApplication, QKeyEvent  # noqa: E402
 
 from modbus_connector import theme  # noqa: E402
+from modbus_connector.bits_dialog import BitsDialog  # noqa: E402
 from modbus_connector.csv_dialogs import (  # noqa: E402
     ExportColumnsDialog,
     ImportMappingDialog,
@@ -1568,6 +1573,122 @@ def test_value_names_display_dialog_editor(qapp: QApplication) -> None:
     assert panel._row_display[token].value_names == {}
     assert panel._table.cellWidget(0, COL_NEW_VALUE).isHidden()  # и скрылось
     dialog.close()
+
+
+def _bitmask_panel() -> RegistersPanel:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [{"name": "flags", "kind": "holding_registers", "address": 0, "count": 1,
+          "value_names": {"0": "Running", "2": "Alarm"}, "bitmask": True}]
+    )
+    return panel
+
+
+def test_bitmask_state_roundtrip(qapp: QApplication) -> None:
+    panel = _bitmask_panel()
+    panel.set_state(
+        panel.state()
+        + [{"name": "plain", "kind": "holding_registers", "address": 1, "count": 1}]
+    )
+    state = panel.state()
+    assert state[0]["bitmask"] is True
+    assert state[0]["value_names"] == {"0": "Running", "2": "Alarm"}
+    assert state[1]["bitmask"] is False  # ключ отсутствовал — default False
+
+
+def test_bitmask_display_and_button(qapp: QApplication) -> None:
+    panel = _bitmask_panel()
+    button = panel._table.cellWidget(0, COL_NEW_VALUE)
+    assert isinstance(button, QToolButton) and not button.isHidden()  # кнопка, не комбо
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [0x0005], "")
+    assert panel._table.item(0, COL_VALUE).text() == "Running, Alarm (0x0005)"
+    # полный текст — в tooltip на случай обрезки, сводка — на кнопке
+    assert panel._table.item(0, COL_VALUE).toolTip() == "Running, Alarm (0x0005)"
+    assert button.text() == "Running, Alarm (0x0005)"
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [0], "")
+    assert panel._table.item(0, COL_VALUE).text() == "0x0000"  # нет установленных
+    assert button.text() == "0x0000"
+
+
+def test_bitmask_empty_names_shows_bit_numbers(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_state(
+        [{"kind": "holding_registers", "address": 0, "count": 1, "bitmask": True}]
+    )
+    assert isinstance(panel._table.cellWidget(0, COL_NEW_VALUE), QToolButton)
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [0x00A1], "")
+    assert panel._table.item(0, COL_VALUE).text() == "b0, b5, b7 (0x00A1)"
+
+
+def test_bitmask_button_dialog_writes(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel = _bitmask_panel()
+    panel.set_bus_enabled(True)
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [1], "")  # текущее значение — bit0
+
+    def fake_exec(dialog: BitsDialog) -> QDialog.DialogCode:
+        dialog._boxes[1].setChecked(True)  # поверх bit0 из значения — bit1
+        dialog._boxes[2].setChecked(True)  # и bit2
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(BitsDialog, "exec", fake_exec)
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel._table.cellWidget(0, COL_NEW_VALUE).click()
+    assert [w[3] for w in writes] == [[0b111]]  # bits_to_value отмеченных
+
+
+def test_bitmask_button_silent_without_bus(
+    qapp: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel = _bitmask_panel()  # шина выключена
+    monkeypatch.setattr(
+        BitsDialog, "exec", lambda self: QDialog.DialogCode.Accepted
+    )
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    panel._table.cellWidget(0, COL_NEW_VALUE).click()
+    assert writes == []  # молча, как текстовый ввод без подключения
+
+
+def test_bitmask_dialog_checkbox_live_toggle(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel._on_display_settings()
+    dialog = panel._display_dialog
+    assert dialog is not None
+    edit = dialog.findChild(QPlainTextEdit)
+    edit.setPlainText("0=Running")
+    box = dialog.findChild(QCheckBox)
+    assert box is not None and not box.isChecked()
+    box.setChecked(True)  # live-применение к выбранной строке
+    token = panel._token_at(0)
+    assert panel._row_display[token].bitmask is True
+    button = panel._table.cellWidget(0, COL_NEW_VALUE)
+    assert isinstance(button, QToolButton) and not button.isHidden()
+    box.setChecked(False)
+    assert panel._row_display[token].bitmask is False
+    combo = panel._table.cellWidget(0, COL_NEW_VALUE)
+    assert isinstance(combo, QComboBox) and not combo.isHidden()  # обратно enum-комбо
+    dialog.close()
+
+
+def test_bitmask_coils_unaffected(qapp: QApplication) -> None:
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"kind": "coils", "address": 0, "count": 1, "bitmask": True,
+          "value_names": {"0": "Off", "1": "On"}}]
+    )
+    widget = panel._table.cellWidget(0, COL_NEW_VALUE)
+    assert not isinstance(widget, QToolButton)  # bitmask только для регистров
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [True], "")
+    assert panel._table.item(0, COL_VALUE).text() == "On (1)"  # enum, как раньше
 
 
 
