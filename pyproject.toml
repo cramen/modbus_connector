@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "modbus-connector"
 version = "0.11.0"
-description = "PySide6 GUI for debugging Modbus buses and developing Modbus devices"
+description = "PySide6 GUI for debugging Modbus buses and developing Modbus devices — master client, device simulator and RTU sniffer"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "cramen"}]
-keywords = ["modbus", "modbus-tcp", "modbus-rtu", "rs485", "plc", "scada", "gui"]
+keywords = ["modbus", "modbus-tcp", "modbus-rtu", "modbus-client", "modbus-server", "modbus-slave", "modbus-simulator", "modbus-sniffer", "rs485", "plc", "scada", "industrial-automation", "gui"]
 requires-python = ">=3.11"
 classifiers = [
     "Environment :: MacOS X",
