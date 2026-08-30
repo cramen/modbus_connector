@@ -199,22 +199,72 @@ Target device, with an optional unit-id filter and a transaction log:
 
 ![Gateway mode](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/gateway.png)
 
+## Command-line utility (modbus-connector-cli)
+
+Alongside the GUI the package ships a non-interactive CLI built for scripts,
+CI pipelines and headless servers. It needs **no Qt** — a lean install pulls
+only pymodbus:
+
+```bash
+pip install modbus-connector        # CLI only (no Qt)
+pip install "modbus-connector[gui]" # CLI + GUI
+```
+
+Ready-made standalone binaries (`modbus-connector-cli-macos` /
+`-linux` / `-windows.exe`, no Python needed) are attached to
+[Releases](https://github.com/cramen/modbus_connector/releases).
+
+Output is **JSON-first**: structured JSON (or NDJSON for streaming commands)
+goes to stdout, diagnostics to stderr; `--text` switches to human-readable
+output. Exit codes: `0` ok (including Ctrl+C of streaming commands),
+`2` connection error/timeout, `3` Modbus exception from the device,
+`4` bad arguments/input files. Every subcommand has a `--help` with working
+examples.
+
+```bash
+# one-shot read / write
+modbus-connector-cli read --tcp 192.168.1.10:502 --unit 1 hr 200 6 --format f32
+modbus-connector-cli write --rtu /dev/ttyUSB0 --baud 9600 coil 3 1
+
+# polling: NDJSON stream to stdout and/or a CSV/JSONL log file, Ctrl+C to stop
+modbus-connector-cli poll --tcp 192.168.1.10 hr 0 10 --interval 1000 --log out.csv
+modbus-connector-cli poll --tcp 192.168.1.10 --map "Eastron/SDM120 template export.json"
+
+# scanners: unit ids / register address space
+modbus-connector-cli scan units --rtu /dev/ttyUSB0 1-10
+modbus-connector-cli scan addresses --tcp 192.168.1.10 --unit 1 hr 0-100
+
+# headless device simulator (map = template/session JSON or table CSV)
+modbus-connector-cli simulate --map device.json --tcp 1502
+
+# headless gateway: listen side and target side accept tcp:/rtu:/rtuovertcp: specs
+modbus-connector-cli gateway --listen tcp:5020 --target rtu:/dev/ttyUSB0,baud=9600 --units "1,5"
+
+# passive RTU sniffer: decoded frames and values as NDJSON
+modbus-connector-cli sniff --rtu /dev/cu.usbserial-1420 --baud 19200
+```
+
 ## Requirements
 
 - Python 3.11+
 
-Runtime dependencies (installed automatically by pip, see `pyproject.toml`):
+The base package (CLI) depends only on `pymodbus[serial]==3.6.9` — the
+Modbus TCP/RTU protocol stack (synchronous clients); the `serial` extra
+brings `pyserial` for RTU ports.
+
+GUI dependencies (extra `[gui]`, installed automatically by
+`pip install "modbus-connector[gui]"` and baked into the standalone
+bundles):
 
 - `PySide6` — Qt 6 GUI framework; the full meta-package including Addons
   (QtMultimedia is used for the alarm sound)
-- `pymodbus[serial]==3.6.9` — Modbus TCP/RTU protocol stack (synchronous
-  clients); the `serial` extra brings `pyserial` for RTU ports
 - `pyqtgraph` — live register graphs (pulls in `numpy`)
 - `pyqtdarktheme` — light/dark/system themes
 
 Optional extras:
 
-- `pip install -e .[dev]` — `pytest`, `pytest-asyncio`, `ruff` (tests & lint)
+- `pip install -e .[dev]` — full development environment (Qt stack, `pytest`,
+  `pytest-asyncio`, `ruff`)
 - `pip install -e .[build]` — `pyinstaller>=6` (standalone app bundles)
 
 ## Installation

@@ -203,23 +203,71 @@ serial-адаптер: вкладка на каждый unit id, автозап�
 
 ![Режим шлюза](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/gateway.png)
 
+## Консольная утилита (modbus-connector-cli)
+
+Вместе с GUI пакет включает неинтерактивную CLI-утилиту для скриптов,
+CI-пайплайнов и headless-серверов. Ей **не нужен Qt** — минимальная
+установка тянет только pymodbus:
+
+```bash
+pip install modbus-connector        # только CLI (без Qt)
+pip install "modbus-connector[gui]" # CLI + GUI
+```
+
+Готовые автономные бинарники (`modbus-connector-cli-macos` / `-linux` /
+`-windows.exe`, Python не нужен) прикладываются к
+[Releases](https://github.com/cramen/modbus_connector/releases).
+
+Вывод — **JSON-first**: структурированный JSON (или NDJSON для потоковых
+команд) идёт в stdout, диагностика — в stderr; флаг `--text` переключает на
+человекочитаемый вид. Коды возврата: `0` — успех (включая Ctrl+C у потоковых
+команд), `2` — ошибка соединения/таймаут, `3` — Modbus-исключение от
+устройства, `4` — ошибка аргументов/входных файлов. У каждой подкоманды есть
+`--help` с рабочими примерами.
+
+```bash
+# одноразовые чтение / запись
+modbus-connector-cli read --tcp 192.168.1.10:502 --unit 1 hr 200 6 --format f32
+modbus-connector-cli write --rtu /dev/ttyUSB0 --baud 9600 coil 3 1
+
+# опрос: NDJSON-поток в stdout и/или лог CSV/JSONL, остановка — Ctrl+C
+modbus-connector-cli poll --tcp 192.168.1.10 hr 0 10 --interval 1000 --log out.csv
+modbus-connector-cli poll --tcp 192.168.1.10 --map "экспорт таблицы.json"
+
+# сканеры: unit-адреса / адресное пространство регистров
+modbus-connector-cli scan units --rtu /dev/ttyUSB0 1-10
+modbus-connector-cli scan addresses --tcp 192.168.1.10 --unit 1 hr 0-100
+
+# headless-симулятор устройства (карта = template/session JSON или CSV таблицы)
+modbus-connector-cli simulate --map device.json --tcp 1502
+
+# headless-шлюз: стороны приёма и цели задаются спеками tcp:/rtu:/rtuovertcp:
+modbus-connector-cli gateway --listen tcp:5020 --target rtu:/dev/ttyUSB0,baud=9600 --units "1,5"
+
+# пассивный сниффер RTU: декодированные кадры и значения в NDJSON
+modbus-connector-cli sniff --rtu /dev/cu.usbserial-1420 --baud 19200
+```
+
 ## Требования
 
 - Python 3.11+
 
-Зависимости времени выполнения (ставятся автоматически через pip, см.
-`pyproject.toml`):
+Базовый пакет (CLI) зависит только от `pymodbus[serial]==3.6.9` — стек
+протокола Modbus TCP/RTU (синхронные клиенты); extra `serial` подтягивает
+`pyserial` для RTU-портов.
+
+GUI-зависимости (extra `[gui]`, ставятся автоматически через
+`pip install "modbus-connector[gui]"` и запечены в standalone-сборки):
 
 - `PySide6` — GUI-фреймворк Qt 6; полный метапакет, включая Addons
   (QtMultimedia используется для звука алармов)
-- `pymodbus[serial]==3.6.9` — стек протокола Modbus TCP/RTU (синхронные
-  клиенты); extra `serial` подтягивает `pyserial` для RTU-портов
 - `pyqtgraph` — живые графики регистров (тянет за собой `numpy`)
 - `pyqtdarktheme` — темы оформления light/dark/system
 
 Опциональные extras:
 
-- `pip install -e .[dev]` — `pytest`, `pytest-asyncio`, `ruff` (тесты и линт)
+- `pip install -e .[dev]` — полная среда разработки (Qt-стек, `pytest`,
+  `pytest-asyncio`, `ruff`)
 - `pip install -e .[build]` — `pyinstaller>=6` (standalone-сборки)
 
 ## Установка

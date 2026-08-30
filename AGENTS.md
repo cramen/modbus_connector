@@ -33,8 +33,13 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
 - `pyqtdarktheme` — темы System/Light/Dark (theme.py)
 - `pymodbus[serial]==3.6.9` — sync-клиенты; методы чтения/записи принимают
   ключевой `slave=`, результат: `.registers` (регистры) / `.bits` (coils,
-  discrete inputs), ошибки — `result.isError()`; extra `serial` = pyserial
-- dev (extra `dev`): `pytest`, `pytest-asyncio`, `ruff`
+  discrete inputs), ошибки — `result.isError()`; extra `serial` = pyserial;
+  это ЕДИНСТВЕННАЯ базовая зависимость — Qt-стек (PySide6/pyqtgraph/
+  pyqtdarktheme) вынесен в extra `gui`, чтобы headless-CLI ставился lean;
+  без `gui` gui-script `modbus-connector` падает с подсказкой (app.py,
+  exit 4); console-script `modbus-connector-cli` → cli.py (без Qt)
+- dev (extra `dev`): Qt-стек (дублирует `gui` — extras не ссылаются друг на
+  друга) + `pytest`, `pytest-asyncio`, `ruff`
 - build (extra `build`): `pyinstaller>=6`
 
 ## Структура (src-layout)
@@ -814,6 +819,24 @@ src/modbus_connector/
                   # =False до создания app), apply_theme(из настроек),
                   # set_language(из настроек), entry point main()
   __main__.py     # python -m modbus_connector
+  cli.py          # консольная утилита modbus-connector-cli (без Qt): argparse,
+                  # subparsers read/write/poll/scan (units|addresses)/simulate/
+                  # gateway/sniff поверх backend/sim_backend/gateway_backend/
+                  # sniffer_backend/datalogger; данные — compact JSON (потоковые —
+                  # NDJSON) в stdout, диагностика в stderr, --text — человекочитаемый
+                  # вывод; exit codes 0 ok (Ctrl+C потоковых тоже)/2 соединение/
+                  # таймаут/3 Modbus exception (код в stderr)/4 аргументы и входные
+                  # файлы (argparse error переопределён на exit 4);
+                  # общие флаги подключения: --tcp/--rtu/--rtu-over-tcp/
+                  # --rtu-over-udp + --unit/--timeout/serial-флаги (ровно один
+                  # транспорт обязателен); kind принимает coils|di|hr|ir и полные
+                  # имена; poll/simulate --map — template/session JSON (ключ
+                  # "registers") или CSV (rows_from_csv); gateway --listen/--target
+                  # — строки-спеки «tcp:PORT | tcp:HOST:PORT | rtuovertcp:... |
+                  # rtu:PORT[,baud=...,...]» (target ещё rtuoverudp:);
+                  # потоковые команды: хуки backend печатают NDJSON с flush,
+                  # главный поток — _wait_until_interrupt (в тестах подменяется
+                  # для симуляции Ctrl+C, как и _sleep у poll)
 tests/
   conftest.py     # фикстура modbus_server (порт): asyncio-ModbusTcpServer на
                   # 127.0.0.1, свободный порт, отдельный поток с собственным
@@ -826,6 +849,13 @@ tests/
                   # (set_bit_labels/bits_to_value/format_bitmask_value)
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
   test_datalogger.py  # DataLogger: csv/jsonl, subset полей, append/overwrite
+  test_cli.py       # cli.py без Qt: read всех областей/--text/--format, write с
+                    # обратным чтением, exit codes (3 Modbus exception, 2
+                    # недоступный target, 4 аргументы/map/spec), poll до Ctrl+C
+                    # (подмена cli._sleep) + --map/--log, scan units/addresses,
+                    # simulate/gateway в потоке (подмена cli._wait_until_interrupt),
+                    # sniff через фейк-SnifferBackend + RtuFrameParser, --help всех
+                    # подкоманд, --version, «PySide6 не появляется в sys.modules»
   test_registers_panel.py  # offscreen Qt тесты таблицы регистров: значения,
                            # поллинг, CSV, логирование в файл, bus-гейтинг
   test_registers_panel_columns.py  # колонки (порядок/скрытие/ширины), быстрые
@@ -935,7 +965,10 @@ modbus-connector          # запуск GUI (или python -m modbus_connector)
                           # шаблоны templates/ попадают в бандл: --add-data
                           # в build.sh/build.bat + package-data в pyproject.toml
                           # иконка: assets/icon.icns (macOS) / icon.ico (Windows) / icon.png (Linux),
-                          # источник — assets/icon.png (генерируется скриптом, см. git history)
+                          # источник — assets/icon.png (генерируется скриптом, см. git history);
+                          # следом собирается CLI-бинарь (--console --onefile, без Qt):
+                          # dist-cli/modbus-connector-cli-macos | -linux
+                          # (Windows: dist-cli\modbus-connector-cli-windows.exe)
 build.bat                 # то же под Windows (cmd): dist\ModbusConnector\ModbusConnector.exe
 packaging/linux/          # упаковка для Linux (только на Linux/CI):
                           # ModbusConnector.desktop + иконка,
@@ -950,8 +983,9 @@ CI: `.github/workflows/build.yml` — push в main / ручной запуск; 
 macOS/Windows/Linux: pytest (по одному процессу на test-файл — изоляция от
 флаки-сегфолтов Qt на CI), затем сборка через build.sh/build.bat,
 артефакты в upload-artifact (macOS — dmg, Windows/Linux — каталог dist;
+CLI-бинарь — отдельным артефактом modbus-connector-cli-<suffix> из dist-cli/;
 на Linux дополнительно AppImage + deb через packaging/linux — на тегах
-прикрепляются к релизу отдельным шагом).
+прикрепляются к релизу отдельным шагом, как и CLI-бинарь).
 
 ## Соглашения
 
