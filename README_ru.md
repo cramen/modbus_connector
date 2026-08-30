@@ -6,7 +6,7 @@
 
 **[Скачать готовые сборки для macOS / Windows / Linux → Releases](https://github.com/cramen/modbus_connector/releases)**
 
-**[Смотреть видео-презентацию (1 минута, с озвучкой) → docs/presentation.mp4](https://github.com/cramen/modbus_connector/blob/main/docs/presentation.mp4)**
+**[Смотреть видео-презентацию (полторы минуты, субтитры) → docs/presentation.mp4](https://github.com/cramen/modbus_connector/blob/main/docs/presentation.mp4)** (музыка: «Carefree» Kevin MacLeod, incompetech.com, CC BY 4.0)
 
 GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
 Работает с Modbus TCP и Modbus RTU через синхронные клиенты pymodbus;
