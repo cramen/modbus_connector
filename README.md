@@ -42,6 +42,15 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   live graph window and CSV export in the master-table format (the file
   imports back into a master tab as is). Serial RTU only — Modbus TCP cannot
   be sniffed.
+- Gateway mode (the fourth **Mode** option): a transparent Modbus proxy. The
+  **Listen** side (TCP, RTU over TCP or serial RTU) accepts masters and every
+  request is forwarded to the **Target** device (any connection type: TCP,
+  RTU, RTU over TCP/UDP) — any direction works, e.g. exposing a serial RTU
+  device as Modbus TCP or sharing one serial port between several TCP
+  clients. The **Units** field filters the served unit ids (empty = all
+  1..247, "1, 5, 10-20" serves only those; other units get silence). Every
+  transaction is logged; a target error surfaces to the master as Slave
+  Failure (0x04) with the reason in the log.
 - Device templates (the **Templates** menu): ready-made register maps and
   default connection settings for popular devices — Eastron SDM120/SDM630,
   EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 and
@@ -565,6 +574,16 @@ src/modbus_connector/
                       # with an auto-filled value table (trend sparklines),
                       # per-unit frame logs, live graph, CSV export in the
                       # master-table format
+  gateway_backend.py  # GatewayBackend — transparent Modbus gateway (no Qt):
+                      # a pymodbus listen server (TCP / RTU over TCP / RTU
+                      # serial) forwards every request to the sync
+                      # ModbusBackend target; units filter, request/error/
+                      # client hooks
+  gateway_worker.py   # GatewayWorker (QObject) — signals/slots over
+                      # GatewayBackend in a QThread
+  gateway_panel.py    # gateway-mode panel: Listen and Target parameter rows
+                      # (ConnectionPanel-style type combo + network/serial
+                      # pages), Units filter, Start/Stop gateway, client count
   connection_panel.py  # connection panel (TCP/RTU/RTU over TCP/RTU over UDP,
                        # state/set_state) with a live status indicator
                        # (gray/green/orange); Device ID…/Diagnostics… dialogs

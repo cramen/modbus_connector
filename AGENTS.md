@@ -5,9 +5,11 @@
 GUI-приложение на PySide6 для отладки шины Modbus и разработки Modbus-устройств.
 Каждая вкладка — сессия в режиме Master (опрос устройства), Slave
 (встроенный симулятор устройства: Modbus TCP/RTU сервер на pymodbus с
-редактируемой картой значений и правилами-выражениями) или Sniffer (пассивное
+редактируемой картой значений и правилами-выражениями), Sniffer (пассивное
 прослушивание RTU-шины через отдельный serial-адаптер: карта регистров
-восстанавливается из подслушанного трафика чужого мастера).
+восстанавливается из подслушанного трафика чужого мастера) или Gateway
+(прозрачный шлюз: listen-сервер TCP/RTU over TCP/RTU транслирует каждый
+запрос в target-устройство любого типа подключения, с фильтром unit-адресов).
 Подключение к устройствам по Modbus TCP и RTU (по умолчанию RTU), чтение/запись
 регистров из таблицы, поллинг с интервалом, сканер unit-адресов в отдельном окне.
 Настройки соединений (вкладки), списки регистров и состояния сканеров
@@ -263,6 +265,47 @@ src/modbus_connector/
                       # sniffing_description(),
                       # state()/set_state() = {"params": {...}, "units": [...]}
                       # (толерантный разбор)
+  gateway_backend.py  # без Qt: GatewayBackend — прозрачный Modbus-шлюз:
+                      # listen-сервер pymodbus (TCP / RTU over TCP / RTU serial)
+                      # транслирует каждый запрос в sync ModbusBackend target'а
+                      # (single-thread executor сериализует запросы);
+                      # GatewayTcpListenParams(host, port=1502)/
+                      # GatewayRtuOverTcpListenParams (framer=RTU), serial listen
+                      # = models.RtuParams; describe_gateway («gw tcp ... -> rtu
+                      # ...»); start(listen, target, units=None) (units=None =
+                      # все 1..247, иначе только перечисленные — остальным
+                      # молчание; ValueError вне 1..247, ConnectionError при
+                      # занятом порте/недоступном target)/stop/running; ошибки
+                      # target пробрасываются — мастер получает Slave Failure
+                      # 0x04; хуки on_request(line) («-> unit 5 read ...» /
+                      # «<- ok (N ms)»)/on_error/on_client(bool) — из потока
+                      # сервера
+  gateway_worker.py   # Qt: GatewayWorker(QObject) над GatewayBackend (в
+                      # отдельном QThread): сигналы gatewayChanged(bool,str)/
+                      # clientChanged(bool)/logLine(str) (строки транзакций
+                      # on_request идут в logLine); слоты start_gateway(listen,
+                      # target, units) (вызывать СИГНАЛОМ — Q_ARG не маршаллит
+                      # dataclass)/stop_gateway/shutdown; хуки backend привязаны
+                      # к сигналам напрямую (queued-доставка безопасна)
+  gateway_panel.py    # GatewayPanel — gateway-режим сессии: две строки
+                      # параметров на общем _EndpointRow (по паттерну
+                      # ConnectionPanel: тип в itemData английским, страницы
+                      # network/serial, serial-страница у ключа "RTU",
+                      # BAUDRATES из connection_panel): Listen (TCP /
+                      # RTU over TCP / RTU, host 0.0.0.0, порт 1502) и Target
+                      # (все CONNECTION_TYPES + Timeout); поле Units
+                      # (parse_units: «1, 5, 10-20», пусто = None = все
+                      # 1..247, мусор пропускается, непустой мусор блокирует
+                      # старт); кнопка Start/Stop gateway (иконки
+                      # connect/disconnect, как
+                      # ConnectionPanel._sync_button_text), статус
+                      # (status_colors, «clients: N» по clientChanged, красный
+                      # при ошибке), help-кнопка (GATEWAY_HELP); сигналы
+                      # startRequested(object,object,object)/stopRequested/
+                      # logLine; set_running(ok, message),
+                      # handle_client_changed(bool), gateway_description(),
+                      # state()/set_state() = {"listen": {...}, "target":
+                      # {...}, "units": "1, 5"} (толерантный разбор)
   connection_panel.py  # параметры подключения (TCP / RTU / RTU over TCP /
                        # RTU over UDP — страницы network/serial; тип в комбо
                        # лежит в itemData английским, переводится только
@@ -524,11 +567,13 @@ src/modbus_connector/
                     # тултип "Help"/"Справка") +
                     # show_help — немодальный диалог с QTextBrowser
                     # (WA_DeleteOnClose); тексты REGISTERS_HELP/GRAPH_HELP/
-                    # SCANNER_HELP/EXPRESSIONS_HELP/SIMULATOR_HELP — HTML со
+                    # SCANNER_HELP/EXPRESSIONS_HELP/SIMULATOR_HELP/
+                    # SNIFFER_HELP/GATEWAY_HELP — HTML со
                     # списком хоткеев, русские версии
                     # в HELP_RU (выбор по текущему языку при открытии);
                     # кнопки стоят в панели регистров, окне графика, сканере,
-                    # тулбаре блока выражений и панели симулятора
+                    # тулбаре блока выражений, панели симулятора, сниффера
+                    # и панели шлюза
   csv_dialogs.py    # ExportColumnsDialog (чек-лист колонок, Space/Ctrl+стрелки,
                     # Enter) и ImportMappingDialog (таблица сопоставления
                     # колонок файла полям, валидация обязательных)
@@ -671,26 +716,34 @@ src/modbus_connector/
   session_widget.py # SessionWidget — одна Modbus-сессия: ConnectionPanel +
                     # RegistersPanel + LogPanel + ScannerPanel (окно) +
                     # ModbusWorker в QThread, вся проводка сигналов внутри;
-                    # режим Master/Slave/Sniffer: тонкая строка (QLabel "Mode:" +
-                    # FitComboBox, ключи master/slave/sniffer в itemData) между
+                    # режим Master/Slave/Sniffer/Gateway: тонкая строка (QLabel
+                    # "Mode:" +
+                    # FitComboBox, ключи master/slave/sniffer/gateway в itemData)
+                    # между
                     # панелью подключения и центральным QStackedWidget
-                    # (registers_panel | sim_panel | sniffer_panel); в
-                    # slave/sniffer connection_panel и кнопки Scanner…/Graph…
+                    # (registers_panel | sim_panel | sniffer_panel |
+                    # gateway_panel); в
+                    # slave/sniffer/gateway connection_panel и кнопки
+                    # Scanner…/Graph…
                     # скрываются, LogPanel общая;
                     # комбо режима disabled, пока master подключён,
-                    # sim-сервер запущен или активен сниффинг (_sync_mode_lock);
+                    # sim-сервер запущен, активен сниффинг или запущен шлюз
+                    # (_sync_mode_lock);
                     # SimPanel + SimWorker во втором QThread, SnifferPanel +
-                    # SnifferWorker в третьем (создаются сразу,
+                    # SnifferWorker в третьем, GatewayPanel + GatewayWorker
+                    # в четвёртом (создаются сразу,
                     # shutdown() останавливает все: invokeMethod shutdown
                     # BlockingQueuedConnection);
                     # заголовок вкладки в slave — describe_sim(params) при
                     # запущенном сервере, иначе "Simulator"; в sniffer —
                     # sniffing_description() при активном сниффинге, иначе
-                    # "Sniffer";
+                    # "Sniffer"; в gateway — gateway_description() при
+                    # запущенном шлюзе, иначе "Gateway";
                     # connectionChanged → set_bus_enabled(ok) панели/сканера/
                     # окна графика, при разрыве — stop_logging + stop_polling;
                     # state()/set_state() (mode+connection+registers+
-                    # registers_options+expressions+logging+scanner+sim+sniffer;
+                    # registers_options+expressions+logging+scanner+sim+sniffer+
+                    # gateway;
                     # mode применяется ДО панелей, старые state без mode —
                     # master, backward compat со старым плоским форматом),
                     # shutdown() — stop_logging + корректная остановка
@@ -791,10 +844,20 @@ tests/
                           # Refresh/Take new snapshot, перезапись снапшота,
                           # "(removed)" для удалённых строк
   test_session_widget.py   # smoke: state round-trip + shutdown сессии;
-                           # режимы Master/Slave/Sniffer: mode+sim+sniffer в
+                           # режимы Master/Slave/Sniffer/Gateway:
+                           # mode+sim+sniffer+gateway в
                            # state round-trip, видимость панелей, блокировка
-                           # комбо режима, заголовок вкладки, shutdown в
-                           # slave/sniffer
+                           # комбо режима, заголовок вкладки, shutdown во всех
+                           # режимах
+  test_gateway_worker.py   # GatewayWorker в QThread: start/stop через сигналы,
+                           # gatewayChanged, сквозное чтение/запись через шлюз
+                           # (реальный target — фикстура modbus_server), фильтр
+                           # units, занятый порт, мёртвый target, clientChanged
+  test_gateway_panel.py    # GatewayPanel: parse_units (диапазоны, мусор),
+                           # state round-trip (listen/target/units, толерантный
+                           # разбор), startRequested эмитит типы параметров,
+                           # set_running (кнопка/статус/гейтинг), clients: N,
+                           # retranslate
   test_sim_backend.py      # SimBackend: start/stop TCP/RTU, занятый порт,
                            # записи мастера (хук), set/get_values
   test_sim_worker.py       # SimWorker в QThread: start/stop, masterWrote,

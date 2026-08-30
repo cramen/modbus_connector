@@ -44,6 +44,15 @@ GUI-приложение на PySide6 для отладки шины Modbus и �
   трендов), логом кадров этого unit, окном живого графика и экспортом CSV в
   формате master-таблицы (файл как есть импортируется в master-вкладку).
   Только serial RTU — Modbus TCP не сниффится.
+- Режим Gateway (четвёртый пункт комбо «Режим»): прозрачный Modbus-прокси.
+  Сторона «Приём» (TCP, RTU over TCP или serial RTU) принимает мастеров, и
+  каждый запрос транслируется устройству на стороне «Цель» (любой тип
+  подключения: TCP, RTU, RTU over TCP/UDP) — работает любое направление,
+  например выставить serial-устройство RTU как Modbus TCP или разделить один
+  serial-порт между несколькими TCP-клиентами. Поле «Юниты» фильтрует
+  обслуживаемые unit id (пусто = все 1..247, «1, 5, 10-20» — только эти;
+  остальным — молчание). Каждая транзакция пишется в лог; ошибка цели
+  уходит мастеру как Slave Failure (0x04), причина — в логе.
 - Шаблоны устройств (меню «Шаблоны»): готовые карты регистров и настройки
   подключения по умолчанию для популярных устройств — Eastron SDM120/SDM630,
   EPEver Tracer-AN, Huawei SUN2000, Delta Electronics MS300/C2000 и
@@ -577,6 +586,17 @@ src/modbus_connector/
                       # unit'ов с автозаполняемой таблицей значений
                       # (спарклайны трендов), per-unit логи кадров, живой
                       # график, экспорт CSV в формате master-таблицы
+  gateway_backend.py  # GatewayBackend — прозрачный Modbus-шлюз (без Qt):
+                      # listen-сервер pymodbus (TCP / RTU over TCP / RTU
+                      # serial) транслирует каждый запрос в sync
+                      # ModbusBackend цели; фильтр units, хуки запросов/
+                      # ошибок/клиентов
+  gateway_worker.py   # GatewayWorker (QObject) — сигналы/слоты над
+                      # GatewayBackend в QThread
+  gateway_panel.py    # панель gateway-режима: строки параметров Приём и Цель
+                      # (комбо типа + страницы network/serial по паттерну
+                      # ConnectionPanel), фильтр «Юниты», Start/Stop gateway,
+                      # счётчик клиентов
   connection_panel.py  # панель подключения (TCP/RTU/RTU over TCP/RTU over UDP,
                        # state/set_state) с живым индикатором статуса
                        # (серый/зелёный/оранжевый); диалоги Device ID…/
