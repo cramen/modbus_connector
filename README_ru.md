@@ -197,6 +197,12 @@ serial-адаптер: вкладка на каждый unit id, автозап�
 
 ![Сниффер RTU-шины](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/sniffer.png)
 
+Режим Gateway — прозрачный Modbus-шлюз: мастера подключаются к стороне
+«Приём» (TCP, RTU over TCP или serial RTU), каждый запрос транслируется
+устройству на стороне «Цель»; есть фильтр unit-адресов и лог транзакций:
+
+![Режим шлюза](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/gateway.png)
+
 ## Требования
 
 - Python 3.11+

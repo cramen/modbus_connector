@@ -193,6 +193,12 @@ per-unit frame log:
 
 ![RTU sniffer](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/sniffer.png)
 
+Gateway mode — a transparent Modbus bridge: masters connect to the Listen
+side (TCP, RTU over TCP or serial RTU), every request is forwarded to the
+Target device, with an optional unit-id filter and a transaction log:
+
+![Gateway mode](https://raw.githubusercontent.com/cramen/modbus_connector/main/docs/screenshots/gateway.png)
+
 ## Requirements
 
 - Python 3.11+
