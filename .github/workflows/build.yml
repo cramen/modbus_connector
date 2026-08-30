@@ -71,6 +71,23 @@ jobs:
         shell: cmd
         run: build.bat
 
+      - name: Package AppImage and deb (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl -sSL -o /tmp/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
+          export APPIMAGETOOL=/tmp/appimagetool
+          export APPIMAGE_EXTRACT_AND_RUN=1  # на раннере нет FUSE
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION=$(.venv/bin/python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"); fi
+          packaging/linux/make_appimage.sh
+          packaging/linux/make_deb.sh "$VERSION"
+          # структурные проверки пакетов (GUI-smoke на раннере невозможен: нет libEGL)
+          dist/ModbusConnector.AppImage --appimage-extract >/dev/null
+          test -f squashfs-root/ModbusConnector/ModbusConnector && rm -rf squashfs-root
+          dpkg-deb --info "dist/modbus-connector_${VERSION}_amd64.deb" | grep -q "Package: modbus-connector"
+          sudo dpkg -i "dist/modbus-connector_${VERSION}_amd64.deb"
+          test -L /usr/bin/modbus-connector
+
       - name: Zip artifact (Windows/Linux)
         if: runner.os != 'macOS'
         shell: pwsh
@@ -81,12 +98,28 @@ jobs:
           name: modbus-connector-${{ matrix.suffix }}
           path: ${{ matrix.release-files }}
 
+      - uses: actions/upload-artifact@v7
+        if: runner.os == 'Linux'
+        with:
+          name: modbus-connector-linux-packages
+          path: |
+            dist/ModbusConnector.AppImage
+            dist/modbus-connector_*_amd64.deb
+
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ matrix.release-files }}
           generate_release_notes: true
+
+      - name: Attach Linux packages to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/ModbusConnector.AppImage
+            dist/modbus-connector_*_amd64.deb
 
   publish-pypi:
     # tag pushes only, after all OS builds (incl. tests) are green

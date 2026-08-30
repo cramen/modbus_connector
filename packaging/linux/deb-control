@@ -1,0 +1,11 @@
+Package: modbus-connector
+Version: __VERSION__
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: cramen
+Depends: libc6, libegl1, libfontconfig1, libxkbcommon0, libdbus-1-3, libgl1
+Description: Modbus debug tool — master client, device simulator and RTU sniffer
+ Cross-platform PySide6 GUI for debugging Modbus buses and developing
+ Modbus devices.
+Homepage: https://github.com/cramen/modbus_connector

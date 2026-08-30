@@ -617,11 +617,16 @@ ruff check .    # линт
 
 GitHub Actions (`.github/workflows/build.yml`) на каждый пуш в `main` гоняет
 тесты и собирает артефакты под три ОС на раннерах macOS/Windows/Linux:
-`modbus-connector-macos` (DMG), `modbus-connector-windows` и
-`modbus-connector-linux` (zip с исполняемым файлом). Готовые файлы скачиваются
+`modbus-connector-macos` (DMG), `modbus-connector-windows` (zip),
+`modbus-connector-linux` (zip) и `modbus-connector-linux-packages`
+(AppImage + deb). Готовые файлы скачиваются
 со страницы запуска workflow (Actions → выбранный run → Artifacts; хранятся
 90 дней); сборку также можно запустить вручную через «Run workflow».
 
 При пуше тега `v*` (например, `git tag v0.1.0 && git push origin v0.1.0`)
 те же файлы автоматически прикрепляются к GitHub Release — постоянной странице
-скачивания (Releases в репозитории).
+скачивания (Releases в репозитории). Для Linux в релизе четыре файла: zip,
+переносимый `ModbusConnector.AppImage` (chmod +x и запуск — без установки,
+любой дистрибутив) и `modbus-connector_<версия>_amd64.deb`
+(`sudo dpkg -i …` ставит в /opt с ярлыком в меню приложений на
+Debian/Ubuntu).

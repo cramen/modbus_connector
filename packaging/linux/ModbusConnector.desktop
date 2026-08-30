@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Modbus Connector
+GenericName=Modbus debug tool
+Comment=Debug Modbus buses and develop Modbus devices: master client, device simulator and RTU sniffer
+Exec=modbus-connector
+Icon=modbus-connector
+Categories=Development;Utility;
+Terminal=false

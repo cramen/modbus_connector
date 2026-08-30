@@ -602,11 +602,15 @@ with a free port and exercise read/write/scan through `ModbusBackend`.
 
 GitHub Actions (`.github/workflows/build.yml`) runs tests and builds artifacts
 for all three OSes on macOS/Windows/Linux runners on every push to `main`:
-`modbus-connector-macos` (DMG), `modbus-connector-windows` and
-`modbus-connector-linux` (zip with the executable). Download them from the
+`modbus-connector-macos` (DMG), `modbus-connector-windows` (zip),
+`modbus-connector-linux` (zip) and `modbus-connector-linux-packages`
+(AppImage + deb). Download them from the
 workflow run page (Actions → a run → Artifacts; kept for 90 days); a build can
 also be started manually via "Run workflow".
 
 Pushing a `v*` tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`)
 automatically attaches the same files to a GitHub Release — a permanent
-download page (Releases in the repository).
+download page (Releases in the repository). On Linux you get four files:
+the zip, a portable `ModbusConnector.AppImage` (chmod +x and run — no
+installation, any distro) and `modbus-connector_<version>_amd64.deb`
+(`sudo dpkg -i …` installs to /opt with an app-menu entry on Debian/Ubuntu).

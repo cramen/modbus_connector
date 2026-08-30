@@ -863,12 +863,21 @@ modbus-connector          # запуск GUI (или python -m modbus_connector)
                           # иконка: assets/icon.icns (macOS) / icon.ico (Windows) / icon.png (Linux),
                           # источник — assets/icon.png (генерируется скриптом, см. git history)
 build.bat                 # то же под Windows (cmd): dist\ModbusConnector\ModbusConnector.exe
+packaging/linux/          # упаковка для Linux (только на Linux/CI):
+                          # ModbusConnector.desktop + иконка,
+                          # make_appimage.sh (AppDir из dist/ModbusConnector +
+                          # appimagetool → dist/ModbusConnector.AppImage),
+                          # make_deb.sh <version> (dpkg-deb: /opt + симлинк
+                          # /usr/bin + .desktop → dist/modbus-connector_<ver>_amd64.deb;
+                          # control-шаблон — deb-control)
 ```
 
 CI: `.github/workflows/build.yml` — push в main / ручной запуск; матрица
 macOS/Windows/Linux: pytest (по одному процессу на test-файл — изоляция от
 флаки-сегфолтов Qt на CI), затем сборка через build.sh/build.bat,
-артефакты в upload-artifact (macOS — dmg, Windows/Linux — каталог dist).
+артефакты в upload-artifact (macOS — dmg, Windows/Linux — каталог dist;
+на Linux дополнительно AppImage + deb через packaging/linux — на тегах
+прикрепляются к релизу отдельным шагом).
 
 ## Соглашения
 
