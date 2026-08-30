@@ -48,6 +48,9 @@ all Modbus logic runs in a separate thread (QThread), so the GUI never freezes.
   16 Wiren Board devices (WB-MS/WB-MSW sensors, WB-M1W2, WB-MR6C/WB-MR2M/
   WB-MRWM2 relays, WB-MDM3/WB-MRGBW-D dimmers, WB-MAP3E/WB-MAP6S/WB-MAP12E
   energy meters, WB-MAI6/WB-MAI11/WB-MAO4 analog I/O, WB-MCM8, WB-MIR).
+  Status, alarm and mode registers are annotated with value names and
+  bitmasks from the vendor documentation — an error code shows up as
+  "oH2 (17)" and alarm bitfields list the raised flags by name.
   Choosing a template opens a new tab
   with everything pre-filled — just press Connect.
 - Register table: rows with a name, area type (coils, discrete inputs,
@@ -278,8 +281,10 @@ RTU over TCP/RTU over UDP, `tcp_host`/`tcp_port` or `rtu_baud`/`rtu_bytesize`/
 `rtu_parity`/`rtu_stopbits`, `unit`, `timeout`); each register row takes
 `name`, `kind`, `address` (0-based PDU address), `count`, `format` and the
 optional `order`, `scale`, `offset`, `unit` — the same fields as the table
-columns. See any bundled file (e.g. `templates/Eastron/SDM120.json`) for a
-full example.
+columns. A row may also carry `value_names` (`{"0": "Stopped", "1": "Running"}`
+— enum labels shown as "Running (1)", also for coils) and `bitmask: true`
+(names then label bits 0..15 of the register). See any bundled file (e.g.
+`templates/Eastron/SDM120.json`) for a full example.
 
 ### Adding registers
 

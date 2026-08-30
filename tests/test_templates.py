@@ -97,3 +97,48 @@ def test_template_registers_roundtrip(qapp: QApplication) -> None:
         assert rows[-1]["address"] == 344
     finally:
         panel.deleteLater()
+
+
+# (шаблон, адрес, bitmask, значение из value_names, ожидаемое имя)
+ANNOTATED_ROWS = [
+    ("Delta Electronics/MS300", 8194, True, 1, "Reset"),
+    ("Delta Electronics/MS300", 8448, False, 17, "oH2"),
+    ("Delta Electronics/MS300", 8449, True, 10, "Run cmd via comm"),
+    ("Delta Electronics/C2000", 8194, True, 2, "Base block ON"),
+    ("Delta Electronics/C2000", 8448, False, 26880, "Warn SpdR"),
+    ("Delta Electronics/C2000", 8449, True, 11, "Parameter locked"),
+    ("Huawei/SUN2000", 32000, True, 6, "Stop due to faults"),
+    ("Huawei/SUN2000", 32008, True, 15, "Output DC Component Overhigh (2040)"),
+    ("Huawei/SUN2000", 32089, False, 512, "On-grid"),
+    ("Huawei/SUN2000", 32090, False, 2002, "DC Arc Fault"),
+    ("EPEver/Tracer-AN", 12800, True, 15, "Wrong rated voltage identification"),
+    ("EPEver/Tracer-AN", 12801, True, 0, "Running"),
+    ("Wiren Board/WB-MDM3", 97, False, 1, "AC voltage present"),
+    ("Wiren Board/WB-M1W2", 16, False, 1, "OK"),
+    ("Wiren Board/WB-MRGBW-D", 4000, False, 256, "RGB + W"),
+    ("Wiren Board/WB-MCM8", 8, True, 7, "Input 8"),
+    ("Wiren Board/WB-MRWM2", 88, False, 1, "Blocked"),
+    ("Wiren Board/WB-MAI6", 5120, False, 4096, None),
+    ("Wiren Board/WB-MAO4", 10, False, 1, "Analog 0-10 V"),
+]
+
+
+@pytest.mark.parametrize(
+    ("resource", "address", "bitmask", "value", "name"), ANNOTATED_ROWS
+)
+def test_template_annotations_roundtrip(
+    qapp: QApplication, resource: str, address: int, bitmask: bool, value: int, name: str | None
+) -> None:
+    """value_names/bitmask из шаблона переживают RegistersPanel set_state→state."""
+    panel = RegistersPanel(lambda: 1)
+    try:
+        panel.set_state(load_template(resource)["registers"])
+        rows = panel.state()
+        row = next(r for r in rows if r["address"] == address)
+        assert row["bitmask"] is bitmask
+        names = row["value_names"]
+        assert names, f"{resource}@{address}: empty value_names"
+        if name is not None:
+            assert names.get(str(value)) == name
+    finally:
+        panel.deleteLater()

@@ -167,7 +167,7 @@ src/modbus_connector/
                   # ячейки Name, state-ключ "value_names"; кнопка "Value
                   # names…" (иконка display, disabled без строк) — диалог
                   # текущей строки (QPlainTextEdit «0=Stopped»); совпавшее
-                  # значение count==1 dec/s16 или бита — «имя (N)»
+                  # значение count==1 dec/s16/hex или бита — «имя (N)»
                   # (_named_key + format_named_value в _render_value), Value
                   # ручной строки с names — комбо «N = имя» (выбор = запись
                   # в datastore через setValuesRequested, комбо остаётся на
@@ -340,7 +340,7 @@ src/modbus_connector/
                        # (QPlainTextEdit «0=Stopped» по строкам, применяется
                        # на лету; value_names в RowDisplaySettings, state-ключ
                        # "value_names" {"0": "Stopped"}): совпавшее значение
-                       # count==1 dec/s16 или бита показывается как «имя (N)»
+                       # count==1 dec/s16/hex или бита показывается как «имя (N)»
                        # (_named_value_text в _display_text), а New value
                        # становится комбо «N = имя» (_sync_value_names_combo):
                        # выбор = немедленная запись через _emit_write ([ключ],
@@ -653,7 +653,11 @@ src/modbus_connector/
   templates/      # пакет-каталог шаблонов устройств:
                   # <Manufacturer>/<Device>.json — карта регистров + дефолтные
                   # настройки подключения ({"name", "description", "connection",
-                  # "registers": [...]}, адреса 0-based PDU); package data —
+                  # "registers": [...]}, адреса 0-based PDU); записи регистров
+                  # могут нести аннотации "value_names" (enum, ключи —
+                  # строки с десятичными числами) и "bitmask" (bool) из
+                  # документации производителя — проносятся в панели через
+                  # set_state без кода; package data —
                   # в бандл попадают через package-data в pyproject.toml и
                   # --add-data в build.sh/build.bat (spec-файл gitignored и
                   # сборкой не используется). Лоадер — templates/__init__.py
