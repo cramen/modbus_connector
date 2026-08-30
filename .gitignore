@@ -9,3 +9,4 @@ dist/
 *.spec
 .tmp_shots/
 tools/
+openspec/
