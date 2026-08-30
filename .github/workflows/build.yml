@@ -100,6 +100,12 @@ jobs:
           name: modbus-connector-${{ matrix.suffix }}
           path: ${{ matrix.release-files }}
 
+      - name: Upload CLI binary artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: modbus-connector-cli-${{ matrix.suffix }}
+          path: dist-cli/*
+
       - uses: actions/upload-artifact@v7
         if: runner.os == 'Linux'
         with:
@@ -114,6 +120,12 @@ jobs:
         with:
           files: ${{ matrix.release-files }}
           generate_release_notes: true
+
+      - name: Attach CLI binary to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist-cli/*
 
       - name: Attach Linux packages to GitHub Release
         if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'

@@ -29,14 +29,32 @@ fi
 
 rm -rf build  # промежуточные файлы PyInstaller, запускать их нельзя
 
+# CLI binary: onefile console, no Qt — lean pymodbus-only build
+CLI_SUFFIX=linux
+if [ "$(uname)" = "Darwin" ]; then
+    CLI_SUFFIX=macos
+fi
+
+"$PY" -m PyInstaller \
+    --noconfirm --clean \
+    --console --onefile \
+    --name modbus-connector-cli \
+    --paths src \
+    --distpath dist-cli \
+    packaging/cli_entry.py
+
+rm -rf build  # промежуточные файлы PyInstaller второй сборки
+mv "dist-cli/modbus-connector-cli" "dist-cli/modbus-connector-cli-$CLI_SUFFIX"
+
 if [ "$(uname)" = "Darwin" ]; then
     hdiutil create -volname ModbusConnector -srcfolder dist/ModbusConnector.app \
         -ov -format UDZO dist/ModbusConnector.dmg >/dev/null
 fi
 
 echo
-echo "Build finished. Artifacts in dist/:"
+echo "Build finished. Artifacts in dist/ and dist-cli/:"
 ls -d dist/ModbusConnector* 2>/dev/null || true
+ls dist-cli/ 2>/dev/null || true
 cat <<'EOF'
 
 How to run (macOS):

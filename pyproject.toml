@@ -26,13 +26,13 @@ classifiers = [
 ]
 dependencies = [
     "pymodbus[serial]==3.6.9",
-    "PySide6",
-    "pyqtgraph",
-    "pyqtdarktheme",
 ]
 
 [project.gui-scripts]
 modbus-connector = "modbus_connector.app:main"
+
+[project.scripts]
+modbus-connector-cli = "modbus_connector.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/cramen/modbus_connector"
@@ -40,7 +40,16 @@ Repository = "https://github.com/cramen/modbus_connector"
 Issues = "https://github.com/cramen/modbus_connector/issues"
 
 [project.optional-dependencies]
+gui = [
+    "PySide6",
+    "pyqtgraph",
+    "pyqtdarktheme",
+]
+# extras cannot reference each other in setuptools, so dev repeats the gui deps
 dev = [
+    "PySide6",
+    "pyqtgraph",
+    "pyqtdarktheme",
     "pytest",
     "pytest-asyncio",
     "ruff",

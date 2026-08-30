@@ -26,7 +26,21 @@ if errorlevel 1 exit /b 1
 rem PyInstaller intermediate directory, not runnable by itself
 if exist build rmdir /s /q build
 
+rem CLI binary: onefile console, no Qt — lean pymodbus-only build
+"%PY%" -m PyInstaller ^
+    --noconfirm --clean ^
+    --console --onefile ^
+    --name modbus-connector-cli ^
+    --paths src ^
+    --distpath dist-cli ^
+    packaging\cli_entry.py
+if errorlevel 1 exit /b 1
+
+if exist build rmdir /s /q build
+move /y dist-cli\modbus-connector-cli.exe dist-cli\modbus-connector-cli-windows.exe
+
 echo.
 echo Build finished. Artifact:
 echo   dist\ModbusConnector\ModbusConnector.exe
+echo   dist-cli\modbus-connector-cli-windows.exe
 echo Copy the whole dist\ModbusConnector folder to another machine.
