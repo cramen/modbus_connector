@@ -29,6 +29,46 @@
       "count": 2
     },
     {
+      "name": "Urms Normal K1",
+      "kind": "discrete_inputs",
+      "address": 80,
+      "count": 1,
+      "value_names": {
+        "0": "Out of limits",
+        "1": "Normal"
+      }
+    },
+    {
+      "name": "Urms Normal K2",
+      "kind": "discrete_inputs",
+      "address": 81,
+      "count": 1,
+      "value_names": {
+        "0": "Out of limits",
+        "1": "Normal"
+      }
+    },
+    {
+      "name": "Blocking K1",
+      "kind": "discrete_inputs",
+      "address": 88,
+      "count": 1,
+      "value_names": {
+        "0": "Unblocked",
+        "1": "Blocked"
+      }
+    },
+    {
+      "name": "Blocking K2",
+      "kind": "discrete_inputs",
+      "address": 89,
+      "count": 1,
+      "value_names": {
+        "0": "Unblocked",
+        "1": "Blocked"
+      }
+    },
+    {
       "name": "Inputs 1-2 counters",
       "kind": "input_registers",
       "address": 32,

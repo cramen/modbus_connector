@@ -62,13 +62,15 @@
       "name": "AC on L-N",
       "kind": "input_registers",
       "address": 97,
-      "count": 1
+      "count": 1,
+      "value_names": {"0": "No AC voltage", "1": "AC voltage present"}
     },
     {
       "name": "Overcurrent",
       "kind": "input_registers",
       "address": 100,
-      "count": 1
+      "count": 1,
+      "value_names": {"0": "Normal", "1": "Overcurrent"}
     },
     {
       "name": "Supply voltage",

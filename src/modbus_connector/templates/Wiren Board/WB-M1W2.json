@@ -32,13 +32,15 @@
       "name": "Sensor 1 OK",
       "kind": "discrete_inputs",
       "address": 16,
-      "count": 1
+      "count": 1,
+      "value_names": {"0": "Not OK", "1": "OK"}
     },
     {
       "name": "Sensor 2 OK",
       "kind": "discrete_inputs",
       "address": 17,
-      "count": 1
+      "count": 1,
+      "value_names": {"0": "Not OK", "1": "OK"}
     },
     {
       "name": "Input 1 state",

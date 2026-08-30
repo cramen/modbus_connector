@@ -17,6 +17,24 @@
       "count": 8
     },
     {
+      "name": "Input states bitmask",
+      "kind": "input_registers",
+      "address": 8,
+      "count": 1,
+      "format": "hex",
+      "bitmask": true,
+      "value_names": {
+        "0": "Input 1",
+        "1": "Input 2",
+        "2": "Input 3",
+        "3": "Input 4",
+        "4": "Input 5",
+        "5": "Input 6",
+        "6": "Input 7",
+        "7": "Input 8"
+      }
+    },
+    {
       "name": "Inputs 1-8 counters",
       "kind": "input_registers",
       "address": 60,

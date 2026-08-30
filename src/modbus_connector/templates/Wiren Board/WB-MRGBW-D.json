@@ -94,6 +94,25 @@
       "unit": "%"
     },
     {
+      "name": "Dimmer mode",
+      "kind": "holding_registers",
+      "address": 4000,
+      "count": 1,
+      "value_names": {
+        "0": "W + W + W + W",
+        "1": "2*W + W + W",
+        "2": "CCT + W + W",
+        "16": "W + W + 2*W",
+        "17": "2*W + 2*W",
+        "18": "CCT + 2*W",
+        "32": "W + W + CCT",
+        "33": "2*W + CCT",
+        "34": "CCT + CCT",
+        "256": "RGB + W",
+        "512": "4*W"
+      }
+    },
+    {
       "name": "Inputs 1-3 state",
       "kind": "discrete_inputs",
       "address": 0,

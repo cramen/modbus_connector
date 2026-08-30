@@ -97,6 +97,16 @@
       "count": 2,
       "format": "u32",
       "unit": "s"
+    },
+    {
+      "name": "Outputs mode",
+      "kind": "holding_registers",
+      "address": 10,
+      "count": 1,
+      "value_names": {
+        "0": "PWM 10 V",
+        "1": "Analog 0-10 V"
+      }
     }
   ]
 }
