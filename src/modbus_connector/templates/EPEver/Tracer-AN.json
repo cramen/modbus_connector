@@ -177,13 +177,32 @@
       "name": "Battery status",
       "kind": "input_registers",
       "address": 12800,
-      "count": 1
+      "count": 1,
+      "bitmask": true,
+      "value_names": {
+        "8": "Internal resistance abnormal",
+        "15": "Wrong rated voltage identification"
+      }
     },
     {
       "name": "Charging equipment status",
       "kind": "input_registers",
       "address": 12801,
-      "count": 1
+      "count": 1,
+      "bitmask": true,
+      "value_names": {
+        "0": "Running",
+        "1": "Fault",
+        "4": "PV input short circuit",
+        "6": "Disequilibrium in three circuits",
+        "7": "Load MOSFET short circuit",
+        "8": "Load short circuit",
+        "9": "Load over current",
+        "10": "Input over current",
+        "11": "Anti-reverse MOSFET short circuit",
+        "12": "Charging/anti-reverse MOSFET open circuit",
+        "13": "Charging MOSFET short circuit"
+      }
     },
     {
       "name": "Consumed energy today",
