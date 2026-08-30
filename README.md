@@ -317,6 +317,10 @@ the table is fully navigable with the keyboard. The ✕ button deletes a row.
   recording mode on the fly, and the last choice becomes the main action.
   The optional **Poll, ms** column overrides the interval per row (empty =
   global interval; finer values are effectively clamped to the global tick).
+- **Group reads** — a toggle button: rows of the same unit and area type with
+  adjacent addresses (gap ≤ 8 registers) are merged into a single Modbus
+  request and the response is split back across the rows; if a grouped read
+  fails, the affected rows fall back to individual reads.
 
 Read values appear in the **Value** column; every request and response is also
 shown in the log panel (toggled with the "Log" button). Bus-reading controls
