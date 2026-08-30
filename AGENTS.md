@@ -769,10 +769,17 @@ tests/
                   # (set_bit_labels/bits_to_value/format_bitmask_value)
   test_backend.py # ModbusBackend против modbus_server: read/write/scan
   test_datalogger.py  # DataLogger: csv/jsonl, subset полей, append/overwrite
-  test_registers_panel.py  # offscreen Qt тесты таблицы регистров, в т.ч.
-                           # bitmask: state round-trip, отображение, кнопка
-                           # битов → BitsDialog → запись, live-чекбокс в
-                           # Display…, coils не затрагиваются
+  test_registers_panel.py  # offscreen Qt тесты таблицы регистров: значения,
+                           # поллинг, CSV, логирование в файл, bus-гейтинг
+  test_registers_panel_columns.py  # колонки (порядок/скрытие/ширины), быстрые
+                           # действия и хоткеи, перемещение/сортировка строк,
+                           # help-кнопка
+  test_registers_panel_formats.py  # запись в формате отображения (f32/ascii/
+                           # ascii1), value names (enum), bitmask (BitsDialog),
+                           # автообъединение чтений (group reads)
+                           # (разрезание одного большого модуля на три —
+                           # митигация краша PySide6 SignalManager/shiboken при
+                           # массовом создании виджетов в одном процессе)
   test_alarms_dialog.py   # диалог алармов (add/edit/remove/round-trip) и
                           # алармы панели: подсветка, edge-лог, state, hex/ascii
   test_snapshot_diff.py   # snapshot diff: гейтинг кнопок, подсветка изменённых
