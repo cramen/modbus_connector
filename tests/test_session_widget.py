@@ -298,3 +298,70 @@ def test_shutdown_in_sniffer_mode(qapp: QApplication) -> None:
     session.set_state({"mode": "sniffer"})
     session.shutdown()  # все три потока останавливаются без зависания
     session.shutdown()  # идемпотентно
+
+
+def test_gateway_mode_state_roundtrip(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state(
+        {
+            "mode": "gateway",
+            "gateway": {
+                "listen": {"type": "TCP", "tcp_host": "0.0.0.0", "tcp_port": 5020},
+                "target": {"type": "TCP", "tcp_host": "10.0.0.2", "tcp_port": 502},
+                "units": "1, 5",
+            },
+        }
+    )
+    collected = session.state()
+    assert collected["mode"] == "gateway"
+    gateway = collected["gateway"]
+    assert gateway["listen"]["tcp_port"] == 5020
+    assert gateway["target"]["tcp_host"] == "10.0.0.2"
+    assert gateway["units"] == "1, 5"
+    # master/slave/sniffer-части state на месте
+    assert "connection" in collected and "sim" in collected and "sniffer" in collected
+    session.shutdown()
+
+
+def test_gateway_mode_visibility(qapp: QApplication) -> None:
+    session = SessionWidget()
+    assert session._center_stack.currentWidget() is session.registers_panel
+    session.set_state({"mode": "gateway"})
+    assert session._center_stack.currentWidget() is session.gateway_panel
+    assert session.connection_panel.isHidden()
+    assert session._scanner_button.isHidden()
+    assert session._graph_button.isHidden()
+    session.set_state({"mode": "master"})
+    assert session._center_stack.currentWidget() is session.registers_panel
+    assert not session.connection_panel.isHidden()
+    session.shutdown()
+
+
+def test_gateway_mode_lock_and_title(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state({"mode": "gateway"})
+    assert session._mode_combo.isEnabled()
+    assert session.title() == "Gateway"  # panel не знает params — общий ключ
+    # запущенный шлюз — режим менять нельзя, заголовок — описание сторон
+    session.gateway_panel.startRequested.disconnect()  # не поднимать реальный сервер
+    session.gateway_panel._button.click()
+    session.gateway_panel.set_running(
+        True, "Gateway running (gw tcp 0.0.0.0:1502 -> tcp 127.0.0.1:502)"
+    )
+    session._on_gateway_changed(
+        True, "Gateway running (gw tcp 0.0.0.0:1502 -> tcp 127.0.0.1:502)"
+    )
+    assert not session._mode_combo.isEnabled()
+    assert session.title() == "gw tcp 0.0.0.0:1502 -> tcp 127.0.0.1:502"
+    session.gateway_panel.set_running(False, "Stopped")
+    session._on_gateway_changed(False, "Stopped")
+    assert session._mode_combo.isEnabled()
+    assert session.title() == "Gateway"
+    session.shutdown()
+
+
+def test_shutdown_in_gateway_mode(qapp: QApplication) -> None:
+    session = SessionWidget()
+    session.set_state({"mode": "gateway"})
+    session.shutdown()  # все четыре потока останавливаются без зависания
+    session.shutdown()  # идемпотентно

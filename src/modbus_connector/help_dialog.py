@@ -207,6 +207,45 @@ structure, so exotic function codes or noisy lines may misclassify.</li>
 """
 
 
+GATEWAY_HELP = """
+<h3>Gateway</h3>
+<p>The <b>Mode</b> combo switches the tab to <b>Gateway</b> — a transparent
+Modbus proxy: it runs a slave server on the <b>Listen</b> side and forwards
+every incoming request to the device on the <b>Target</b> side. Use it to
+bridge networks (e.g. expose a serial RTU device as Modbus TCP), to log the
+traffic between an existing master and its device, or to share one serial
+port between several TCP clients. The combo is locked while the gateway is
+running.</p>
+<h4>Sides</h4>
+<ul>
+<li><b>Listen</b> — where masters connect: <b>TCP</b> (host/port, 1502 by
+default so no admin rights are needed), <b>RTU over TCP</b> (TCP socket with
+RTU framing) or <b>RTU</b> (a serial port). A busy TCP port fails the start
+with an error in the status line.</li>
+<li><b>Target</b> — where requests are forwarded: any connection type
+(<b>TCP</b>, <b>RTU</b>, <b>RTU over TCP</b>, <b>RTU over UDP</b>) with its
+own <b>Timeout</b>. The target must be reachable at start, otherwise the
+gateway refuses to run.</li>
+<li>Any direction works: TCP → RTU, RTU → TCP, TCP → TCP, RTU over TCP →
+RTU over UDP, and so on — listen and target are configured independently.</li>
+</ul>
+<h4>Units filter</h4>
+<p><b>Units</b> lists the unit ids the gateway serves: empty means all
+(1..247); ids and ranges separated by commas, e.g. <code>1, 5, 10-20</code>.
+Requests to other units get <b>no answer</b> — the master just times out.</p>
+<h4>Errors</h4>
+<ul>
+<li>Every transaction goes to the session log
+(<code>-&gt; unit 5 read ...</code> / <code>&lt;- ok (N ms)</code>).</li>
+<li>If the target answers with a Modbus exception, times out or the request
+fails, the master receives <b>Slave Failure (0x04)</b>; the actual reason is
+in the log (<code>&lt;- error: ...</code>).</li>
+<li>The status line shows the bound listen address and the number of
+connected TCP clients.</li>
+</ul>
+"""
+
+
 SIMULATOR_HELP = """
 <h3>Simulator (slave mode)</h3>
 <p>The <b>Mode</b> combo above switches the tab between <b>Master</b> (poll a
@@ -508,6 +547,46 @@ master-вкладки.</li>
 """
 
 
+GATEWAY_HELP_RU = """
+<h3>Шлюз</h3>
+<p>Комбо <b>Режим</b> переключает вкладку в <b>Шлюз</b> — прозрачный
+Modbus-прокси: на стороне <b>Приём</b> поднимается slave-сервер, и каждый
+входящий запрос транслируется устройству на стороне <b>Цель</b>. Шлюз нужен,
+чтобы связывать сети (например, выставить serial-устройство RTU как Modbus
+TCP), логировать трафик между существующим мастером и его устройством или
+разделить один serial-порт между несколькими TCP-клиентами. Комбо
+заблокировано, пока шлюз запущен.</p>
+<h4>Стороны</h4>
+<ul>
+<li><b>Приём</b> — куда подключаются мастера: <b>TCP</b> (хост/порт, по
+умолчанию 1502 — права администратора не нужны), <b>RTU over TCP</b>
+(TCP-сокет с RTU-фреймингом) или <b>RTU</b> (serial-порт). Занятый TCP-порт
+приводит к ошибке старта в строке статуса.</li>
+<li><b>Цель</b> — куда транслируются запросы: любой тип подключения
+(<b>TCP</b>, <b>RTU</b>, <b>RTU over TCP</b>, <b>RTU over UDP</b>) со своим
+<b>таймаутом</b>. Цель должна быть доступна при старте, иначе шлюз не
+запустится.</li>
+<li>Работает любое направление: TCP → RTU, RTU → TCP, TCP → TCP,
+RTU over TCP → RTU over UDP и т.д. — приём и цель настраиваются независимо.</li>
+</ul>
+<h4>Фильтр юнитов</h4>
+<p>Поле <b>Юниты</b> задаёт unit id, которые обслуживает шлюз: пустое поле —
+все (1..247); id и диапазоны через запятую, например
+<code>1, 5, 10-20</code>. На запросы к остальным unit шлюз <b>не отвечает</b> —
+мастер просто отваливается по таймауту.</p>
+<h4>Ошибки</h4>
+<ul>
+<li>Каждая транзакция попадает в лог сессии
+(<code>-&gt; unit 5 read ...</code> / <code>&lt;- ok (N мс)</code>).</li>
+<li>Если цель отвечает Modbus-исключением, молчит или запрос падает, мастер
+получает <b>Slave Failure (0x04)</b>; реальная причина — в логе
+(<code>&lt;- error: ...</code>).</li>
+<li>Строка статуса показывает адрес прослушки и число подключённых
+TCP-клиентов.</li>
+</ul>
+"""
+
+
 SIMULATOR_HELP_RU = """
 <h3>Симулятор (slave-режим)</h3>
 <p>Комбо <b>Режим</b> выше переключает вкладку между <b>Мастером</b> (опрос
@@ -581,4 +660,5 @@ HELP_RU = {
     EXPRESSIONS_HELP: EXPRESSIONS_HELP_RU,
     SIMULATOR_HELP: SIMULATOR_HELP_RU,
     SNIFFER_HELP: SNIFFER_HELP_RU,
+    GATEWAY_HELP: GATEWAY_HELP_RU,
 }

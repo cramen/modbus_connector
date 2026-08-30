@@ -457,6 +457,27 @@ RU: dict[str, str] = {
     "→ sniffer stopped": "→ сниффер остановлен",
     "✗ sniffer stop failed: {exc}": "✗ остановка сниффера не удалась: {exc}",
     "✗ sniffer: {message}": "✗ сниффер: {message}",
+    # gateway mode / gateway panel
+    "Gateway": "Шлюз",
+    "Listen:": "Приём:",
+    "Target:": "Цель:",
+    "Units:": "Юниты:",
+    "Units to serve: empty = all 1..247; comma-separated ids and ranges, "
+    "e.g. 1, 5, 10-20; other units get no answer (master times out)":
+        "Обслуживаемые unit: пусто = все 1..247; id и диапазоны через запятую, "
+        "например 1, 5, 10-20; остальным шлюз не отвечает (таймаут у мастера)",
+    "Start gateway": "Запустить шлюз",
+    "Stop gateway": "Остановить шлюз",
+    "Gateway running ({desc})": "Шлюз работает ({desc})",
+    "← gateway client connected": "← клиент шлюза подключился",
+    "→ gateway client disconnected": "→ клиент шлюза отключился",
+    # gateway worker log lines
+    "→ start gateway {desc}": "→ запуск шлюза {desc}",
+    "✗ gateway start failed: {exc}": "✗ запуск шлюза не удался: {exc}",
+    "← gateway running ({desc})": "← шлюз работает ({desc})",
+    "✗ gateway stop failed: {exc}": "✗ остановка шлюза не удалась: {exc}",
+    "→ gateway stopped": "→ шлюз остановлен",
+    "✗ gateway: {message}": "✗ шлюз: {message}",
     # scanner panel
     "Add probe": "Добавить пробу",
     "Start scan": "Начать сканирование",
@@ -512,6 +533,7 @@ RU: dict[str, str] = {
     "Expressions — Help": "Выражения — справка",
     "Simulator — Help": "Симулятор — справка",
     "Sniffer — Help": "Сниффер — справка",
+    "Gateway — Help": "Шлюз — справка",
 }
 
 

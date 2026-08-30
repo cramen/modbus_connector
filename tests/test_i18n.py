@@ -250,3 +250,33 @@ def test_help_sheets_follow_language(qapp: QApplication) -> None:
     panel.close()
     panel.deleteLater()
     qapp.processEvents()
+
+
+def test_gateway_strings_and_help(qapp: QApplication) -> None:
+    from PySide6.QtWidgets import QTextBrowser
+
+    from modbus_connector.gateway_panel import GatewayPanel
+    from modbus_connector.help_dialog import GATEWAY_HELP, show_help
+
+    i18n.set_language("ru")
+    assert i18n.tr("Gateway") == "Шлюз"
+    assert i18n.tr("Start gateway") == "Запустить шлюз"
+    assert i18n.tr("Stop gateway") == "Остановить шлюз"
+    assert i18n.tr("Listen:") == "Приём:"
+    assert i18n.tr("Target:") == "Цель:"
+    assert i18n.tr("Units:") == "Юниты:"
+    line = i18n.tr("→ start gateway {desc}", desc="gw tcp 0.0.0.0:1502 -> tcp 10.0.0.2:502")
+    assert line == "→ запуск шлюза gw tcp 0.0.0.0:1502 -> tcp 10.0.0.2:502"
+
+    panel = GatewayPanel()
+    russian = show_help(panel, "Gateway — Help", GATEWAY_HELP)
+    assert russian.windowTitle() == "Шлюз — справка"
+    assert "Slave Failure" in russian.findChild(QTextBrowser).toPlainText()
+    russian.close()
+    i18n.set_language("en")
+    english = show_help(panel, "Gateway — Help", GATEWAY_HELP)
+    assert "Slave Failure" in english.findChild(QTextBrowser).toPlainText()
+    english.close()
+    panel.close()
+    panel.deleteLater()
+    qapp.processEvents()

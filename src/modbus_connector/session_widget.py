@@ -7,6 +7,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, 
 
 from modbus_connector import icons, theme
 from modbus_connector.connection_panel import ConnectionPanel
+from modbus_connector.gateway_panel import GatewayPanel
+from modbus_connector.gateway_worker import GatewayWorker
 from modbus_connector.i18n import tr
 from modbus_connector.log_panel import LogPanel
 from modbus_connector.models import ConnectionParams, StatsSnapshot, describe_connection
@@ -22,7 +24,7 @@ if TYPE_CHECKING:
     from modbus_connector.graph_window import GraphWindow
 
 # ключ режима (в state, не переводится) -> английский display-ключ
-_MODE_LABELS = {"master": "Master", "slave": "Slave", "sniffer": "Sniffer"}
+_MODE_LABELS = {"master": "Master", "slave": "Slave", "sniffer": "Sniffer", "gateway": "Gateway"}
 
 
 class SessionWidget(QWidget):
@@ -43,11 +45,13 @@ class SessionWidget(QWidget):
         self._mode = "master"
         self._sim_running = False
         self._sniffing = False
+        self._gateway_running = False
 
         self.connection_panel = ConnectionPanel(lambda: next(self._request_ids))
         self.registers_panel = RegistersPanel(lambda: next(self._request_ids))
         self.sim_panel = SimPanel()
         self.sniffer_panel = SnifferPanel()
+        self.gateway_panel = GatewayPanel()
         self.log_panel = LogPanel()
 
         self.scanner_panel = ScannerPanel(lambda: next(self._request_ids), self)
@@ -80,12 +84,13 @@ class SessionWidget(QWidget):
         # контролы) видна только в master-режиме
         mode_row.addWidget(self._log_button)
 
-        # центр: таблица регистров (master), панель симулятора (slave)
-        # или панель сниффера (sniffer)
+        # центр: таблица регистров (master), панель симулятора (slave),
+        # панель сниффера (sniffer) или панель шлюза (gateway)
         self._center_stack = QStackedWidget()
         self._center_stack.addWidget(self.registers_panel)
         self._center_stack.addWidget(self.sim_panel)
         self._center_stack.addWidget(self.sniffer_panel)
+        self._center_stack.addWidget(self.gateway_panel)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -189,6 +194,18 @@ class SessionWidget(QWidget):
         self._sniffer_worker.logLine.connect(self.log_panel.append)
         self.sniffer_panel.logLine.connect(self.log_panel.append)
 
+        # шлюз (gateway-режим): свой worker в отдельном потоке
+        self._gateway_thread = QThread(self)
+        self._gateway_worker = GatewayWorker()
+        self._gateway_worker.moveToThread(self._gateway_thread)
+        self.gateway_panel.startRequested.connect(self._gateway_worker.start_gateway)
+        self.gateway_panel.stopRequested.connect(self._gateway_worker.stop_gateway)
+        self._gateway_worker.gatewayChanged.connect(self.gateway_panel.set_running)
+        self._gateway_worker.gatewayChanged.connect(self._on_gateway_changed)
+        self._gateway_worker.clientChanged.connect(self.gateway_panel.handle_client_changed)
+        self._gateway_worker.logLine.connect(self.log_panel.append)
+        self.gateway_panel.logLine.connect(self.log_panel.append)
+
         self._worker.aliveChanged.connect(self.connection_panel.set_alive)
         # queued to the worker thread: check_alive runs where the backend lives
         self._alive_timer = QTimer(self)
@@ -199,6 +216,7 @@ class SessionWidget(QWidget):
         self._thread.start()
         self._sim_thread.start()
         self._sniffer_thread.start()
+        self._gateway_thread.start()
 
     def state(self) -> dict[str, Any]:
         return {
@@ -211,6 +229,7 @@ class SessionWidget(QWidget):
             "scanner": self.scanner_panel.state(),
             "sim": self.sim_panel.state(),
             "sniffer": self.sniffer_panel.state(),
+            "gateway": self.gateway_panel.state(),
         }
 
     def set_state(self, state: dict[str, Any]) -> None:
@@ -247,6 +266,9 @@ class SessionWidget(QWidget):
         sniffer = state.get("sniffer")
         if isinstance(sniffer, dict):
             self.sniffer_panel.set_state(sniffer)
+        gateway = state.get("gateway")
+        if isinstance(gateway, dict):
+            self.gateway_panel.set_state(gateway)
 
     def _on_mode_changed(self, index: int) -> None:
         self._set_mode(self._mode_combo.itemData(index))
@@ -265,15 +287,19 @@ class SessionWidget(QWidget):
             "master": self.registers_panel,
             "slave": self.sim_panel,
             "sniffer": self.sniffer_panel,
+            "gateway": self.gateway_panel,
         }[mode]
         self._center_stack.setCurrentWidget(page)
         self.titleChanged.emit(self.title())
 
     def _sync_mode_lock(self) -> None:
         # режим нельзя менять при живом master-подключении, запущенном
-        # сервере или активном сниффинге
+        # сервере, активном сниффинге или работающем шлюзе
         self._mode_combo.setEnabled(
-            not self._bus_enabled and not self._sim_running and not self._sniffing
+            not self._bus_enabled
+            and not self._sim_running
+            and not self._sniffing
+            and not self._gateway_running
         )
 
     @Slot(bool, str)
@@ -285,6 +311,12 @@ class SessionWidget(QWidget):
     @Slot(bool, str)
     def _on_sniffing_changed(self, ok: bool, message: str) -> None:
         self._sniffing = ok
+        self._sync_mode_lock()
+        self.titleChanged.emit(self.title())
+
+    @Slot(bool, str)
+    def _on_gateway_changed(self, ok: bool, message: str) -> None:
+        self._gateway_running = ok
         self._sync_mode_lock()
         self.titleChanged.emit(self.title())
 
@@ -334,6 +366,9 @@ class SessionWidget(QWidget):
         if self._mode == "sniffer":
             description = self.sniffer_panel.sniffing_description()
             return tr(description) if description else tr("Sniffer")
+        if self._mode == "gateway":
+            description = self.gateway_panel.gateway_description()
+            return tr(description) if description else tr("Gateway")
         return tr(self._title)  # English key stored, translated for display
 
     def retranslate(self) -> None:
@@ -355,6 +390,7 @@ class SessionWidget(QWidget):
         self.registers_panel.retranslate()
         self.sim_panel.retranslate()
         self.sniffer_panel.retranslate()
+        self.gateway_panel.retranslate()
         self.log_panel.retranslate()
         self.scanner_panel.retranslate()
         if self._graph_window is not None:
@@ -394,3 +430,10 @@ class SessionWidget(QWidget):
             )
             self._sniffer_thread.quit()
             self._sniffer_thread.wait(3000)
+        if self._gateway_thread.isRunning():
+            QMetaObject.invokeMethod(
+                self._gateway_worker, "shutdown",
+                Qt.ConnectionType.BlockingQueuedConnection,
+            )
+            self._gateway_thread.quit()
+            self._gateway_thread.wait(3000)
