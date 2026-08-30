@@ -85,6 +85,8 @@ jobs:
           dist/ModbusConnector.AppImage --appimage-extract >/dev/null
           test -f squashfs-root/ModbusConnector/ModbusConnector && rm -rf squashfs-root
           dpkg-deb --info "dist/modbus-connector_${VERSION}_amd64.deb" | grep -q "Package: modbus-connector"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl1 libfontconfig1 libxkbcommon0 libdbus-1-3 libgl1
           sudo dpkg -i "dist/modbus-connector_${VERSION}_amd64.deb"
           test -L /usr/bin/modbus-connector
 
