@@ -10,3 +10,6 @@ dist/
 .tmp_shots/
 tools/
 openspec/
+.idea/
+.kimi-code/
+.DS_Store
