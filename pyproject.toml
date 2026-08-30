@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "modbus-connector"
-version = "0.11.1"
-description = "PySide6 GUI for debugging Modbus buses and developing Modbus devices — master client, device simulator and RTU sniffer"
+version = "0.12.0"
+description = "PySide6 GUI for debugging Modbus buses and developing Modbus devices — master client, device simulator, RTU sniffer and gateway"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "cramen"}]
