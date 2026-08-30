@@ -477,7 +477,7 @@ class SimPanel(QWidget):
         return fmt in ("dec", "s16", "hex")
 
     def _named_key(self, index: int) -> int | None:
-        """Ключ value_names текущего значения: биты — 0/1, регистры dec/s16 —
+        """Ключ value_names текущего значения: биты — 0/1, регистры dec/s16/hex —
         знаковое/сырое число. None — формат/ширина строки не именуются."""
         values = self._values_at(index)
         if len(values) != 1:
@@ -485,7 +485,7 @@ class SimPanel(QWidget):
         if self._kind_at(index) not in REGISTER_KINDS:
             return int(bool(values[0]))
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
-        if fmt not in ("dec", "s16"):
+        if fmt not in ("dec", "s16", "hex"):
             return None
         raw = int(values[0])
         return raw - 0x10000 if fmt == "s16" and raw >= 0x8000 else raw
@@ -559,7 +559,8 @@ class SimPanel(QWidget):
         if self._kind_at(index) in REGISTER_KINDS:
             fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
             try:
-                encoded = encode_register_values(value, fmt)
+                # hex не кодируется (строковый формат) — пишем число как сырое
+                encoded = [value] if fmt == "hex" else encode_register_values(value, fmt)
             except OverflowError:
                 return
             values[0] = encoded[0]

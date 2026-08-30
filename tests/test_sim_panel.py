@@ -343,6 +343,21 @@ def test_value_names_combo_writes_datastore(panel: SimPanel) -> None:
     assert spy.count() == 2
 
 
+def test_value_names_hex_display_and_combo_write(panel: SimPanel) -> None:
+    # enum работает и для hex-строк: имя с десятичным числом, комбо пишет число
+    panel._add_row({"kind": "holding_registers", "address": 5, "count": 1,
+                    "format": "hex", "values": [2],
+                    "value_names": {"0": "Off", "2": "On"}})
+    combo = panel._table.cellWidget(0, COL_VALUE)
+    assert combo is not None
+    assert combo.currentText() == "2 = On"  # число в имени десятичное
+    spy = QSignalSpy(panel.setValuesRequested)
+    combo.activated[int].emit(combo.findData(0))
+    kind, address, values = spy.at(0)
+    assert (kind, address, list(values)) == ("holding_registers", 5, [0])
+    assert panel._values_at(0) == [0]
+
+
 def test_value_names_combo_coils_bool(panel: SimPanel) -> None:
     panel._add_row({"kind": "coils", "address": 0, "count": 1,
                     "values": [True], "value_names": {"0": "Off", "1": "On"}})

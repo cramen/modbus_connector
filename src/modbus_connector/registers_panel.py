@@ -2555,12 +2555,14 @@ class RegistersPanel(QWidget):
     def _named_value_text(
         self, kind: str, index: int, values: list, settings: RowDisplaySettings
     ) -> str | None:
-        """«имя (N)» по value_names: count==1 регистры dec/s16 и битовые строки."""
+        """«имя (N)» по value_names: count==1 регистры dec/s16/hex и биты."""
         if not settings.value_names or len(values) != 1:
             return None
         if kind not in REGISTER_KINDS:
             return format_named_value(settings.value_names, int(bool(values[0])))
         fmt = self._table.cellWidget(index, COL_FORMAT).currentText()
+        if fmt == "hex":
+            return format_named_value(settings.value_names, int(values[0]))
         if fmt not in ("dec", "s16"):
             return None
         decoded = decode_register_values([int(values[0])], fmt)

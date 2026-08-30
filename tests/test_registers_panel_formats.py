@@ -216,6 +216,31 @@ def test_value_names_display_and_combo_write(qapp: QApplication) -> None:
     assert [w[3] for w in writes] == [[2], [2]]
 
 
+def test_value_names_hex_display_and_combo_write(qapp: QApplication) -> None:
+    # enum работает и для hex-строк: имя с десятичным числом, комбо пишет число
+    panel = RegistersPanel(itertools.count(1).__next__)
+    panel.set_bus_enabled(True)
+    panel.set_state(
+        [{"name": "mode", "kind": "holding_registers", "address": 0, "count": 1,
+          "format": "hex", "value_names": {"0": "Stopped", "2": "Pump running"}}]
+    )
+    combo = panel._table.cellWidget(0, COL_NEW_VALUE)
+    assert combo is not None and not combo.isHidden()  # names → комбо и для hex
+
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [2], "")
+    assert panel._table.item(0, COL_VALUE).text() == "Pump running (2)"
+    request_id = _read_row(panel, 0)
+    panel.handle_read_finished(request_id, True, [5], "")
+    assert panel._table.item(0, COL_VALUE).text() == "0x0005"  # вне names — как раньше
+
+    writes: list[tuple] = []
+    panel.writeRequested.connect(lambda *args: writes.append(args))
+    combo.activated[int].emit(combo.findData(2))
+    assert [w[3] for w in writes] == [[2]]
+    assert combo.currentIndex() == -1
+
+
 def test_value_names_combo_silent_without_bus(qapp: QApplication) -> None:
     panel = RegistersPanel(itertools.count(1).__next__)  # шина выключена
     panel.set_state(
