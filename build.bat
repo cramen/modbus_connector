@@ -39,8 +39,24 @@ if errorlevel 1 exit /b 1
 if exist build rmdir /s /q build
 move /y dist-cli\modbus-connector-cli.exe dist-cli\modbus-connector-cli-windows.exe
 
+rem MCP server binary: onefile console, no Qt — pymodbus + mcp SDK
+"%PY%" -m PyInstaller ^
+    --noconfirm --clean ^
+    --console --onefile ^
+    --name modbus-connector-mcp ^
+    --paths src ^
+    --paths mcp\src ^
+    --add-data "src\modbus_connector\templates;modbus_connector\templates" ^
+    --distpath dist-cli ^
+    packaging\mcp_entry.py
+if errorlevel 1 exit /b 1
+
+if exist build rmdir /s /q build
+move /y dist-cli\modbus-connector-mcp.exe dist-cli\modbus-connector-mcp-windows.exe
+
 echo.
 echo Build finished. Artifact:
 echo   dist\ModbusConnector\ModbusConnector.exe
 echo   dist-cli\modbus-connector-cli-windows.exe
+echo   dist-cli\modbus-connector-mcp-windows.exe
 echo Copy the whole dist\ModbusConnector folder to another machine.

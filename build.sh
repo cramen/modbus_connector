@@ -46,6 +46,20 @@ fi
 rm -rf build  # промежуточные файлы PyInstaller второй сборки
 mv "dist-cli/modbus-connector-cli" "dist-cli/modbus-connector-cli-$CLI_SUFFIX"
 
+# MCP server binary: onefile console, no Qt — pymodbus + mcp SDK
+"$PY" -m PyInstaller \
+    --noconfirm --clean \
+    --console --onefile \
+    --name modbus-connector-mcp \
+    --paths src \
+    --paths mcp/src \
+    --add-data "src/modbus_connector/templates:modbus_connector/templates" \
+    --distpath dist-cli \
+    packaging/mcp_entry.py
+
+rm -rf build  # промежуточные файлы PyInstaller третьей сборки
+mv "dist-cli/modbus-connector-mcp" "dist-cli/modbus-connector-mcp-$CLI_SUFFIX"
+
 if [ "$(uname)" = "Darwin" ]; then
     hdiutil create -volname ModbusConnector -srcfolder dist/ModbusConnector.app \
         -ov -format UDZO dist/ModbusConnector.dmg >/dev/null

@@ -14,6 +14,10 @@ base) and the official `mcp` SDK.
 pip install modbus-connector-mcp
 ```
 
+Standalone binaries (`modbus-connector-mcp-macos` / `-linux` /
+`-windows.exe`, no Python needed) are attached to
+[Releases](https://github.com/cramen/modbus_connector/releases).
+
 ## Running with Claude Desktop
 
 Add to `claude_desktop_config.json`:

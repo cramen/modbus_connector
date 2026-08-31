@@ -1000,8 +1000,11 @@ modbus-connector          # запуск GUI (или python -m modbus_connector)
                           # иконка: assets/icon.icns (macOS) / icon.ico (Windows) / icon.png (Linux),
                           # источник — assets/icon.png (генерируется скриптом, см. git history);
                           # следом собирается CLI-бинарь (--console --onefile, без Qt):
-                          # dist-cli/modbus-connector-cli-macos | -linux
-                          # (Windows: dist-cli\modbus-connector-cli-windows.exe)
+                          # dist-cli/modbus-connector-cli-macos | -linux и
+                          # modbus-connector-mcp-macos | -linux (onefile, pymodbus +
+                          # mcp SDK, packaging/mcp_entry.py)
+                          # (Windows: dist-cli\modbus-connector-cli-windows.exe и
+                          # modbus-connector-mcp-windows.exe)
 build.bat                 # то же под Windows (cmd): dist\ModbusConnector\ModbusConnector.exe
 packaging/linux/          # упаковка для Linux (только на Linux/CI):
                           # ModbusConnector.desktop + иконка,

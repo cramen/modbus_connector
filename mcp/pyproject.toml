@@ -4,8 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "modbus-connector-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server (Model Context Protocol) for Modbus Connector: read/write/scan tools, device templates and background jobs (simulator, gateway, sniffer, polling)"
+readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "cramen"}]
 keywords = ["modbus", "mcp", "model-context-protocol", "modbus-tcp", "modbus-rtu"]
