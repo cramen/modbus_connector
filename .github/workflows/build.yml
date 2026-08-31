@@ -156,6 +156,8 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
       - name: Build MCP subpackage
         run: python -m build mcp --outdir dist-mcp
@@ -164,3 +166,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist-mcp
+          skip-existing: true
