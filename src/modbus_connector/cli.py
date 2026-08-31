@@ -21,14 +21,14 @@ from typing import Any, get_args
 from pymodbus.exceptions import ModbusIOException
 
 from .backend import ModbusBackend, ModbusExceptionError
-from .datalogger import DataLogger, LogSample, LogSettings
-from .gateway_backend import (
-    GatewayBackend,
-    GatewayListenParams,
-    GatewayRtuOverTcpListenParams,
-    GatewayTcpListenParams,
-    describe_gateway,
+from .conn_spec import (
+    parse_client_endpoint,
+    parse_connection_spec,
+    parse_listen_endpoint,
+    parse_listen_spec,
 )
+from .datalogger import DataLogger, LogSample, LogSettings
+from .gateway_backend import GatewayBackend, describe_gateway
 from .models import (
     DEFAULT_SCAN_PROBES,
     ByteOrder,
@@ -141,75 +141,17 @@ def _positive_int(text: str) -> int:
     return value
 
 
-def _client_host_port(spec: str, default_port: int = 502) -> tuple[str, int]:
-    """«HOST[:PORT]» для клиентского подключения; host обязателен."""
-    host, sep, port_text = spec.rpartition(":")
-    if not sep:
-        host, port_text = spec, ""
-    if not host:
-        raise ValueError(f"bad endpoint {spec!r} (expected HOST[:PORT])")
-    try:
-        port = int(port_text) if port_text else default_port
-    except ValueError:
-        raise ValueError(f"bad port in endpoint {spec!r}") from None
-    if not 1 <= port <= 65535:
-        raise ValueError(f"port out of range in endpoint {spec!r}")
-    return host, port
-
-
-def _listen_host_port(spec: str, default_host: str) -> tuple[str, int]:
-    """«PORT» или «HOST:PORT» для listen-стороны; host по умолчанию — default_host."""
-    host, sep, port_text = spec.rpartition(":")
-    if not sep:
-        host, port_text = default_host, spec
-    if not host:
-        host = default_host
-    try:
-        port = int(port_text)
-    except ValueError:
-        raise ValueError(f"bad listen endpoint {spec!r} (expected PORT or HOST:PORT)") from None
-    if not 1 <= port <= 65535:
-        raise ValueError(f"port out of range in listen endpoint {spec!r}")
-    return host, port
-
-
-def _parse_rtu_spec(text: str, timeout: float = 3.0) -> RtuParams:
-    """«PORT[,baud=9600][,bits=8][,parity=N][,stop=1]» → RtuParams."""
-    parts = [part.strip() for part in text.split(",")]
-    port = parts[0]
-    if not port:
-        raise ValueError("bad rtu spec (expected rtu:PORT[,baud=...][,bits=...][,parity=...])")
-    option_keys = {"baud": "baudrate", "bits": "bytesize", "parity": "parity", "stop": "stopbits"}
-    options: dict[str, Any] = {"timeout": timeout}
-    for item in parts[1:]:
-        key, sep, value = item.partition("=")
-        if not sep or key.strip().lower() not in option_keys:
-            raise ValueError(f"bad rtu option {item!r} (expected baud=/bits=/parity=/stop=)")
-        field = option_keys[key.strip().lower()]
-        if field == "parity":
-            parity = value.strip().upper()
-            if parity not in ("N", "E", "O"):
-                raise ValueError(f"bad parity {value!r} (N/E/O)")
-            options[field] = parity
-        else:
-            try:
-                options[field] = int(value)
-            except ValueError:
-                raise ValueError(f"bad rtu option {item!r} (integer expected)") from None
-    return RtuParams(port, **options)
-
-
 def _params_from_args(args: argparse.Namespace) -> ConnectionParams:
     """ConnectionParams из общих флагов подключения; ровно один транспорт обязателен."""
     timeout = args.timeout
     if args.tcp is not None:
-        host, port = _client_host_port(args.tcp)
+        host, port = parse_client_endpoint(args.tcp)
         return TcpParams(host, port, timeout)
     if args.rtu_over_tcp is not None:
-        host, port = _client_host_port(args.rtu_over_tcp)
+        host, port = parse_client_endpoint(args.rtu_over_tcp)
         return RtuOverTcpParams(host, port, timeout)
     if args.rtu_over_udp is not None:
-        host, port = _client_host_port(args.rtu_over_udp)
+        host, port = parse_client_endpoint(args.rtu_over_udp)
         return RtuOverUdpParams(host, port, timeout)
     return RtuParams(args.rtu, args.baud, args.bits, args.parity, args.stop, timeout)
 
@@ -601,10 +543,10 @@ def _cmd_scan_addresses(args: argparse.Namespace) -> int:
 def _sim_params(args: argparse.Namespace) -> SimTcpParams | RtuParams:
     """Параметры listen-сервера симулятора; без флага транспорта — TCP 127.0.0.1:1502."""
     if args.tcp is not None:
-        host, port = _listen_host_port(args.tcp, "127.0.0.1")
+        host, port = parse_listen_endpoint(args.tcp, "127.0.0.1")
         return SimTcpParams(host, port)
     if args.rtu_over_tcp is not None:
-        host, port = _listen_host_port(args.rtu_over_tcp, "127.0.0.1")
+        host, port = parse_listen_endpoint(args.rtu_over_tcp, "127.0.0.1")
         return SimRtuOverTcpParams(host, port)
     if args.rtu is not None:
         return RtuParams(args.rtu, args.baud, args.bits, args.parity, args.stop)
@@ -648,50 +590,9 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
     return _serve_until_interrupt(sim.stop)
 
 
-def _parse_gateway_listen(spec: str) -> GatewayListenParams:
-    """«tcp:PORT | tcp:HOST:PORT | rtuovertcp:PORT | rtuovertcp:HOST:PORT | rtu:PORT[,...]»."""
-    scheme, sep, rest = spec.partition(":")
-    if not sep or not rest:
-        raise ValueError(f"bad listen spec {spec!r} (expected SCHEME:ENDPOINT)")
-    scheme = scheme.lower().replace("-", "")
-    if scheme == "tcp":
-        host, port = _listen_host_port(rest, "0.0.0.0")
-        return GatewayTcpListenParams(host, port)
-    if scheme == "rtuovertcp":
-        host, port = _listen_host_port(rest, "0.0.0.0")
-        return GatewayRtuOverTcpListenParams(host, port)
-    if scheme == "rtu":
-        return _parse_rtu_spec(rest)
-    raise ValueError(
-        f"unknown listen scheme {scheme!r} (tcp / rtuovertcp / rtu)"
-    )
-
-
-def _parse_gateway_target(spec: str, timeout: float) -> ConnectionParams:
-    """«tcp:HOST[:PORT] | rtuovertcp:HOST[:PORT] | rtuoverudp:HOST[:PORT] | rtu:PORT[,...]»."""
-    scheme, sep, rest = spec.partition(":")
-    if not sep or not rest:
-        raise ValueError(f"bad target spec {spec!r} (expected SCHEME:ENDPOINT)")
-    scheme = scheme.lower().replace("-", "")
-    if scheme == "tcp":
-        host, port = _client_host_port(rest)
-        return TcpParams(host, port, timeout)
-    if scheme == "rtuovertcp":
-        host, port = _client_host_port(rest)
-        return RtuOverTcpParams(host, port, timeout)
-    if scheme == "rtuoverudp":
-        host, port = _client_host_port(rest)
-        return RtuOverUdpParams(host, port, timeout)
-    if scheme == "rtu":
-        return _parse_rtu_spec(rest, timeout)
-    raise ValueError(
-        f"unknown target scheme {scheme!r} (tcp / rtuovertcp / rtuoverudp / rtu)"
-    )
-
-
 def _cmd_gateway(args: argparse.Namespace) -> int:
-    listen = _parse_gateway_listen(args.listen)
-    target = _parse_gateway_target(args.target, args.timeout)
+    listen = parse_listen_spec(args.listen)
+    target = parse_connection_spec(args.target, args.timeout)
     units = _parse_units(args.units)
     gateway = GatewayBackend()
     gateway.on_request = lambda line: _event(

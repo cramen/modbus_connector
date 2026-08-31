@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modbus-connector-mcp"
+version = "0.1.0"
+description = "MCP server (Model Context Protocol) for Modbus Connector: read/write/scan tools, device templates and background jobs (simulator, gateway, sniffer, polling)"
+license = {text = "MIT"}
+authors = [{name = "cramen"}]
+keywords = ["modbus", "mcp", "model-context-protocol", "modbus-tcp", "modbus-rtu"]
+requires-python = ">=3.11"
+dependencies = [
+    "modbus-connector>=0.13",
+    "mcp>=1.2,<2",
+]
+
+[project.scripts]
+modbus-connector-mcp = "modbus_connector_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/cramen/modbus_connector"
+Repository = "https://github.com/cramen/modbus_connector"
+
+[tool.setuptools.packages.find]
+where = ["src"]
