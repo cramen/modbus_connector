@@ -214,6 +214,12 @@ Ready-made standalone binaries (`modbus-connector-cli-macos` /
 `-linux` / `-windows.exe`, no Python needed) are attached to
 [Releases](https://github.com/cramen/modbus_connector/releases).
 
+For LLM agents there is a companion **MCP server**
+([`modbus-connector-mcp`](mcp/README.md), `pip install
+modbus-connector-mcp`): the same reads/writes, scanners, simulator,
+gateway and sniffer exposed as MCP tools over stdio, with non-blocking
+jobs for long-running processes and an optional `--read-only` mode.
+
 Output is **JSON-first**: structured JSON (or NDJSON for streaming commands)
 goes to stdout, diagnostics to stderr; `--text` switches to human-readable
 output. Exit codes: `0` ok (including Ctrl+C of streaming commands),

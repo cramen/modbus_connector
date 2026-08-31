@@ -837,6 +837,39 @@ src/modbus_connector/
                   # потоковые команды: хуки backend печатают NDJSON с flush,
                   # главный поток — _wait_until_interrupt (в тестах подменяется
                   # для симуляции Ctrl+C, как и _sleep у poll)
+  conn_spec.py    # без Qt: парсеры строк-спеков подключения «tcp:HOST[:PORT] |
+                  # rtuovertcp:... | rtuoverudp:... | rtu:PORT[,baud=...,...]» —
+                  # parse_client_endpoint/parse_listen_endpoint/parse_rtu_spec/
+                  # parse_listen_spec (GatewayListenParams)/
+                  # parse_connection_spec (ConnectionParams); общий DSL для
+                  # cli.py и modbus_connector_mcp
+mcp/              # monorepo-подпакет modbus-connector-mcp (свой pyproject,
+                  # deps modbus-connector>=0.13 + mcp, своя версия): MCP-сервер для
+                  # LLM-агентов, stdio (FastMCP SDK `mcp`), README.md + src/ + tests/
+                  #  modbus_connector_mcp/
+                  #  server.py      # FastMCP + main() (argparse --read-only/
+                  #                # --version): 11 tools — one-shot
+                  #                # modbus_read/modbus_write/modbus_scan_units/
+                  #                # modbus_scan_addresses/templates_list/
+                  #                # templates_get (sync backend через
+                  #                # asyncio.to_thread, ошибки → isError,
+                  #                # сервер не падает) + job_start/job_stop/
+                  #                # job_list/job_status/job_events; create_server(
+                  #                # read_only) — read-only блокирует write и
+                  #                # simulate/gateway (sniff/poll разрешены);
+                  #                # finally: registry.stop_all()
+                  #  jobs.py        # JobRegistry/Job (job_id «kind-N», кольцевой
+                  #                # буфер 1000 событий с seq-курсором, Lock;
+                  #                # события из хуков backend'ов) + PollRunner
+                  #                # (поток read→event→wait(interval)); виды:
+                  #                # simulate/gateway/sniff/poll; stop_all при
+                  #                # завершении сервера освобождает порты
+                  #  tests/         # свои conftest (копия фикстуры modbus_server)
+                  #                # test_server/test_jobs/test_e2e_stdio
+                  #                # (сервер подпроцессом, клиент MCP SDK;
+                  #                # 11 tools, read/job по протоколу; PySide6 нет
+                  #                # в sys.modules); публикация — отдельные шаги
+                  #                # в publish-pypi джобе (build mcp → dist-mcp)
 tests/
   conftest.py     # фикстура modbus_server (порт): asyncio-ModbusTcpServer на
                   # 127.0.0.1, свободный порт, отдельный поток с собственным

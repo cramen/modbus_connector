@@ -218,6 +218,12 @@ pip install "modbus-connector[gui]" # CLI + GUI
 `-windows.exe`, Python не нужен) прикладываются к
 [Releases](https://github.com/cramen/modbus_connector/releases).
 
+Для LLM-агентов есть отдельный **MCP-сервер**
+([`modbus-connector-mcp`](mcp/README.md), `pip install
+modbus-connector-mcp`): те же чтения/записи, сканеры, симулятор, шлюз и
+сниффер как MCP-инструменты по stdio — долгоживущие процессы работают
+неблокирующими job'ами, есть опциональный режим `--read-only`.
+
 Вывод — **JSON-first**: структурированный JSON (или NDJSON для потоковых
 команд) идёт в stdout, диагностика — в stderr; флаг `--text` переключает на
 человекочитаемый вид. Коды возврата: `0` — успех (включая Ctrl+C у потоковых
